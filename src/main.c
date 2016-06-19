@@ -32,11 +32,12 @@ void trigger_escape()
 	if (child_pid != 0) {
 		return;
 	}
+	
 #ifdef DEBUG
 	printf("DEBUG: triggering escape...\n");
 #endif
 	if (execlp("xdotool", "xdotool", "key", "Escape", NULL) == -1) {
-		fprintf(stderr, "Bash-script execution error.\n");
+		fprintf(stderr, "xdotool execution error.\n");
 		perror("execlp");
 		exit(EXIT_FAILURE);
 	}
