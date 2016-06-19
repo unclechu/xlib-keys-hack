@@ -34,7 +34,7 @@ void trigger_escape()
 	}
 	
 #ifdef DEBUG
-	printf("DEBUG: triggering escape...\n");
+	printf("DEBUG: Triggering escape key...\n");
 #endif
 	if (execlp("xdotool", "xdotool", "key", "Escape", NULL) == -1) {
 		fprintf(stderr, "xdotool execution error.\n");
