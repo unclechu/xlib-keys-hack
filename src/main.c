@@ -16,8 +16,7 @@
 #define  IDLE_TIME   10000
 #define  KEYS_LIMIT  16
 
-#define  LSHIFT      50
-#define  RSHIFT      62
+#define  CAPSKEY     66
 
 Display *dpy;
 Window   wnd;
@@ -41,16 +40,14 @@ int main(const int argc, const char **argv)
 	
 	escape_key_code = XKeysymToKeycode(dpy, XK_Escape);
 	
-	int lshift_was_pressed = 0;
-	int rshift_was_pressed = 0;
+	int caps_was_pressed = 0;
 	int was_blocked = 0;
 	
 	char keys_return[KEYS_LIMIT];
 	
 	while (1) {
 		
-		int lshift_is_pressed = 0;
-		int rshift_is_pressed = 0;
+		int caps_is_pressed = 0;
 		int another_key_is_pressed = 0;
 		
 		XQueryKeymap(dpy, keys_return);
@@ -68,10 +65,8 @@ int main(const int argc, const char **argv)
 						
 						int key_num = i*8+pos;
 						
-						if (key_num == LSHIFT) {
-							lshift_is_pressed = 1;
-						} else if (key_num == RSHIFT) {
-							rshift_is_pressed = 1;
+						if (key_num == CAPSKEY) {
+							caps_is_pressed = 1;
 						} else {
 							another_key_is_pressed = 1;
 						}
@@ -83,46 +78,24 @@ int main(const int argc, const char **argv)
 			}
 		}
 		
-		if (
-			was_blocked == 1 ||
-			another_key_is_pressed == 1 ||
+		if (was_blocked == 1 || another_key_is_pressed == 1) {
 			
-			// both shifts prevents escape key triggering
-			(lshift_is_pressed == 1 && rshift_is_pressed == 1) ||
-			(lshift_was_pressed == 1 && rshift_is_pressed == 1) ||
-			(lshift_is_pressed == 1 && rshift_was_pressed == 1) ||
-			(lshift_was_pressed == 1 && rshift_was_pressed == 1)
-		) {
-			
-			lshift_was_pressed = 0;
-			rshift_was_pressed = 0;
+			caps_was_pressed = 0;
 			was_blocked = 1;
 			
-			if (
-				lshift_is_pressed == 0 &&
-				rshift_is_pressed == 0 &&
-				another_key_is_pressed == 0
-			) {
+			if (caps_is_pressed == 0 && another_key_is_pressed == 0) {
 				was_blocked = 0;
 			}
 			
-		} else if (lshift_is_pressed == 1) {
+		} else if (caps_is_pressed == 1) {
 #ifdef DEBUG
-			if (lshift_was_pressed == 0) {
-				printf("DEBUG: Left shift is pressed\n");
+			if (caps_was_pressed == 0) {
+				printf("DEBUG: Caps Lock is pressed\n");
 			}
 #endif
-			lshift_was_pressed = 1;
-		} else if (rshift_is_pressed == 1) {
-#ifdef DEBUG
-			if (rshift_was_pressed == 0) {
-				printf("DEBUG: Right shift is pressed\n");
-			}
-#endif
-			rshift_was_pressed = 1;
-		} else if (lshift_was_pressed == 1 || rshift_was_pressed == 1) {
-			lshift_was_pressed = 0;
-			rshift_was_pressed = 0;
+			caps_was_pressed = 1;
+		} else if (caps_was_pressed == 1) {
+			caps_was_pressed = 0;
 			was_blocked = 1;
 			trigger_escape();
 		}

@@ -1,8 +1,7 @@
 xlib-escape-key-hack
 ====================
 
-Simulating Escape key pressing when press shift (only one, not both left and right)
-without any combos.
+Simulating Escape key pressing when press Caps Lock key without any combos.
 
 Build
 -----
