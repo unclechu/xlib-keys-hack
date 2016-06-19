@@ -32,7 +32,9 @@ void trigger_escape()
 	if (child_pid != 0) {
 		return;
 	}
-	
+#ifdef DEBUG
+	printf("DEBUG: triggering escape...\n");
+#endif
 	if (execlp("xdotool", "xdotool", "key", "Escape", NULL) == -1) {
 		fprintf(stderr, "Bash-script execution error.\n");
 		perror("execlp");
@@ -117,6 +119,7 @@ int main(const int argc, const char **argv)
 		} else if (lshift_was_pressed == 1 || rshift_was_pressed == 1) {
 			lshift_was_pressed = 0;
 			rshift_was_pressed = 0;
+			was_blocked = 1;
 			trigger_escape();
 		}
 		
