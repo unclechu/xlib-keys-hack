@@ -10,6 +10,7 @@
 
 #include <X11/Xlib.h>
 #include <X11/extensions/XTest.h>
+#include <X11/keysym.h>
 
 #define  APPNAME     "xlib-escape-key-hack"
 #define  IDLE_TIME   10000
@@ -18,35 +19,27 @@
 #define  LSHIFT      50
 #define  RSHIFT      62
 
+Display *dpy;
+Window   wnd;
+unsigned int escape_key_code;
+
 void trigger_escape()
 {
-	const pid_t child_pid = fork();
-	
-	if (child_pid < 0) {
-		fprintf(stderr, "Can't fork.\n");
-		perror("fork");
-		exit(EXIT_FAILURE);
-	}
-	
-	// parent process
-	if (child_pid != 0) {
-		return;
-	}
-	
 #ifdef DEBUG
 	printf("DEBUG: Triggering escape key...\n");
 #endif
-	if (execlp("xdotool", "xdotool", "key", "Escape", NULL) == -1) {
-		fprintf(stderr, "xdotool execution error.\n");
-		perror("execlp");
-		exit(EXIT_FAILURE);
-	}
+	XTestFakeKeyEvent(dpy, escape_key_code, True, CurrentTime);
+	XFlush(dpy);
+	XTestFakeKeyEvent(dpy, escape_key_code, False, CurrentTime);
+	XFlush(dpy);
 }
 
 int main(const int argc, const char **argv)
 {
-	Display *dpy = XOpenDisplay(NULL);
-	Window   wnd = DefaultRootWindow(dpy);
+	dpy = XOpenDisplay(NULL);
+	wnd = DefaultRootWindow(dpy);
+	
+	escape_key_code = XKeysymToKeycode(dpy, XK_Escape);
 	
 	int lshift_was_pressed = 0;
 	int rshift_was_pressed = 0;
