@@ -114,8 +114,18 @@ int main(const int argc, const char **argv)
 			}
 			
 		} else if (lshift_is_pressed == 1) {
+#ifdef DEBUG
+			if (lshift_was_pressed == 0) {
+				printf("DEBUG: Left shift is pressed\n");
+			}
+#endif
 			lshift_was_pressed = 1;
 		} else if (rshift_is_pressed == 1) {
+#ifdef DEBUG
+			if (rshift_was_pressed == 0) {
+				printf("DEBUG: Right shift is pressed\n");
+			}
+#endif
 			rshift_was_pressed = 1;
 		} else if (lshift_was_pressed == 1 || rshift_was_pressed == 1) {
 			lshift_was_pressed = 0;
