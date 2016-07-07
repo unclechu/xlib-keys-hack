@@ -1,7 +1,9 @@
-xlib-escape-key-hack
-====================
+xlib-keys-hack
+==============
 
-Simulating Escape key pressing when press Caps Lock key without any combos.
+- Simulating Escape key pressing when press Caps Lock key without any combos;
+- Simulating press and hold third-level modificator by `Left Super + Caps Lock`
+  and simulating release of this key by `Left Alt + Caps Lock`.
 
 Build
 -----
@@ -14,7 +16,7 @@ Run (as daemon)
 ---------------
 
 ```bash
-$ ./build/xlib-escape-key-hack
+$ ./build/xlib-keys-hack
 ```
 
 Author

@@ -1,6 +1,6 @@
 /**
  * Author: Viacheslav Lotsmanov
- * License: GNU/GPLv3 https://raw.githubusercontent.com/unclechu/xlib-escape-key-hack/master/LICENSE
+ * License: GNU/GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
  */
 
 #include <stdio.h>
@@ -12,7 +12,7 @@
 #include <X11/extensions/XTest.h>
 #include <X11/keysym.h>
 
-#define  APPNAME     "xlib-escape-key-hack"
+#define  APPNAME     "xlib-keys-hack"
 #define  IDLE_TIME   10000
 #define  KEYS_LIMIT  16
 

@@ -1,4 +1,4 @@
-NAME ?= xlib-escape-key-hack
+NAME ?= xlib-keys-hack
 BUILD_DIR ?= ./build/
 DEBUG ?= 0
 
