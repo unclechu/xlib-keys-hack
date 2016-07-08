@@ -1,9 +1,9 @@
 xlib-keys-hack
 ==============
 
-- Simulating Escape key pressing when press Caps Lock key without any combos;
-- Simulating press and hold third-level modificator by `Left Super + Caps Lock`
-  and simulating release of this key by `Left Alt + Caps Lock`.
+- Simulation of pressing Escape key when press `Caps Lock` key without any combos;
+- Simulation of pressing and holding third-level modificator by `Left Alt + Caps Lock`
+  and simulation of releasing of this key by `Right Alt`.
 
 Build
 -----
