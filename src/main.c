@@ -102,7 +102,7 @@ int main(const int argc, const char **argv)
 						
 						if (key_num == CAPS_KEY) {
 							caps_is_pressed = 1;
-						} else {
+						} else if (key_num != level3_key_code) {
 							another_key_is_pressed = 1;
 						}
 						
