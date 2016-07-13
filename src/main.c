@@ -161,7 +161,7 @@ int main(const int argc, const char **argv)
 		fprintf(stderr, "Get stat of XMobar PIPE error\n");
 		return EXIT_FAILURE;
 	}
-	if ((xmobar_pipe_stat.st_mode & S_IFMT) == S_IFIFO) {
+	if (S_ISFIFO(xmobar_pipe_stat.st_mode)) {
 		xmobar_pipe_fd = open(xmobar_pipe_abs_path, O_WRONLY | O_NONBLOCK);
 		if (xmobar_pipe_fd == -1) {
 			fprintf(stderr, "Can't open XMobar PIPE for writing\n");
