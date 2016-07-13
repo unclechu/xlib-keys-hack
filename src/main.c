@@ -7,23 +7,30 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #include <X11/Xlib.h>
 #include <X11/extensions/XTest.h>
 #include <X11/keysym.h>
 
-#define  APPNAME     "xlib-keys-hack"
-#define  IDLE_TIME   10000
-#define  KEYS_LIMIT  16
+#define  APPNAME      "xlib-keys-hack"
+#define  IDLE_TIME    10000
+#define  KEYS_LIMIT   16
 
-#define  CAPS_KEY    66
-#define  LALT_KEY    64
-#define  RALT_KEY    108
+#define  CAPS_KEY     66
+#define  LALT_KEY     64
+#define  RALT_KEY     108
+
+#define  XMOBAR_PIPE  ".xmonad/xmobar.fifo"
 
 Display *dpy;
 Window   wnd;
 unsigned int escape_key_code;
 unsigned int level3_key_code;
+int xmobar_pipe_is_open = 0;
+char xmobar_pipe_abs_path[128];
+int xmobar_pipe_fd = -1;
 
 void trigger_escape()
 {
@@ -43,6 +50,13 @@ void trigger_level3_press()
 #endif
 	XTestFakeKeyEvent(dpy, level3_key_code, True, CurrentTime);
 	XFlush(dpy);
+	if (xmobar_pipe_fd != -1) {
+#ifdef DEBUG
+		printf("DEBUG: Writing 'level3:on' to XMobar PIPE...\n");
+#endif
+		const char msg[] = "level3:on\n";
+		write(xmobar_pipe_fd, msg, strlen(msg) + 1);
+	}
 }
 
 void trigger_level3_release()
@@ -52,6 +66,13 @@ void trigger_level3_release()
 #endif
 	XTestFakeKeyEvent(dpy, level3_key_code, False, CurrentTime);
 	XFlush(dpy);
+	if (xmobar_pipe_fd != -1) {
+#ifdef DEBUG
+		printf("DEBUG: Writing 'level3:off' to XMobar PIPE...\n");
+#endif
+		const char msg[] = "level3:off\n";
+		write(xmobar_pipe_fd, msg, strlen(msg) + 1);
+	}
 }
 
 int main(const int argc, const char **argv)
@@ -67,6 +88,40 @@ int main(const int argc, const char **argv)
 	printf("DEBUG: Level3 key code: %d\n", level3_key_code);
 #endif
 	
+	char *home_dir = getenv("HOME");
+	if (home_dir == NULL) {
+		fprintf(stderr, "Can't get HOME directory path\n");
+		return EXIT_FAILURE;
+	}
+	strcpy(xmobar_pipe_abs_path, home_dir);
+	strcat(xmobar_pipe_abs_path, "/");
+	strcat(xmobar_pipe_abs_path, XMOBAR_PIPE);
+	
+#ifdef DEBUG
+	printf("DEBUG: XMobar PIPE file path: %s\n", xmobar_pipe_abs_path);
+#endif
+	
+	struct stat xmobar_pipe_stat;
+	if (stat(xmobar_pipe_abs_path, &xmobar_pipe_stat) == -1) {
+		fprintf(stderr, "Get stat of XMobar PIPE error\n");
+		return EXIT_FAILURE;
+	}
+	if ((xmobar_pipe_stat.st_mode & S_IFMT) == S_IFIFO) {
+		xmobar_pipe_fd = open(xmobar_pipe_abs_path, O_WRONLY | O_NONBLOCK);
+		if (xmobar_pipe_fd == -1) {
+			fprintf(stderr, "Can't open XMobar PIPE for writing\n");
+			return EXIT_FAILURE;
+		}
+#ifdef DEBUG
+		printf("DEBUG: XMobar PIPE is opened to write\n");
+#endif
+	}
+#ifdef DEBUG
+	else {
+		printf("DEBUG: XMobar PIPE file is not FIFO, won't open\n");
+	}
+#endif
+	
 	int caps_was_pressed = 0;
 	int was_blocked = 0;
 	int level3_is_active = 0;
@@ -77,6 +132,9 @@ int main(const int argc, const char **argv)
 #endif
 	
 	char keys_return[KEYS_LIMIT];
+	
+	// reset previous press
+	trigger_level3_release();
 	
 	while (1) {
 		

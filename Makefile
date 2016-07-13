@@ -14,6 +14,7 @@ $(NAME): clean
 		./src/main.c \
 		-lX11 -lXtst \
 		-std=c99 \
+		-D _XOPEN_SOURCE=600 \
 		$(DEBUG_FLAG) \
 		-o "$(BUILD_DIR)/$(NAME)"
 
