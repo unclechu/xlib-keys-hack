@@ -13,6 +13,7 @@
 #include <X11/Xlib.h>
 #include <X11/extensions/XTest.h>
 #include <X11/keysym.h>
+#include <X11/XKBlib.h>
 
 #define  APPNAME      "xlib-keys-hack"
 #define  IDLE_TIME    10000
@@ -31,6 +32,9 @@ unsigned int level3_key_code;
 int xmobar_pipe_is_open = 0;
 char xmobar_pipe_abs_path[128];
 int xmobar_pipe_fd = -1;
+int is_numlock_on = 0;
+int is_capslock_on = 0;
+int is_level3_on = 0;
 
 void trigger_escape()
 {
@@ -50,13 +54,6 @@ void trigger_level3_press()
 #endif
 	XTestFakeKeyEvent(dpy, level3_key_code, True, CurrentTime);
 	XFlush(dpy);
-	if (xmobar_pipe_fd != -1) {
-#ifdef DEBUG
-		printf("DEBUG: Writing 'level3:on' to XMobar PIPE...\n");
-#endif
-		const char msg[] = "level3:on\n";
-		write(xmobar_pipe_fd, msg, strlen(msg) + 1);
-	}
 }
 
 void trigger_level3_release()
@@ -66,12 +63,70 @@ void trigger_level3_release()
 #endif
 	XTestFakeKeyEvent(dpy, level3_key_code, False, CurrentTime);
 	XFlush(dpy);
-	if (xmobar_pipe_fd != -1) {
+}
+
+const char msg_numlock_on[] = "numlock:on\n";
+const char msg_numlock_off[] = "numlock:off\n";
+const char msg_capslock_on[] = "capslock:on\n";
+const char msg_capslock_off[] = "capslock:off\n";
+const char msg_level3_on[] = "level3:on\n";
+const char msg_level3_off[] = "level3:off\n";
+void detect_modes()
+{
+	XkbStateRec xkb_state;
+	XkbGetState(dpy, XkbUseCoreKbd, &xkb_state);
+	
+	int cur_state;
+	
+	// numlock
+	cur_state = (xkb_state.mods & 16) ? 1 : 0;
+	if (cur_state != is_numlock_on) {
 #ifdef DEBUG
-		printf("DEBUG: Writing 'level3:off' to XMobar PIPE...\n");
+		printf(
+			"DEBUG: Writing 'numlock:%s' to XMobar PIPE...\n",
+			(cur_state == 1) ? "on" : "off"
+		);
 #endif
-		const char msg[] = "level3:off\n";
-		write(xmobar_pipe_fd, msg, strlen(msg) + 1);
+		write(xmobar_pipe_fd, (
+			(cur_state == 1) ? msg_numlock_on : msg_numlock_off
+		), strlen(
+			(cur_state == 1) ? msg_numlock_on : msg_numlock_off
+		) + 1);
+		is_numlock_on = cur_state;
+	}
+	
+	// capslock
+	cur_state = (xkb_state.mods & 2) ? 1 : 0;
+	if (cur_state != is_capslock_on) {
+#ifdef DEBUG
+		printf(
+			"DEBUG: Writing 'capslock:%s' to XMobar PIPE...\n",
+			(cur_state == 1) ? "on" : "off"
+		);
+#endif
+		write(xmobar_pipe_fd, (
+			(cur_state == 1) ? msg_capslock_on : msg_capslock_off
+		), strlen(
+			(cur_state == 1) ? msg_capslock_on : msg_capslock_off
+		) + 1);
+		is_capslock_on = cur_state;
+	}
+	
+	// level3
+	cur_state = (xkb_state.mods & 128) ? 1 : 0;
+	if (cur_state != is_level3_on) {
+#ifdef DEBUG
+		printf(
+			"DEBUG: Writing 'level3:%s' to XMobar PIPE...\n",
+			(cur_state == 1) ? "on" : "off"
+		);
+#endif
+		write(xmobar_pipe_fd, (
+			(cur_state == 1) ? msg_level3_on : msg_level3_off
+		), strlen(
+			(cur_state == 1) ? msg_level3_on : msg_level3_off
+		) + 1);
+		is_level3_on = cur_state;
 	}
 }
 
@@ -135,6 +190,9 @@ int main(const int argc, const char **argv)
 	
 	// reset previous press
 	trigger_level3_release();
+	if (xmobar_pipe_fd != -1) {
+		detect_modes();
+	}
 	
 	while (1) {
 		
@@ -236,6 +294,9 @@ int main(const int argc, const char **argv)
 			trigger_level3_release();
 		}
 		
+		if (xmobar_pipe_fd != -1) {
+			detect_modes();
+		}
 		usleep(IDLE_TIME); // idle
 	}
 	
