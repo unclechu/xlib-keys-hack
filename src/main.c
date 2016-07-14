@@ -156,24 +156,33 @@ int main(const int argc, const char **argv)
 	printf("DEBUG: XMobar PIPE file path: %s\n", xmobar_pipe_abs_path);
 #endif
 	
-	struct stat xmobar_pipe_stat;
-	if (stat(xmobar_pipe_abs_path, &xmobar_pipe_stat) == -1) {
-		fprintf(stderr, "Get stat of XMobar PIPE error\n");
-		return EXIT_FAILURE;
-	}
-	if (S_ISFIFO(xmobar_pipe_stat.st_mode)) {
-		xmobar_pipe_fd = open(xmobar_pipe_abs_path, O_WRONLY | O_NONBLOCK);
-		if (xmobar_pipe_fd == -1) {
-			fprintf(stderr, "Can't open XMobar PIPE for writing\n");
+	int xmobar_pipe_exists = open(xmobar_pipe_abs_path, O_RDONLY | O_NONBLOCK);
+	if (xmobar_pipe_exists != -1) {
+		close(xmobar_pipe_exists);
+		struct stat xmobar_pipe_stat;
+		if (stat(xmobar_pipe_abs_path, &xmobar_pipe_stat) == -1) {
+			fprintf(stderr, "Get stat of XMobar PIPE error\n");
 			return EXIT_FAILURE;
 		}
+		if (S_ISFIFO(xmobar_pipe_stat.st_mode)) {
+			xmobar_pipe_fd = open(xmobar_pipe_abs_path, O_WRONLY | O_NONBLOCK);
+			if (xmobar_pipe_fd == -1) {
+				fprintf(stderr, "Can't open XMobar PIPE for writing\n");
+				return EXIT_FAILURE;
+			}
 #ifdef DEBUG
-		printf("DEBUG: XMobar PIPE is opened to write\n");
+			printf("DEBUG: XMobar PIPE is opened to write\n");
+#endif
+		}
+#ifdef DEBUG
+		else {
+			printf("DEBUG: XMobar PIPE file is not FIFO, won't open\n");
+		}
 #endif
 	}
 #ifdef DEBUG
 	else {
-		printf("DEBUG: XMobar PIPE file is not FIFO, won't open\n");
+		printf("DEBUG: XMobar PIPE file isn't exists, won't open\n");
 	}
 #endif
 	
