@@ -332,7 +332,7 @@ int main(const int argc, const char **argv)
 			ctrl_and_capslock_was_pressed == 0
 		) {
 #ifdef DEBUG
-			printf("DEBUG: Both Caps Lock and Left Control pressed\n");
+			printf("DEBUG: Both Caps Lock and Left/Right Control pressed\n");
 #endif
 			ctrl_and_capslock_was_pressed = 1;
 			trigger_capslock();
