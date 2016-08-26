@@ -22,6 +22,8 @@
 #define  CAPS_KEY     66
 #define  LALT_KEY     64
 #define  RALT_KEY     108
+#define  LCTRL_KEY    37
+#define  RCTRL_KEY    105
 
 #define  XMOBAR_PIPE  ".xmonad/xmobar.fifo"
 
@@ -29,6 +31,7 @@ Display *dpy;
 Window   wnd;
 unsigned int escape_key_code;
 unsigned int level3_key_code;
+unsigned int capslock_key_code;
 int xmobar_pipe_is_open = 0;
 char xmobar_pipe_abs_path[128];
 int xmobar_pipe_fd = -1;
@@ -39,7 +42,7 @@ int is_level3_on = 0;
 void trigger_escape()
 {
 #ifdef DEBUG
-	printf("DEBUG: Triggering escape key...\n");
+	printf("DEBUG: Triggering Escape key...\n");
 #endif
 	XTestFakeKeyEvent(dpy, escape_key_code, True, CurrentTime);
 	XFlush(dpy);
@@ -62,6 +65,17 @@ void trigger_level3_release()
 	printf("DEBUG: Triggering Level3 modifier release...\n");
 #endif
 	XTestFakeKeyEvent(dpy, level3_key_code, False, CurrentTime);
+	XFlush(dpy);
+}
+
+void trigger_capslock()
+{
+#ifdef DEBUG
+	printf("DEBUG: Triggering Caps Lock key...\n");
+#endif
+	XTestFakeKeyEvent(dpy, capslock_key_code, True, CurrentTime);
+	XFlush(dpy);
+	XTestFakeKeyEvent(dpy, capslock_key_code, False, CurrentTime);
 	XFlush(dpy);
 }
 
@@ -137,10 +151,12 @@ int main(const int argc, const char **argv)
 	
 	escape_key_code = XKeysymToKeycode(dpy, XK_Escape);
 	level3_key_code = XKeysymToKeycode(dpy, XK_ISO_Level3_Shift);
+	capslock_key_code = XKeysymToKeycode(dpy, XK_Caps_Lock);
 	
 #ifdef DEBUG
 	printf("DEBUG: Escape key code: %d\n", escape_key_code);
 	printf("DEBUG: Level3 key code: %d\n", level3_key_code);
+	printf("DEBUG: Caps Lock key code: %d\n", capslock_key_code);
 #endif
 	
 	char *home_dir = getenv("HOME");
@@ -195,6 +211,8 @@ int main(const int argc, const char **argv)
 	int ralt_was_pressed = 0;
 #endif
 	
+	int ctrl_and_capslock_was_pressed = 0;
+	
 	char keys_return[KEYS_LIMIT];
 	
 	// reset previous press
@@ -209,6 +227,7 @@ int main(const int argc, const char **argv)
 		int another_key_is_pressed = 0;
 		int lalt_is_pressed = 0;
 		int ralt_is_pressed = 0;
+		int ctrl_is_pressed = 0; // any of left or right control pressed
 		
 		XQueryKeymap(dpy, keys_return);
 		
@@ -236,6 +255,10 @@ int main(const int argc, const char **argv)
 						}
 						if (key_num == RALT_KEY) {
 							ralt_is_pressed = 1;
+						}
+						
+						if (key_num == LCTRL_KEY || key_num == RCTRL_KEY) {
+							ctrl_is_pressed = 1;
 						}
 					}
 					
@@ -301,6 +324,20 @@ int main(const int argc, const char **argv)
 		) {
 			level3_is_active = 0;
 			trigger_level3_release();
+		}
+		
+		if (
+			caps_is_pressed == 1 &&
+			ctrl_is_pressed == 1 &&
+			ctrl_and_capslock_was_pressed == 0
+		) {
+#ifdef DEBUG
+			printf("DEBUG: Both Caps Lock and Left Control pressed\n");
+#endif
+			ctrl_and_capslock_was_pressed = 1;
+			trigger_capslock();
+		} else if (caps_is_pressed == 0 || ctrl_is_pressed == 0) {
+			ctrl_and_capslock_was_pressed = 0;
 		}
 		
 		if (xmobar_pipe_fd != -1) {
