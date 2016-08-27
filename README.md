@@ -5,6 +5,7 @@ xlib-keys-hack
 - Simulation of pressing and holding third-level modificator by `Left Alt + Caps Lock`
   and simulation of releasing of this key by `Right Alt`;
 - Simulation of pressing real `Caps Lock` by `Caps Lock + Left/Right Ctrl`
+  or `Left Ctrl + Right Ctrl`
   (because `Caps Lock` used as additional `Left Ctrl`);
 - Notifying my XMobar FIFO PIPE about third-level modificator, `Num Lock` and `Caps Lock`
   state to make indicators of these on panel

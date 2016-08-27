@@ -211,7 +211,7 @@ int main(const int argc, const char **argv)
 	int ralt_was_pressed = 0;
 #endif
 	
-	int ctrl_and_capslock_was_pressed = 0;
+	int capslock_was_activated = 0;
 	
 	char keys_return[KEYS_LIMIT];
 	
@@ -228,6 +228,8 @@ int main(const int argc, const char **argv)
 		int lalt_is_pressed = 0;
 		int ralt_is_pressed = 0;
 		int ctrl_is_pressed = 0; // any of left or right control pressed
+		int lctrl_is_pressed = 0;
+		int rctrl_is_pressed = 0;
 		
 		XQueryKeymap(dpy, keys_return);
 		
@@ -259,6 +261,12 @@ int main(const int argc, const char **argv)
 						
 						if (key_num == LCTRL_KEY || key_num == RCTRL_KEY) {
 							ctrl_is_pressed = 1;
+							if (key_num == LCTRL_KEY) {
+								lctrl_is_pressed = 1;
+							}
+							if (key_num == RCTRL_KEY) {
+								rctrl_is_pressed = 1;
+							}
 						}
 					}
 					
@@ -327,17 +335,22 @@ int main(const int argc, const char **argv)
 		}
 		
 		if (
-			caps_is_pressed == 1 &&
-			ctrl_is_pressed == 1 &&
-			ctrl_and_capslock_was_pressed == 0
+			(caps_is_pressed == 1 && ctrl_is_pressed == 1) ||
+			(lctrl_is_pressed == 1 && rctrl_is_pressed == 1)
 		) {
+			if (capslock_was_activated == 0) {
 #ifdef DEBUG
-			printf("DEBUG: Both Caps Lock and Left/Right Control pressed\n");
+				printf(
+					(caps_is_pressed == 1 && ctrl_is_pressed == 1) ?
+						"DEBUG: Both Caps Lock and Left/Right Control is pressed\n" :
+						"DEBUG: Both Left Control and Right Control is pressed\n"
+				);
 #endif
-			ctrl_and_capslock_was_pressed = 1;
-			trigger_capslock();
-		} else if (caps_is_pressed == 0 || ctrl_is_pressed == 0) {
-			ctrl_and_capslock_was_pressed = 0;
+				capslock_was_activated = 1;
+				trigger_capslock();
+			}
+		} else {
+			capslock_was_activated = 0;
 		}
 		
 		if (xmobar_pipe_fd != -1) {
