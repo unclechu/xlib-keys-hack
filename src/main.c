@@ -112,11 +112,13 @@ void detect_modes()
 			(cur_state == 1) ? "on" : "off"
 		);
 #endif
-		write(xmobar_pipe_fd, (
-			(cur_state == 1) ? msg_numlock_on : msg_numlock_off
-		), strlen(
-			(cur_state == 1) ? msg_numlock_on : msg_numlock_off
-		) + 1);
+		if (xmobar_pipe_fd != -1) {
+			write(xmobar_pipe_fd, (
+				(cur_state == 1) ? msg_numlock_on : msg_numlock_off
+			), strlen(
+				(cur_state == 1) ? msg_numlock_on : msg_numlock_off
+			) + 1);
+		}
 		is_numlock_on = cur_state;
 	}
 	
@@ -129,11 +131,13 @@ void detect_modes()
 			(cur_state == 1) ? "on" : "off"
 		);
 #endif
-		write(xmobar_pipe_fd, (
-			(cur_state == 1) ? msg_capslock_on : msg_capslock_off
-		), strlen(
-			(cur_state == 1) ? msg_capslock_on : msg_capslock_off
-		) + 1);
+		if (xmobar_pipe_fd != -1) {
+			write(xmobar_pipe_fd, (
+				(cur_state == 1) ? msg_capslock_on : msg_capslock_off
+			), strlen(
+				(cur_state == 1) ? msg_capslock_on : msg_capslock_off
+			) + 1);
+		}
 		is_capslock_on = cur_state;
 	}
 	
@@ -146,11 +150,13 @@ void detect_modes()
 			(cur_state == 1) ? "on" : "off"
 		);
 #endif
-		write(xmobar_pipe_fd, (
-			(cur_state == 1) ? msg_level3_on : msg_level3_off
-		), strlen(
-			(cur_state == 1) ? msg_level3_on : msg_level3_off
-		) + 1);
+		if (xmobar_pipe_fd != -1) {
+			write(xmobar_pipe_fd, (
+				(cur_state == 1) ? msg_level3_on : msg_level3_off
+			), strlen(
+				(cur_state == 1) ? msg_level3_on : msg_level3_off
+			) + 1);
+		}
 		is_level3_on = cur_state;
 	}
 }
@@ -232,9 +238,7 @@ int main(const int argc, const char **argv)
 	
 	// reset previous press
 	trigger_level3_release();
-	if (xmobar_pipe_fd != -1) {
-		detect_modes();
-	}
+	detect_modes();
 	
 	while (1) {
 		
@@ -379,9 +383,7 @@ int main(const int argc, const char **argv)
 			capslock_was_activated = 0;
 		}
 		
-		if (xmobar_pipe_fd != -1) {
-			detect_modes();
-		}
+		detect_modes();
 		usleep(IDLE_TIME); // idle
 	}
 	
