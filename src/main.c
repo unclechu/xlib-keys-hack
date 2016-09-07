@@ -225,7 +225,6 @@ int main(const int argc, const char **argv)
 	int caps_was_blocked = 0;
 	int enter_was_pressed = 0;
 	int enter_was_blocked = 0;
-	int level3_is_active = 0;
 	
 #ifdef DEBUG
 	int lalt_was_pressed = 0;
@@ -355,19 +354,17 @@ int main(const int argc, const char **argv)
 #endif
 		
 		if (
-			level3_is_active == 0 &&
+			is_level3_on == 0 &&
 			ralt_is_pressed == 0 &&
 			caps_is_pressed == 1 &&
 			lalt_is_pressed == 1
 		) {
-			level3_is_active = 1;
 			trigger_level3_press();
 		} else if (
-			level3_is_active == 1 &&
+			is_level3_on == 1 &&
 			lalt_is_pressed == 0 &&
 			ralt_is_pressed == 1
 		) {
-			level3_is_active = 0;
 			trigger_level3_release();
 		}
 		
