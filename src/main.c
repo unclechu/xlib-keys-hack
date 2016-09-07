@@ -22,8 +22,7 @@
 #define  CAPS_KEY     66
 #define  LALT_KEY     64
 #define  RALT_KEY     108
-#define  LCTRL_KEY    37
-#define  RCTRL_KEY    105
+#define  ENTER_KEY    36
 
 #define  XMOBAR_PIPE  ".xmonad/xmobar.fifo"
 
@@ -32,6 +31,7 @@ Window   wnd;
 unsigned int escape_key_code;
 unsigned int level3_key_code;
 unsigned int capslock_key_code;
+unsigned int enter_key_code;
 int xmobar_pipe_is_open = 0;
 char xmobar_pipe_abs_path[128];
 int xmobar_pipe_fd = -1;
@@ -47,6 +47,17 @@ void trigger_escape()
 	XTestFakeKeyEvent(dpy, escape_key_code, True, CurrentTime);
 	XFlush(dpy);
 	XTestFakeKeyEvent(dpy, escape_key_code, False, CurrentTime);
+	XFlush(dpy);
+}
+
+void trigger_enter()
+{
+#ifdef DEBUG
+	printf("DEBUG: Triggering Enter key...\n");
+#endif
+	XTestFakeKeyEvent(dpy, enter_key_code, True, CurrentTime);
+	XFlush(dpy);
+	XTestFakeKeyEvent(dpy, enter_key_code, False, CurrentTime);
 	XFlush(dpy);
 }
 
@@ -152,11 +163,13 @@ int main(const int argc, const char **argv)
 	escape_key_code = XKeysymToKeycode(dpy, XK_Escape);
 	level3_key_code = XKeysymToKeycode(dpy, XK_ISO_Level3_Shift);
 	capslock_key_code = XKeysymToKeycode(dpy, XK_Caps_Lock);
+	enter_key_code = XKeysymToKeycode(dpy, XK_Return);
 	
 #ifdef DEBUG
 	printf("DEBUG: Escape key code: %d\n", escape_key_code);
 	printf("DEBUG: Level3 key code: %d\n", level3_key_code);
 	printf("DEBUG: Caps Lock key code: %d\n", capslock_key_code);
+	printf("DEBUG: Enter key code: %d\n", enter_key_code);
 #endif
 	
 	char *home_dir = getenv("HOME");
@@ -203,7 +216,9 @@ int main(const int argc, const char **argv)
 #endif
 	
 	int caps_was_pressed = 0;
-	int was_blocked = 0;
+	int caps_was_blocked = 0;
+	int enter_was_pressed = 0;
+	int enter_was_blocked = 0;
 	int level3_is_active = 0;
 	
 #ifdef DEBUG
@@ -224,12 +239,12 @@ int main(const int argc, const char **argv)
 	while (1) {
 		
 		int caps_is_pressed = 0;
-		int another_key_is_pressed = 0;
+		int enter_is_pressed = 0;
+		int non_caps_is_pressed = 0;
+		int non_enter_is_pressed = 0;
+		
 		int lalt_is_pressed = 0;
 		int ralt_is_pressed = 0;
-		int ctrl_is_pressed = 0; // any of left or right control pressed
-		int lctrl_is_pressed = 0;
-		int rctrl_is_pressed = 0;
 		
 		XQueryKeymap(dpy, keys_return);
 		
@@ -249,7 +264,13 @@ int main(const int argc, const char **argv)
 						if (key_num == CAPS_KEY) {
 							caps_is_pressed = 1;
 						} else if (key_num != level3_key_code) {
-							another_key_is_pressed = 1;
+							non_caps_is_pressed = 1;
+						}
+						
+						if (key_num == ENTER_KEY) {
+							enter_is_pressed = 1;
+						} else if (key_num != level3_key_code) {
+							non_enter_is_pressed = 1;
 						}
 						
 						if (key_num == LALT_KEY) {
@@ -257,16 +278,6 @@ int main(const int argc, const char **argv)
 						}
 						if (key_num == RALT_KEY) {
 							ralt_is_pressed = 1;
-						}
-						
-						if (key_num == LCTRL_KEY || key_num == RCTRL_KEY) {
-							ctrl_is_pressed = 1;
-							if (key_num == LCTRL_KEY) {
-								lctrl_is_pressed = 1;
-							}
-							if (key_num == RCTRL_KEY) {
-								rctrl_is_pressed = 1;
-							}
 						}
 					}
 					
@@ -276,13 +287,13 @@ int main(const int argc, const char **argv)
 			}
 		}
 		
-		if (was_blocked == 1 || another_key_is_pressed == 1) {
+		if (caps_was_blocked == 1 || non_caps_is_pressed == 1) {
 			
 			caps_was_pressed = 0;
-			was_blocked = 1;
+			caps_was_blocked = 1;
 			
-			if (caps_is_pressed == 0 && another_key_is_pressed == 0) {
-				was_blocked = 0;
+			if (caps_is_pressed == 0 && non_caps_is_pressed == 0) {
+				caps_was_blocked = 0;
 			}
 			
 		} else if (caps_is_pressed == 1) {
@@ -294,8 +305,30 @@ int main(const int argc, const char **argv)
 			caps_was_pressed = 1;
 		} else if (caps_was_pressed == 1) {
 			caps_was_pressed = 0;
-			was_blocked = 1;
+			caps_was_blocked = 1;
 			trigger_escape();
+		}
+		
+		if (enter_was_blocked == 1 || non_enter_is_pressed == 1) {
+			
+			enter_was_pressed = 0;
+			enter_was_blocked = 1;
+			
+			if (enter_is_pressed == 0 && non_enter_is_pressed == 0) {
+				enter_was_blocked = 0;
+			}
+			
+		} else if (enter_is_pressed == 1) {
+#ifdef DEBUG
+			if (enter_was_pressed == 0) {
+				printf("DEBUG: Enter is pressed\n");
+			}
+#endif
+			enter_was_pressed = 1;
+		} else if (enter_was_pressed == 1) {
+			enter_was_pressed = 0;
+			enter_was_blocked = 1;
+			trigger_enter();
 		}
 		
 #ifdef DEBUG
@@ -334,17 +367,10 @@ int main(const int argc, const char **argv)
 			trigger_level3_release();
 		}
 		
-		if (
-			(caps_is_pressed == 1 && ctrl_is_pressed == 1) ||
-			(lctrl_is_pressed == 1 && rctrl_is_pressed == 1)
-		) {
+		if (caps_is_pressed == 1 && enter_is_pressed == 1) {
 			if (capslock_was_activated == 0) {
 #ifdef DEBUG
-				printf(
-					(caps_is_pressed == 1 && ctrl_is_pressed == 1) ?
-						"DEBUG: Both Caps Lock and Left/Right Control is pressed\n" :
-						"DEBUG: Both Left Control and Right Control is pressed\n"
-				);
+				printf("DEBUG: Both Caps Lock and Enter is pressed\n");
 #endif
 				capslock_was_activated = 1;
 				trigger_capslock();
