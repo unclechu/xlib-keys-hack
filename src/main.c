@@ -15,16 +15,26 @@
 #include <X11/keysym.h>
 #include <X11/XKBlib.h>
 
+
 #define  APPNAME      "xlib-keys-hack"
 #define  IDLE_TIME    10000
 #define  KEYS_LIMIT   16
 
+
 #define  CAPS_KEY     66
+#define  ENTER_KEY    36
+#define  LCTRL_KEY    37
+#define  RCTRL_KEY    105
+
 #define  LALT_KEY     64
 #define  RALT_KEY     108
-#define  ENTER_KEY    36
+
+#define  LSHIFT_KEY   50
+#define  RSHIFT_KEY   62
+
 
 #define  XMOBAR_PIPE  ".xmonad/xmobar.fifo"
+
 
 Display *dpy;
 Window   wnd;
@@ -272,7 +282,15 @@ int main(const int argc, const char **argv)
 						
 						if (key_num == ENTER_KEY) {
 							enter_is_pressed = 1;
-						} else if (key_num != level3_key_code) {
+						} else if (
+							key_num != level3_key_code &&
+							key_num != LCTRL_KEY &&
+							key_num != RCTRL_KEY &&
+							key_num != LSHIFT_KEY &&
+							key_num != RSHIFT_KEY &&
+							key_num != LALT_KEY &&
+							key_num != RALT_KEY
+						) {
 							non_enter_is_pressed = 1;
 						}
 						
