@@ -100,6 +100,19 @@ void trigger_capslock()
 	XFlush(dpy);
 }
 
+void flush_modes()
+{
+#ifdef DEBUG
+	printf("DEBUG: Flushing modes...\n");
+#endif
+	if (is_capslock_on == 1) {
+		trigger_capslock();
+	}
+	if (is_level3_on == 1) {
+		trigger_level3_release();
+	}
+}
+
 const char msg_numlock_on[] = "numlock:on\n";
 const char msg_numlock_off[] = "numlock:off\n";
 const char msg_capslock_on[] = "capslock:on\n";
@@ -328,6 +341,7 @@ int main(const int argc, const char **argv)
 			caps_was_pressed = 0;
 			caps_was_blocked = 1;
 			trigger_escape();
+			flush_modes();
 		}
 		
 		if (enter_was_blocked == 1 || non_enter_is_pressed == 1) {
