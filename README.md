@@ -9,7 +9,8 @@ xlib-keys-hack
 - Simulation of pressing real `Enter` by `Enter` key
   (because `Enter` key used as additional `Right Ctrl`);
 - Pressing `Caps Lock` without any combos key that simulates `Escape` key
-  is also turning off caps lock mode and third-level mode;
+  also turns off caps lock mode, third-level mode
+  and resets keyboard layout to first layout;
 - Notifying my XMobar FIFO PIPE about third-level modificator, `Num Lock` and `Caps Lock`
   state to make indicators of these on panel
   ([see here for more details](https://github.com/unclechu/xmonadrc/blob/master/xmobar-cmd.sh)).

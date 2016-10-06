@@ -113,6 +113,14 @@ void flush_modes()
 	}
 }
 
+void reset_xkb_layout()
+{
+#ifdef DEBUG
+	printf("DEBUG: Resetting keyboard layout...\n");
+#endif
+	XkbLockGroup(dpy, XkbUseCoreKbd, 0); // change to first layout
+}
+
 const char msg_numlock_on[] = "numlock:on\n";
 const char msg_numlock_off[] = "numlock:off\n";
 const char msg_capslock_on[] = "capslock:on\n";
@@ -200,6 +208,17 @@ int main(const int argc, const char **argv)
 	printf("DEBUG: Caps Lock key code: %d\n", capslock_key_code);
 	printf("DEBUG: Enter key code: %d\n", enter_key_code);
 #endif
+	
+	XkbDescRec* kbd_desc_ptr = XkbAllocKeyboard();
+	if (kbd_desc_ptr == NULL) {
+		fprintf(stderr, "XKB init error (XkbAllocKeyboard)\n");
+		return EXIT_FAILURE;
+	}
+	XkbGetControls(dpy, XkbAllControlsMask, kbd_desc_ptr);
+	if (kbd_desc_ptr->ctrls->num_groups <= 0) {
+		fprintf(stderr, "XKB init error (group count is 0)\n");
+		return EXIT_FAILURE;
+	}
 	
 	char *home_dir = getenv("HOME");
 	if (home_dir == NULL) {
@@ -341,6 +360,7 @@ int main(const int argc, const char **argv)
 			caps_was_pressed = 0;
 			caps_was_blocked = 1;
 			trigger_escape();
+			reset_xkb_layout();
 			flush_modes();
 		}
 		
