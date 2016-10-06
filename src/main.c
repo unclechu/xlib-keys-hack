@@ -211,12 +211,12 @@ int main(const int argc, const char **argv)
 	
 	XkbDescRec* kbd_desc_ptr = XkbAllocKeyboard();
 	if (kbd_desc_ptr == NULL) {
-		fprintf(stderr, "XKB init error (XkbAllocKeyboard)\n");
+		fprintf(stderr, "Xkb init error (XkbAllocKeyboard)\n");
 		return EXIT_FAILURE;
 	}
 	XkbGetControls(dpy, XkbAllControlsMask, kbd_desc_ptr);
 	if (kbd_desc_ptr->ctrls->num_groups <= 0) {
-		fprintf(stderr, "XKB init error (group count is 0)\n");
+		fprintf(stderr, "Xkb init error (XkbGetControls)\n");
 		return EXIT_FAILURE;
 	}
 	
