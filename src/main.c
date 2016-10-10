@@ -15,6 +15,8 @@
 #include <X11/keysym.h>
 #include <X11/XKBlib.h>
 
+#include <pthread.h>
+
 
 #define  APPNAME      "xlib-keys-hack"
 #define  IDLE_TIME    10000
@@ -48,6 +50,12 @@ int xmobar_pipe_fd = -1;
 int is_numlock_on = 0;
 int is_capslock_on = 0;
 int is_level3_on = 0;
+
+Display *window_focus__dpy;
+Window window_focus__wnd;
+XEvent window_focus__event;
+int window_focus__revert_to;
+int window_focus__last_wnd_id = 0;
 
 void trigger_escape()
 {
@@ -192,6 +200,61 @@ void detect_modes()
 	}
 }
 
+void *window_focus__thread_handler(void *ptr)
+{
+	while (1) {
+		XGetInputFocus(
+			window_focus__dpy, &window_focus__wnd, &window_focus__revert_to
+		);
+		XSelectInput(window_focus__dpy, window_focus__wnd, FocusChangeMask);
+		XNextEvent(window_focus__dpy, &window_focus__event);
+		
+		// check for new window focus
+		if ((int)window_focus__wnd != window_focus__last_wnd_id) {
+#ifdef DEBUG
+			printf("DEBUG: Window focus was moved...\n");
+#endif
+			reset_xkb_layout();
+			flush_modes();
+			window_focus__last_wnd_id = (int)window_focus__wnd;
+		}
+	}
+}
+
+void window_focus__display_init()
+{
+	int reason_return;
+	
+	window_focus__dpy = XkbOpenDisplay(
+		NULL, NULL, NULL, NULL, NULL, &reason_return
+	);
+	
+	switch (reason_return) {
+		case XkbOD_BadLibraryVersion:
+			fprintf(stderr, "Bad Xkb library version\n");
+			exit(EXIT_FAILURE);
+			break;
+		case XkbOD_ConnectionRefused:
+			fprintf(stderr, "Connection to X server refused\n");
+			exit(EXIT_FAILURE);
+			break;
+		case XkbOD_BadServerVersion:
+			fprintf(stderr, "Bad X11 server version\n");
+			exit(EXIT_FAILURE);
+			break;
+		case XkbOD_NonXkbServer:
+			fprintf(stderr, "Xkb not present\n");
+			exit(EXIT_FAILURE);
+			break;
+		case XkbOD_Success:
+			// move forward
+			break;
+		default:
+			fprintf(stderr, "Xkb error with unknown reason\n");
+			exit(EXIT_FAILURE);
+	}
+}
+
 int main(const int argc, const char **argv)
 {
 	dpy = XOpenDisplay(NULL);
@@ -219,6 +282,8 @@ int main(const int argc, const char **argv)
 		fprintf(stderr, "Xkb init error (XkbGetControls)\n");
 		return EXIT_FAILURE;
 	}
+	
+	window_focus__display_init();
 	
 	char *home_dir = getenv("HOME");
 	if (home_dir == NULL) {
@@ -280,6 +345,14 @@ int main(const int argc, const char **argv)
 	// reset previous press
 	trigger_level3_release();
 	detect_modes();
+	
+	pthread_t window_focus__thread;
+	pthread_create(
+		&window_focus__thread,
+		NULL,
+		window_focus__thread_handler,
+		NULL
+	);
 	
 	while (1) {
 		
