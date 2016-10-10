@@ -1,6 +1,9 @@
 xlib-keys-hack
 ==============
 
+This tool supposed to be used with
+[these hacked keyboard layouts](https://github.com/unclechu/X11-my-custom-layouts).
+
 - Simulation of pressing `Escape` key when press `Caps Lock` key without any combos;
 - Simulation of pressing and holding third-level modificator by `Left Alt + Caps Lock`
   and simulation of releasing this key by `Right Alt`;
