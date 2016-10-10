@@ -12,7 +12,7 @@ $(NAME): clean
 	mkdir "$(BUILD_DIR)"
 	gcc \
 		./src/main.c \
-		-lX11 -lXtst \
+		-lX11 -lXtst -lpthread \
 		-std=c99 \
 		-D _XOPEN_SOURCE=600 \
 		$(DEBUG_FLAG) \
