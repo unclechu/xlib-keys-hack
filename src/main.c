@@ -221,6 +221,24 @@ void *window_focus__thread_handler(void *ptr)
 	}
 }
 
+int window_focus__error_handler(Display *dpy, XErrorEvent *ev)
+{
+	// we get BadWindow error when close focused window
+	// it's okay
+	if (ev->error_code == 3) {
+#ifdef DEBUG
+		printf("DEBUG: BadWindow error successfully handled\n");
+#endif
+		return 0;
+	}
+	
+	char mess[128];
+	XGetErrorText(dpy, ev->error_code, mess, sizeof(mess));
+	fprintf(stderr, "X11 Error: %s (error code: %d)\n", mess, ev->error_code);
+	exit(ev->error_code);
+	return ev->error_code;
+}
+
 void window_focus__display_init()
 {
 	int reason_return;
@@ -253,6 +271,8 @@ void window_focus__display_init()
 			fprintf(stderr, "Xkb error with unknown reason\n");
 			exit(EXIT_FAILURE);
 	}
+	
+	XSetErrorHandler(window_focus__error_handler);
 }
 
 int main(const int argc, const char **argv)
