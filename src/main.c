@@ -57,7 +57,7 @@ XEvent window_focus__event;
 int window_focus__revert_to;
 int window_focus__last_wnd_id = 0;
 
-void trigger_escape()
+inline static void trigger_escape()
 {
 #ifdef DEBUG
 	printf("DEBUG: Triggering Escape key...\n");
@@ -68,7 +68,7 @@ void trigger_escape()
 	XFlush(dpy);
 }
 
-void trigger_enter()
+inline static void trigger_enter()
 {
 #ifdef DEBUG
 	printf("DEBUG: Triggering Enter key...\n");
@@ -79,7 +79,7 @@ void trigger_enter()
 	XFlush(dpy);
 }
 
-void trigger_level3_press()
+inline static void trigger_level3_press()
 {
 #ifdef DEBUG
 	printf("DEBUG: Triggering Level3 modifier press...\n");
@@ -88,7 +88,7 @@ void trigger_level3_press()
 	XFlush(dpy);
 }
 
-void trigger_level3_release()
+inline static void trigger_level3_release()
 {
 #ifdef DEBUG
 	printf("DEBUG: Triggering Level3 modifier release...\n");
@@ -97,7 +97,7 @@ void trigger_level3_release()
 	XFlush(dpy);
 }
 
-void trigger_capslock()
+inline static void trigger_capslock()
 {
 #ifdef DEBUG
 	printf("DEBUG: Triggering Caps Lock key...\n");
@@ -108,7 +108,7 @@ void trigger_capslock()
 	XFlush(dpy);
 }
 
-void flush_modes()
+inline static void flush_modes()
 {
 #ifdef DEBUG
 	printf("DEBUG: Flushing modes...\n");
@@ -121,7 +121,7 @@ void flush_modes()
 	}
 }
 
-void reset_xkb_layout()
+inline static void reset_xkb_layout()
 {
 #ifdef DEBUG
 	printf("DEBUG: Resetting keyboard layout...\n");
