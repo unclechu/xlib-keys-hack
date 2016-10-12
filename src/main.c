@@ -513,7 +513,6 @@ int main(const int argc, const char **argv)
 		) {
 			trigger_level3_press();
 		} else if (
-			is_level3_on == 1 &&
 			lalt_is_pressed == 0 &&
 			ralt_is_pressed == 1
 		) {
