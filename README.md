@@ -16,6 +16,8 @@ This tool supposed to be used with
   and resets keyboard layout to first layout;
 - Moving focus to another window resets keyboard layout to first layout,
   turns off caps lock mode and third-level mode;
+- `Right Alt` works as resetter to all of modes (third-level shift, caps lock)
+  and resets keyboard layout to first layout;
 - Notifying my XMobar FIFO PIPE about third-level modificator, `Num Lock` and `Caps Lock`
   state to make indicators of these on panel
   ([see here for more details](https://github.com/unclechu/xmonadrc/blob/master/xmobar-cmd.sh)).

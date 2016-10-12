@@ -129,6 +129,15 @@ void reset_xkb_layout()
 	XkbLockGroup(dpy, XkbUseCoreKbd, 0); // change to first layout
 }
 
+inline static void reset_everything()
+{
+#ifdef DEBUG
+	printf("DEBUG: Resetting everything...\n");
+#endif
+	reset_xkb_layout();
+	flush_modes();
+}
+
 const char msg_numlock_on[] = "numlock:on\n";
 const char msg_numlock_off[] = "numlock:off\n";
 const char msg_capslock_on[] = "capslock:on\n";
@@ -214,8 +223,7 @@ void *window_focus__thread_handler(void *ptr)
 #ifdef DEBUG
 			printf("DEBUG: Window focus was moved...\n");
 #endif
-			reset_xkb_layout();
-			flush_modes();
+			reset_everything();
 			window_focus__last_wnd_id = (int)window_focus__wnd;
 		}
 	}
@@ -453,8 +461,7 @@ int main(const int argc, const char **argv)
 			caps_was_pressed = 0;
 			caps_was_blocked = 1;
 			trigger_escape();
-			reset_xkb_layout();
-			flush_modes();
+			reset_everything();
 		}
 		
 		if (enter_was_blocked == 1 || non_enter_is_pressed == 1) {
@@ -510,7 +517,7 @@ int main(const int argc, const char **argv)
 			lalt_is_pressed == 0 &&
 			ralt_is_pressed == 1
 		) {
-			trigger_level3_release();
+			reset_everything();
 		}
 		
 		if (caps_is_pressed == 1 && enter_is_pressed == 1) {
