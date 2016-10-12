@@ -20,7 +20,6 @@
 
 #define  APPNAME      "xlib-keys-hack"
 #define  IDLE_TIME    10000
-#define  KEYS_LIMIT   16
 
 
 #define  CAPS_KEY     66
@@ -368,7 +367,7 @@ int main(const int argc, const char **argv)
 	
 	int capslock_was_activated = 0;
 	
-	char keys_return[KEYS_LIMIT];
+	char keys_return[32];
 	
 	// reset previous press
 	trigger_level3_release();
@@ -394,50 +393,51 @@ int main(const int argc, const char **argv)
 		
 		XQueryKeymap(dpy, keys_return);
 		
-		for (int i=0; i<KEYS_LIMIT; ++i) {
+		for (int i=0; i<sizeof(keys_return); ++i) {
 			
-			if (keys_return[i] != 0) {
+			if (keys_return[i] == 0) {
+				continue;
+			}
+			
+			int pos = 0;
+			int num = keys_return[i];
+			
+			while (pos < 8) {
 				
-				int pos = 0;
-				int num = keys_return[i];
-				
-				while (pos < 8) {
+				if ((num & 0x01) == 1) {
 					
-					if ((num & 0x01) == 1) {
-						
-						int key_num = i*8+pos;
-						
-						if (key_num == CAPS_KEY) {
-							caps_is_pressed = 1;
-						} else if (key_num != level3_key_code) {
-							non_caps_is_pressed = 1;
-						}
-						
-						if (key_num == ENTER_KEY) {
-							enter_is_pressed = 1;
-						} else if (
-							key_num != level3_key_code &&
-							key_num != LCTRL_KEY &&
-							key_num != RCTRL_KEY &&
-							key_num != LSHIFT_KEY &&
-							key_num != RSHIFT_KEY &&
-							key_num != LALT_KEY &&
-							key_num != RALT_KEY
-						) {
-							non_enter_is_pressed = 1;
-						}
-						
-						if (key_num == LALT_KEY) {
-							lalt_is_pressed = 1;
-						}
-						if (key_num == RALT_KEY) {
-							ralt_is_pressed = 1;
-						}
+					int key_num = i*8+pos;
+					
+					if (key_num == CAPS_KEY) {
+						caps_is_pressed = 1;
+					} else if (key_num != level3_key_code) {
+						non_caps_is_pressed = 1;
 					}
 					
-					++pos;
-					num /= 2;
+					if (key_num == ENTER_KEY) {
+						enter_is_pressed = 1;
+					} else if (
+						key_num != level3_key_code &&
+						key_num != LCTRL_KEY &&
+						key_num != RCTRL_KEY &&
+						key_num != LSHIFT_KEY &&
+						key_num != RSHIFT_KEY &&
+						key_num != LALT_KEY &&
+						key_num != RALT_KEY
+					) {
+						non_enter_is_pressed = 1;
+					}
+					
+					if (key_num == LALT_KEY) {
+						lalt_is_pressed = 1;
+					}
+					if (key_num == RALT_KEY) {
+						ralt_is_pressed = 1;
+					}
 				}
+				
+				++pos;
+				num /= 2;
 			}
 		}
 		
