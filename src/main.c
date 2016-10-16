@@ -282,6 +282,22 @@ void window_focus__display_init()
 	XSetErrorHandler(window_focus__error_handler);
 }
 
+inline static void copy_pressed_non_modifiers_keys(
+	int *keys_pressed_from_i,
+	int  keys_pressed_from[],
+	int *keys_pressed_to_i,
+	int  keys_pressed_to[]
+) {
+	for (
+		*keys_pressed_to_i = 0;
+		*keys_pressed_to_i < *keys_pressed_from_i;
+		++(*keys_pressed_to_i)
+	) {
+		keys_pressed_to[*keys_pressed_to_i] =
+			keys_pressed_from[*keys_pressed_to_i];
+	}
+}
+
 int main(const int argc, const char **argv)
 {
 	dpy = XOpenDisplay(NULL);
@@ -362,12 +378,17 @@ int main(const int argc, const char **argv)
 	
 #ifdef DEBUG
 	int lalt_was_pressed = 0;
-	int ralt_was_pressed = 0;
 #endif
+	int ralt_was_pressed = 0;
+	int ralt_was_blocked = 0;
 	
 	int capslock_was_activated = 0;
 	
 	char keys_return[32];
+	
+	int keys_pressed_at_i = 0;
+	int keys_pressed_at[sizeof(keys_return)]; // at caps or enter pressed
+	int is_keys_stored_at = 0;
 	
 	// reset previous press
 	trigger_level3_release();
@@ -383,13 +404,25 @@ int main(const int argc, const char **argv)
 	
 	while (1) {
 		
+		int keys_pressed_tmp_i = 0;
+		int keys_pressed_tmp[sizeof(keys_return)];
+		
 		int caps_is_pressed = 0;
 		int enter_is_pressed = 0;
-		int non_caps_is_pressed = 0;
-		int non_enter_is_pressed = 0;
+		int caps_and_enter_is_pressed_both = 0;
 		
 		int lalt_is_pressed = 0;
 		int ralt_is_pressed = 0;
+		
+		// not caps, enter or level3
+		int modifier_is_pressed = 0;
+		// any key that isn't modifier (shift/alt/control)
+		int non_modifier_is_pressed = 0;
+		// to trigger caps lock in level3 mode
+		int non_modifier_is_pressed_except_level3 = 0;
+		
+		int caps_is_blocked = 0;
+		int enter_is_blocked = 0;
 		
 		XQueryKeymap(dpy, keys_return);
 		
@@ -410,29 +443,33 @@ int main(const int argc, const char **argv)
 					
 					if (key_num == CAPS_KEY) {
 						caps_is_pressed = 1;
-					} else if (key_num != level3_key_code) {
-						non_caps_is_pressed = 1;
-					}
-					
-					if (key_num == ENTER_KEY) {
+						enter_is_blocked = 0;
+					} else if (key_num == ENTER_KEY) {
 						enter_is_pressed = 1;
+						caps_is_blocked = 0;
 					} else if (
-						key_num != level3_key_code &&
-						key_num != LCTRL_KEY &&
-						key_num != RCTRL_KEY &&
-						key_num != LSHIFT_KEY &&
-						key_num != RSHIFT_KEY &&
-						key_num != LALT_KEY &&
-						key_num != RALT_KEY
+						key_num == LCTRL_KEY ||
+						key_num == RCTRL_KEY ||
+						
+						key_num == LSHIFT_KEY ||
+						key_num == RSHIFT_KEY ||
+						
+						key_num == LALT_KEY ||
+						key_num == RALT_KEY
 					) {
-						non_enter_is_pressed = 1;
-					}
-					
-					if (key_num == LALT_KEY) {
-						lalt_is_pressed = 1;
-					}
-					if (key_num == RALT_KEY) {
-						ralt_is_pressed = 1;
+						modifier_is_pressed = 1;
+						
+						if (key_num == LALT_KEY) {
+							lalt_is_pressed = 1;
+						} else if (key_num == RALT_KEY) {
+							ralt_is_pressed = 1;
+						}
+					} else {
+						if (key_num != level3_key_code) {
+							non_modifier_is_pressed_except_level3 = 1;
+						}
+						non_modifier_is_pressed = 1;
+						keys_pressed_tmp[keys_pressed_tmp_i++] = key_num;
 					}
 				}
 				
@@ -441,46 +478,162 @@ int main(const int argc, const char **argv)
 			}
 		}
 		
-		if (caps_was_blocked == 1 || non_caps_is_pressed == 1) {
+		// check for pressing caps lock and enter both.
+		// also check if it's not blocked.
+		if (
+			caps_is_pressed == 1 &&
+			enter_is_pressed == 1 &&
+			modifier_is_pressed == 0 &&
+			non_modifier_is_pressed_except_level3 == 0
+		) {
+			caps_and_enter_is_pressed_both = 1;
+			caps_was_blocked = 1;
+			enter_was_blocked = 1;
+		}
+		
+		if (caps_was_blocked == 0 && enter_was_blocked == 0) {
+			
+			if (caps_was_pressed == 1 || enter_was_pressed == 1) {
+				
+				// check if current non-modifiers state
+				// doesn't have new keys and remove keys
+				// from stored state that was released
+				// that in turn can't be pressed again
+				// without blocking caps/enter.
+				
+				// we definitely have new key pressed
+				if (keys_pressed_tmp_i > keys_pressed_at_i) {
+					caps_was_blocked = 1;
+					enter_was_blocked = 1;
+				} else {
+					
+					// compare if we have new keys
+					for (int i = 0; i < keys_pressed_tmp_i; ++i) {
+						int found_this_key = 0;
+						for (int n = 0; n < keys_pressed_at_i; ++n) {
+							if (keys_pressed_tmp[i] == keys_pressed_at[n]) {
+								found_this_key = 1;
+							}
+						}
+						// new key pressed
+						if (found_this_key == 0) {
+							caps_was_blocked = 1;
+							enter_was_blocked = 1;
+							break;
+						}
+					}
+					
+					// remove released keys from state
+					// just by copying it again.
+					if (
+						keys_pressed_tmp_i < keys_pressed_at_i &&
+						caps_was_blocked == 0 &&
+						enter_was_blocked == 0
+					) {
+						// copy current non-modifiers state
+						copy_pressed_non_modifiers_keys(
+							&keys_pressed_tmp_i,
+							(int*)&keys_pressed_tmp,
+							&keys_pressed_at_i,
+							(int*)&keys_pressed_at
+						);
+					}
+				}
+				
+			} else if (
+				is_keys_stored_at == 0 &&
+				(caps_is_pressed == 1 || enter_is_pressed == 1)
+			) {
+				is_keys_stored_at = 1;
+				// copy current non-modifiers state
+				copy_pressed_non_modifiers_keys(
+					&keys_pressed_tmp_i,
+					(int*)&keys_pressed_tmp,
+					&keys_pressed_at_i,
+					(int*)&keys_pressed_at
+				);
+			}
+		}
+		// reset pressed non-modifiers keys state if both
+		// caps lock and enter released.
+		if (
+			(caps_is_pressed == 0 && enter_is_pressed == 0) ||
+			(caps_was_blocked == 1 || enter_was_blocked == 1)
+		) {
+			is_keys_stored_at = 0;
+			keys_pressed_at_i = 0;
+		}
+		
+		// deal with escape triggering by caps lock.
+		if (
+			caps_was_blocked == 1 ||
+			modifier_is_pressed == 1 ||
+			caps_is_blocked == 1
+		) {
 			
 			caps_was_pressed = 0;
 			caps_was_blocked = 1;
 			
-			if (caps_is_pressed == 0 && non_caps_is_pressed == 0) {
+			if (
+				caps_is_pressed == 0 &&
+				modifier_is_pressed == 0 &&
+				caps_is_blocked == 0
+			) {
 				caps_was_blocked = 0;
 			}
-			
-		} else if (caps_is_pressed == 1) {
+		}
+		// when held
+		else if (caps_is_pressed == 1) {
 #ifdef DEBUG
 			if (caps_was_pressed == 0) {
 				printf("DEBUG: Caps Lock is pressed\n");
 			}
 #endif
 			caps_was_pressed = 1;
-		} else if (caps_was_pressed == 1) {
+		}
+		// after previous condition
+		// (when is still pressed)
+		// it mean it's released know
+		else if (caps_was_pressed == 1) {
 			caps_was_pressed = 0;
 			caps_was_blocked = 1;
 			trigger_escape();
 			reset_everything();
 		}
 		
-		if (enter_was_blocked == 1 || non_enter_is_pressed == 1) {
+		// deal with real enter triggering by enter
+		// (that is right control).
+		if (
+			enter_was_blocked == 1 ||
+			modifier_is_pressed == 1 ||
+			enter_is_blocked == 1
+		) {
 			
 			enter_was_pressed = 0;
 			enter_was_blocked = 1;
 			
-			if (enter_is_pressed == 0 && non_enter_is_pressed == 0) {
+			if (
+				enter_is_pressed == 0 &&
+				modifier_is_pressed == 0 &&
+				enter_is_blocked == 0
+			) {
 				enter_was_blocked = 0;
 			}
 			
-		} else if (enter_is_pressed == 1) {
+		}
+		// when held
+		else if (enter_is_pressed == 1) {
 #ifdef DEBUG
 			if (enter_was_pressed == 0) {
 				printf("DEBUG: Enter is pressed\n");
 			}
 #endif
 			enter_was_pressed = 1;
-		} else if (enter_was_pressed == 1) {
+		}
+		// after previous condition
+		// (when is still pressed)
+		// it mean it's released know
+		else if (enter_was_pressed == 1) {
 			enter_was_pressed = 0;
 			enter_was_blocked = 1;
 			trigger_enter();
@@ -495,15 +648,25 @@ int main(const int argc, const char **argv)
 		} else {
 			lalt_was_pressed = 0;
 		}
-		if (ralt_is_pressed == 1) {
+#endif
+		int ralt_on = 0;
+		if (ralt_was_blocked == 1) {
+			ralt_was_pressed = 0;
+			if (ralt_is_pressed == 0) {
+				ralt_was_blocked = 0;
+			}
+		} else if (ralt_is_pressed == 1) {
 			if (ralt_was_pressed == 0) {
 				ralt_was_pressed = 1;
+				ralt_on = 1;
+#ifdef DEBUG
 				printf("DEBUG: Right Alt is pressed\n");
+#endif
 			}
 		} else {
 			ralt_was_pressed = 0;
+			ralt_was_blocked = 0;
 		}
-#endif
 		
 		if (
 			is_level3_on == 0 &&
@@ -512,14 +675,12 @@ int main(const int argc, const char **argv)
 			lalt_is_pressed == 1
 		) {
 			trigger_level3_press();
-		} else if (
-			lalt_is_pressed == 0 &&
-			ralt_is_pressed == 1
-		) {
+		} else if (lalt_is_pressed == 0 && ralt_on == 1) {
 			reset_everything();
 		}
+		ralt_on = 0;
 		
-		if (caps_is_pressed == 1 && enter_is_pressed == 1) {
+		if (caps_and_enter_is_pressed_both == 1) {
 			if (capslock_was_activated == 0) {
 #ifdef DEBUG
 				printf("DEBUG: Both Caps Lock and Enter is pressed\n");
