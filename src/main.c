@@ -421,9 +421,6 @@ int main(const int argc, const char **argv)
 		// to trigger caps lock in level3 mode
 		int non_modifier_is_pressed_except_level3 = 0;
 		
-		int caps_is_blocked = 0;
-		int enter_is_blocked = 0;
-		
 		XQueryKeymap(dpy, keys_return);
 		
 		for (int i=0; i<sizeof(keys_return); ++i) {
@@ -443,10 +440,8 @@ int main(const int argc, const char **argv)
 					
 					if (key_num == CAPS_KEY) {
 						caps_is_pressed = 1;
-						enter_is_blocked = 0;
 					} else if (key_num == ENTER_KEY) {
 						enter_is_pressed = 1;
-						caps_is_blocked = 0;
 					} else if (
 						key_num == LCTRL_KEY ||
 						key_num == RCTRL_KEY ||
@@ -491,7 +486,10 @@ int main(const int argc, const char **argv)
 			enter_was_blocked = 1;
 		}
 		
-		if (caps_was_blocked == 0 && enter_was_blocked == 0) {
+		if (
+			(caps_was_blocked == 0 && enter_was_blocked == 0) ||
+			(enter_is_pressed == 1 && enter_was_blocked == 0)
+		) {
 			
 			if (caps_was_pressed == 1 || enter_was_pressed == 1) {
 				
@@ -558,27 +556,22 @@ int main(const int argc, const char **argv)
 		// caps lock and enter released.
 		if (
 			(caps_is_pressed == 0 && enter_is_pressed == 0) ||
-			(caps_was_blocked == 1 || enter_was_blocked == 1)
+			(
+				(caps_was_blocked == 1 || enter_was_blocked == 1) &&
+				(enter_is_pressed == 0 || enter_was_blocked == 1)
+			)
 		) {
 			is_keys_stored_at = 0;
 			keys_pressed_at_i = 0;
 		}
 		
 		// deal with escape triggering by caps lock.
-		if (
-			caps_was_blocked == 1 ||
-			modifier_is_pressed == 1 ||
-			caps_is_blocked == 1
-		) {
+		if (caps_was_blocked == 1 || modifier_is_pressed == 1) {
 			
 			caps_was_pressed = 0;
 			caps_was_blocked = 1;
 			
-			if (
-				caps_is_pressed == 0 &&
-				modifier_is_pressed == 0 &&
-				caps_is_blocked == 0
-			) {
+			if (caps_is_pressed == 0 && modifier_is_pressed == 0) {
 				caps_was_blocked = 0;
 			}
 		}
@@ -603,20 +596,12 @@ int main(const int argc, const char **argv)
 		
 		// deal with real enter triggering by enter
 		// (that is right control).
-		if (
-			enter_was_blocked == 1 ||
-			modifier_is_pressed == 1 ||
-			enter_is_blocked == 1
-		) {
+		if (enter_was_blocked == 1) {
 			
 			enter_was_pressed = 0;
 			enter_was_blocked = 1;
 			
-			if (
-				enter_is_pressed == 0 &&
-				modifier_is_pressed == 0 &&
-				enter_is_blocked == 0
-			) {
+			if (enter_is_pressed == 0) {
 				enter_was_blocked = 0;
 			}
 			
