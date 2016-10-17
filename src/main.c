@@ -390,8 +390,7 @@ int main(const int argc, const char **argv)
 	int keys_pressed_at[sizeof(keys_return)]; // at caps or enter pressed
 	int is_keys_stored_at = 0;
 	
-	// reset previous press
-	trigger_level3_release();
+	reset_everything();
 	detect_modes();
 	
 	pthread_t window_focus__thread;
@@ -423,7 +422,7 @@ int main(const int argc, const char **argv)
 		
 		XQueryKeymap(dpy, keys_return);
 		
-		for (int i=0; i<sizeof(keys_return); ++i) {
+		for (int i = 0; i < sizeof(keys_return); ++i) {
 			
 			if (keys_return[i] == 0) {
 				continue;
@@ -506,10 +505,10 @@ int main(const int argc, const char **argv)
 				} else {
 					
 					// compare if we have new keys
-					for (int i = 0; i < keys_pressed_tmp_i; ++i) {
+					for (int tmp_i = 0; tmp_i < keys_pressed_tmp_i; ++tmp_i) {
 						int found_this_key = 0;
-						for (int n = 0; n < keys_pressed_at_i; ++n) {
-							if (keys_pressed_tmp[i] == keys_pressed_at[n]) {
+						for (int at_i = 0; at_i < keys_pressed_at_i; ++at_i) {
+							if (keys_pressed_tmp[tmp_i] == keys_pressed_at[at_i]) {
 								found_this_key = 1;
 							}
 						}
