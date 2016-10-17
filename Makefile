@@ -13,7 +13,7 @@ $(NAME): clean
 	gcc \
 		./src/main.c \
 		-lX11 -lXtst -lpthread \
-		-std=c99 \
+		-std=c11 \
 		-Ofast \
 		-D _XOPEN_SOURCE=600 \
 		$(DEBUG_FLAG) \
