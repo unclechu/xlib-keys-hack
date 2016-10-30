@@ -7,9 +7,12 @@ import System.IO (hPutStrLn, stderr)
 import System.Environment (getArgs)
 import System.Console.GetOpt (getOpt)
 
-import qualified Graphics.X11.Xlib as Xlib
-import qualified Graphics.X11.Xlib.Event as XEvent
-import qualified Graphics.X11.Xlib.Display as XDisplay
+import Graphics.X11.Types (xK_Escape, xK_Caps_Lock)
+import Graphics.X11.ExtraTypes (xK_ISO_Level3_Shift)
+import Graphics.X11.Xlib.Display (openDisplay, defaultRootWindow)
+import Graphics.X11.Xlib.Misc (keysymToKeycode)
+
+import Bindings.XTest (fakeKeyEvent)
 
 
 -- constants
@@ -29,7 +32,6 @@ lShiftKey      = 50
 rShiftKey      = 62
 
 
-
 errPutStrLn = hPutStrLn stderr
 
 main :: IO ()
@@ -37,9 +39,18 @@ main = do
 
   args <- getArgs
 
-  dpy <- XDisplay.openDisplay ""
-  let wnd = XDisplay.defaultRootWindow dpy
+  dpy <- openDisplay ""
+  let wnd = defaultRootWindow dpy
 
-  -- key_event <- XEvent.get_KeyEvent TODO
+  escapeKeycode      <- keysymToKeycode dpy xK_Escape
+  capsLockKeycode    <- keysymToKeycode dpy xK_Caps_Lock
+  level3ShiftKeycode <- keysymToKeycode dpy xK_ISO_Level3_Shift
+
+  putStrLn $ "Escape keycode: "       ++ show escapeKeycode
+  putStrLn $ "Caps Lock keycode: "    ++ show capsLockKeycode
+  putStrLn $ "Level3 Shift keycode: " ++ show level3ShiftKeycode
+
+  -- fakeKeyEvent dpy xK_ISO_Level3_Shift True
+  -- fakeKeyEvent dpy xK_ISO_Level3_Shift False
 
   putStrLn "it's okay"
