@@ -7,12 +7,30 @@ import System.IO (hPutStrLn, stderr)
 import System.Environment (getArgs)
 import System.Console.GetOpt (getOpt)
 
-import Graphics.X11.Types (xK_Escape, xK_Caps_Lock)
-import Graphics.X11.ExtraTypes (xK_ISO_Level3_Shift)
-import Graphics.X11.Xlib.Display (openDisplay, defaultRootWindow)
-import Graphics.X11.Xlib.Misc (keysymToKeycode)
+import Data.Bits ((.|.))
 
-import Bindings.XTest (fakeKeyEvent)
+import Graphics.X11.Types ( xK_Escape
+                          , xK_Caps_Lock )
+import Graphics.X11.ExtraTypes ( xK_ISO_Level3_Shift
+                               )
+import Graphics.X11.Xlib ( Display
+                         , buttonPressMask
+                         , buttonReleaseMask )
+import Graphics.X11.Xlib.Display ( openDisplay
+                                 , defaultRootWindow )
+import Graphics.X11.Xlib.Misc ( keysymToKeycode
+                              )
+import Graphics.X11.Xlib.Event ( XEvent(XEvent)
+                               , XEventPtr
+                               , nextEvent
+                               , selectInput
+                               , allocaXEvent
+                               , sync )
+import Graphics.X11.Xlib.Extras ( getEvent
+                                , eventName )
+
+import Bindings.XTest ( fakeKeyEvent
+                      )
 
 
 -- constants
@@ -32,7 +50,24 @@ lShiftKey      = 50
 rShiftKey      = 62
 
 
+(&) = flip ($)
+(?) = flip (.)
 errPutStrLn = hPutStrLn stderr
+
+
+processEvent :: Display -> XEventPtr -> IO ()
+processEvent dpy evPtr = do
+
+  putStrLn "Iteration"
+
+  sync dpy False
+  nextEvent dpy evPtr
+  ev <- getEvent evPtr
+  putStrLn $ "Event: " ++ eventName ev
+  again
+
+  where again = processEvent dpy evPtr
+
 
 main :: IO ()
 main = do
@@ -49,6 +84,14 @@ main = do
   putStrLn $ "Escape keycode: "       ++ show escapeKeycode
   putStrLn $ "Caps Lock keycode: "    ++ show capsLockKeycode
   putStrLn $ "Level3 Shift keycode: " ++ show level3ShiftKeycode
+
+  selectInput dpy wnd (buttonPressMask .|. buttonReleaseMask)
+
+  evPtr <- allocaXEvent return
+  let eventLoop = processEvent dpy evPtr
+  eventLoop
+
+  -- processEvent dpy evPtr
 
   -- fakeKeyEvent dpy xK_ISO_Level3_Shift True
   -- fakeKeyEvent dpy xK_ISO_Level3_Shift False

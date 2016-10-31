@@ -1,3 +1,6 @@
+-- Author: Viacheslav Lotsmanov
+-- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
+
 {-# LANGUAGE ForeignFunctionInterface #-}
 
 module Bindings.XTest (fakeKeyEvent) where
