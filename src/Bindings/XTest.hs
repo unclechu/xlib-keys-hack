@@ -6,12 +6,15 @@
 module Bindings.XTest (fakeKeyEvent) where
 
 import Control.Monad (when)
-import Foreign.C.Types (CULong(CULong), CInt(CInt))
+import Foreign.C.Types ( CULong(CULong)
+                       , CInt(CInt)
+                       )
 import Graphics.X11.Xlib ( Display(Display)
                          , KeyCode
                          , Status
                          , KeySym
-                         , sync )
+                         , sync
+                         )
 import Graphics.X11.Xlib.Misc (keysymToKeycode)
 
 foreign import ccall unsafe "X11/extensions/XTest.h XTestFakeKeyEvent"

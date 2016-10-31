@@ -6,28 +6,41 @@ module Main (main) where
 import System.IO (hPutStrLn, stderr)
 import System.Environment (getArgs)
 import System.Console.GetOpt (getOpt)
+import System.Posix.Types (Fd(Fd))
+
+import Control.Concurrent (threadWaitRead)
 
 import Data.Bits ((.|.))
 
 import Graphics.X11.Types ( xK_Escape
-                          , xK_Caps_Lock )
+                          , xK_Caps_Lock
+                          )
 import Graphics.X11.ExtraTypes ( xK_ISO_Level3_Shift
                                )
 import Graphics.X11.Xlib ( Display
-                         , buttonPressMask
-                         , buttonReleaseMask )
+                         , Window
+                         , keyPressMask
+                         , keyReleaseMask
+                         , focusChangeMask
+                         , pending
+                         )
 import Graphics.X11.Xlib.Display ( openDisplay
-                                 , defaultRootWindow )
+                                 , defaultRootWindow
+                                 , connectionNumber
+                                 )
 import Graphics.X11.Xlib.Misc ( keysymToKeycode
+                              , getInputFocus
                               )
 import Graphics.X11.Xlib.Event ( XEvent(XEvent)
                                , XEventPtr
                                , nextEvent
                                , selectInput
                                , allocaXEvent
-                               , sync )
+                               , sync
+                               )
 import Graphics.X11.Xlib.Extras ( getEvent
-                                , eventName )
+                                , eventName
+                                )
 
 import Bindings.XTest ( fakeKeyEvent
                       )
@@ -54,19 +67,45 @@ rShiftKey      = 62
 (?) = flip (.)
 errPutStrLn = hPutStrLn stderr
 
+-- https://wiki.haskell.org/X_window_programming_in_Haskell
+-- A version of nextEvent that does not block in foreign calls.
+nextEvent' :: Display -> XEventPtr -> IO ()
+nextEvent' dpy evPtr = do
+  pend <- pending dpy
+  if pend /= 0
+     then nextEvent dpy evPtr
+     else do
+       threadWaitRead (Fd fd)
+       nextEvent' dpy evPtr
+  where fd = connectionNumber dpy
 
-processEvent :: Display -> XEventPtr -> IO ()
-processEvent dpy evPtr = do
+processEvent :: Display -> Window -> XEventPtr -> IO ()
+processEvent dpy rootWnd evPtr = do
 
-  putStrLn "Iteration"
+  putStrLn "----- Iteration -----"
 
-  sync dpy False
-  nextEvent dpy evPtr
-  ev <- getEvent evPtr
-  putStrLn $ "Event: " ++ eventName ev
-  again
+  (wnd, _) <- getInputFocus dpy
+  if wnd == rootWnd
+  then putStrLn "Root window!" >> again
+  else do
 
-  where again = processEvent dpy evPtr
+    putStrLn "selectInput..."
+    selectInput dpy wnd (  keyPressMask
+                       .|. keyReleaseMask
+                       .|. focusChangeMask
+                        )
+
+    putStrLn "sync ..."
+    sync dpy False
+    putStrLn "nextEvent ..."
+    nextEvent dpy evPtr
+    putStrLn "getEvent ..."
+    ev <- getEvent evPtr
+    putStrLn $ "Event: " ++ eventName ev
+    again
+
+  where again = processEvent dpy rootWnd evPtr
+        nextEvent = nextEvent'
 
 
 main :: IO ()
@@ -75,7 +114,7 @@ main = do
   args <- getArgs
 
   dpy <- openDisplay ""
-  let wnd = defaultRootWindow dpy
+  let rootWnd = defaultRootWindow dpy
 
   escapeKeycode      <- keysymToKeycode dpy xK_Escape
   capsLockKeycode    <- keysymToKeycode dpy xK_Caps_Lock
@@ -85,13 +124,9 @@ main = do
   putStrLn $ "Caps Lock keycode: "    ++ show capsLockKeycode
   putStrLn $ "Level3 Shift keycode: " ++ show level3ShiftKeycode
 
-  selectInput dpy wnd (buttonPressMask .|. buttonReleaseMask)
-
   evPtr <- allocaXEvent return
-  let eventLoop = processEvent dpy evPtr
+  let eventLoop = processEvent dpy rootWnd evPtr
   eventLoop
-
-  -- processEvent dpy evPtr
 
   -- fakeKeyEvent dpy xK_ISO_Level3_Shift True
   -- fakeKeyEvent dpy xK_ISO_Level3_Shift False
