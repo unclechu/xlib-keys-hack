@@ -4,29 +4,23 @@
 module Main (main) where
 
 import System.IO (hPutStrLn, stderr)
--- import System.Environment (getArgs)
-import System.Console.GetOpt (getOpt)
+-- import System.Console.GetOpt (getOpt) -- TODO (verbose arg)
 import System.Posix.Types (Fd(Fd))
 
+import Control.Monad (when)
 import Control.Concurrent (threadWaitRead)
 
+import qualified Data.Maybe as Maybe
 import Data.Bits ((.|.))
 
-import Graphics.X11.Types ( xK_Escape
-                          , xK_Caps_Lock
-                          , grabModeAsync
-                          , grabModeSync
-                          , anyModifier
-                          )
-import Graphics.X11.ExtraTypes ( xK_ISO_Level3_Shift
-                               )
-import Graphics.X11.Xlib ( Display
-                         , Window
-                         , keyPressMask
-                         , keyReleaseMask
-                         , focusChangeMask
-                         , pending
-                         )
+import qualified Graphics.X11.Types      as XTypes
+import qualified Graphics.X11.ExtraTypes as XTypes
+import Graphics.X11.Xlib.Types (Display)
+import Graphics.X11.Types (Window)
+
+import qualified Graphics.X11.Xlib.Event  as XEvent
+import qualified Graphics.X11.Xlib.Extras as XExtras -- ev_keycode
+import Graphics.X11.Xlib (pending)
 import Graphics.X11.Xlib.Display ( openDisplay
                                  , defaultRootWindow
                                  , connectionNumber
@@ -36,36 +30,25 @@ import Graphics.X11.Xlib.Misc ( keysymToKeycode
                               , grabKey
                               , ungrabKey
                               )
-import Graphics.X11.Xlib.Event ( XEvent(XEvent)
-                               , XEventPtr
-                               , nextEvent
-                               , selectInput
-                               , allocaXEvent
-                               , sync
-                               )
-import Graphics.X11.Xlib.Extras ( getEvent
-                                , eventName
-                                )
 
-import Bindings.XTest ( fakeKeyEvent
-                      )
+import Bindings.XTest (fakeKeyEvent)
 
 
 xmobarPipeFile = ".xmonad/xmobar.fifo"
 
+-- caps lock key that remapped to escape key
+capsEscKeycode = 66
 
-(&) = flip ($)
-(?) = flip (.)
 errPutStrLn = hPutStrLn stderr
 
 
 -- https://wiki.haskell.org/X_window_programming_in_Haskell
 -- A version of nextEvent that does not block in foreign calls.
-nextEvent' :: Display -> XEventPtr -> IO ()
+nextEvent' :: Display -> XEvent.XEventPtr -> IO ()
 nextEvent' dpy evPtr = do
   pend <- pending dpy
   if pend /= 0
-     then nextEvent dpy evPtr
+     then XEvent.nextEvent dpy evPtr
      else do
        threadWaitRead (Fd fd)
        nextEvent' dpy evPtr
@@ -75,56 +58,70 @@ nextEvent' dpy evPtr = do
 processEvent :: Display -> Window -> IO ()
 processEvent dpy rootWnd = do
 
-  putStrLn "----- Iteration -----"
-
   (wnd, _) <- getInputFocus dpy
   if wnd == rootWnd
-  then putStrLn "Root window!" >> again
+  then again
   else do
 
-    putStrLn "sync ..."
-    sync dpy False
+    XEvent.sync dpy False
 
-    putStrLn "selectInput..."
-    selectInput dpy wnd (  keyPressMask
-                       .|. keyReleaseMask
-                       .|. focusChangeMask
-                        )
+    XEvent.selectInput dpy wnd (  XTypes.keyPressMask
+                              .|. XTypes.keyReleaseMask
+                              .|. XTypes.focusChangeMask
+                               )
 
-    putStrLn "grabKey ..."
-    escapeKeycode <- keysymToKeycode dpy xK_Escape
-    grabKey dpy escapeKeycode anyModifier wnd False grabModeAsync grabModeAsync
-
-    putStrLn "allocaXEvent ..."
-    evPtr <- allocaXEvent return
-
-    putStrLn "nextEvent ..."
+    grabKey dpy
+            capsEscKeycode
+            XTypes.anyModifier
+            wnd
+            False
+            XTypes.grabModeAsync
+            XTypes.grabModeAsync
+    evPtr <- XEvent.allocaXEvent return
     nextEvent dpy evPtr
+    ungrabKey dpy capsEscKeycode XTypes.anyModifier wnd
 
-    putStrLn "ungrabKey ..."
-    ungrabKey dpy escapeKeycode anyModifier wnd
+    ev <- XExtras.getEvent evPtr
+    let m = dealMap (XExtras.eventName ev) evPtr
+    when (Maybe.isJust m) $ Maybe.fromJust m
 
-    putStrLn "getEvent ..."
-    ev <- getEvent evPtr
-
-    putStrLn $ "Event: " ++ eventName ev
     again
 
   where again = processEvent dpy rootWnd
         nextEvent = nextEvent'
 
+        dealMap :: String -> XEvent.XEventPtr -> Maybe (IO ())
+        dealMap evName evPtr =
+          case evName of
+               "FocusOut"   -> Maybe.Just $ dealWithFocus evName evPtr
+               "KeyPress"   -> Maybe.Just $ dealWithKey   evName evPtr
+               "KeyRelease" -> Maybe.Just $ dealWithKey   evName evPtr
+               _            -> Maybe.Nothing
+
+        dealWithKey :: String -> XEvent.XEventPtr -> IO ()
+        dealWithKey evName evPtr = do
+          -- XEvent.get_KeyEvent
+          putStrLn $ "key event: " ++ evName
+          return ()
+
+        dealWithFocus :: String -> XEvent.XEventPtr -> IO ()
+        dealWithFocus evName evPtr = do
+          putStrLn $ "focus event: " ++ evName
+          return ()
+
 
 main :: IO ()
 main = do
 
-  -- args <- getArgs
-
   dpy <- openDisplay ""
   let rootWnd = defaultRootWindow dpy
 
-  escapeKeycode      <- keysymToKeycode dpy xK_Escape
-  capsLockKeycode    <- keysymToKeycode dpy xK_Caps_Lock
-  level3ShiftKeycode <- keysymToKeycode dpy xK_ISO_Level3_Shift
+  -- prevent errors with closed windows
+  XExtras.xSetErrorHandler
+
+  escapeKeycode      <- keysymToKeycode dpy XTypes.xK_Escape
+  capsLockKeycode    <- keysymToKeycode dpy XTypes.xK_Caps_Lock
+  level3ShiftKeycode <- keysymToKeycode dpy XTypes.xK_ISO_Level3_Shift
 
   putStrLn $ "Escape keycode: "       ++ show escapeKeycode
   putStrLn $ "Caps Lock keycode: "    ++ show capsLockKeycode
