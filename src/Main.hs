@@ -1,13 +1,16 @@
 -- Author: Viacheslav Lotsmanov
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
+{-# LANGUAGE DoAndIfThenElse #-}
+
 module Main (main) where
 
 import System.IO (hPutStrLn, stderr)
 -- import System.Console.GetOpt (getOpt) -- TODO (verbose arg)
 import System.Posix.Types (Fd(Fd))
+import System.Exit (exitFailure)
 
-import Control.Monad (when)
+import Control.Monad (when, unless)
 import Control.Concurrent (threadWaitRead)
 
 import qualified Data.Maybe as Maybe
@@ -32,6 +35,11 @@ import Graphics.X11.Xlib.Misc ( keysymToKeycode
                               )
 
 import Bindings.XTest (fakeKeyEvent)
+import Bindings.Xkb ( xkbGetDescPtr
+                    , xkbFetchControls
+                    , xkbIsDescPtrNotNull
+                    , xkbGetGroupsCount
+                    )
 
 
 xmobarPipeFile = ".xmonad/xmobar.fifo"
@@ -126,6 +134,21 @@ main = do
   putStrLn $ "Escape keycode: "       ++ show escapeKeycode
   putStrLn $ "Caps Lock keycode: "    ++ show capsLockKeycode
   putStrLn $ "Level3 Shift keycode: " ++ show level3ShiftKeycode
+
+
+  xkbDescPtr <- xkbGetDescPtr dpy
+  let isOkay = xkbIsDescPtrNotNull xkbDescPtr
+  unless isOkay $ errPutStrLn "Xkb init error: xkbDescPtr is null"
+               >> exitFailure
+
+  isOkay <- xkbFetchControls dpy xkbDescPtr
+  unless isOkay $ errPutStrLn "Xkb init error: status is not 0"
+               >> exitFailure
+
+  count <- xkbGetGroupsCount xkbDescPtr
+  unless (count > 0) $ errPutStrLn "Xkb init error: groups count is 0"
+                    >> exitFailure
+
 
   let eventLoop = processEvent dpy rootWnd
   eventLoop
