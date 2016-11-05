@@ -39,6 +39,7 @@ import Bindings.Xkb ( xkbGetDescPtr
                     , xkbFetchControls
                     , xkbGetGroupsCount
                     , xkbGetDisplay
+                    , xkbSetGroup
                     )
 
 
@@ -115,6 +116,8 @@ processEvent dpy rootWnd = do
         dealWithFocus :: String -> XEvent.XEventPtr -> IO ()
         dealWithFocus evName evPtr = do
           putStrLn $ "focus event: " ++ evName
+          isOkay <- xkbSetGroup dpy 0
+          unless isOkay $ errPutStrLn "xkbSetGroup error" >> exitFailure
           return ()
 
 

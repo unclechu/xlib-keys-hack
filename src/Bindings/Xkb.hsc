@@ -10,6 +10,7 @@ module Bindings.Xkb
   , xkbGetGroupsCount
   , XkbGetDisplayError(..)
   , xkbGetDisplay
+  , xkbSetGroup
   ) where
 
 import Foreign
@@ -29,6 +30,7 @@ import qualified Bindings.Xkb.Types as XkbTypes
 #define  __INT_SIZE  sizeof(int)
 
 
+-- native
 foreign import ccall unsafe "X11/XKBlib.h XkbGetKeyboard"
   xkbGetKeyboard :: Display
                  -> CTypes.CUInt
@@ -37,6 +39,7 @@ foreign import ccall unsafe "X11/XKBlib.h XkbGetKeyboard"
 
 data XkbGetDescPtrError = DescPtrIsNull deriving (Show)
 
+-- abstract
 xkbGetDescPtr :: Display
               -> IO (Either.Either XkbGetDescPtrError
                                    (Ptr XkbTypes.XkbDescRec))
@@ -47,18 +50,21 @@ xkbGetDescPtr dpy = do
               else Either.Right ptr
 
 
+-- native
 foreign import ccall unsafe "X11/XKBlib.h XkbGetControls"
   xkbGetControls :: Display
                  -> CTypes.CULong
                  -> Ptr XkbTypes.XkbDescRec
                  -> IO CTypes.CInt
 
+-- abstract
 xkbFetchControls :: Display -> Ptr XkbTypes.XkbDescRec -> IO Bool
 xkbFetchControls dpy descPtr = do
   status <- xkbGetControls dpy (#const XkbAllControlsMask) descPtr
   return $ status == 0
 
 
+-- abstract
 xkbGetGroupsCount :: Ptr XkbTypes.XkbDescRec -> IO Int
 xkbGetGroupsCount descPtr = do
   descRec  <- peek descPtr
@@ -66,6 +72,7 @@ xkbGetGroupsCount descPtr = do
   return $ fromIntegral $ XkbTypes.num_groups ctrlsRec
 
 
+-- native
 foreign import ccall unsafe "X11/XKBlib.h XkbOpenDisplay"
   xkbOpenDisplay :: Ptr CTypes.CChar -- display_name
                  -> Ptr CTypes.CInt -- event_rtrn
@@ -82,6 +89,7 @@ data XkbGetDisplayError = BadLibraryVersion
                         | XkbDisplayIsNull
                         deriving (Show)
 
+-- abstract
 xkbGetDisplay :: IO (Either.Either XkbGetDisplayError Display)
 xkbGetDisplay = do
 
@@ -103,3 +111,15 @@ xkbGetDisplay = do
   if Either.isRight retval && xkbDpy == nullPtr
      then return $ Either.Left XkbDisplayIsNull
      else return retval
+
+
+-- native
+foreign import ccall unsafe "X11/XKBlib.h XkbLockGroup"
+  xkbLockGroup :: Display
+               -> CTypes.CUInt -- deviceSpec
+               -> CTypes.CUInt -- group
+               -> IO Bool
+
+-- abstract
+xkbSetGroup :: Display -> CTypes.CUInt -> IO Bool
+xkbSetGroup dpy groupNum = xkbLockGroup dpy (#const XkbUseCoreKbd) groupNum
