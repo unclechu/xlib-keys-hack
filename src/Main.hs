@@ -13,6 +13,7 @@ import System.Exit (exitFailure)
 import Control.Monad (when, unless)
 import Control.Concurrent (threadWaitRead)
 
+import qualified Data.Either as Either
 import qualified Data.Maybe as Maybe
 import Data.Bits ((.|.))
 
@@ -24,8 +25,7 @@ import Graphics.X11.Types (Window)
 import qualified Graphics.X11.Xlib.Event  as XEvent
 import qualified Graphics.X11.Xlib.Extras as XExtras -- ev_keycode
 import Graphics.X11.Xlib (pending)
-import Graphics.X11.Xlib.Display ( openDisplay
-                                 , defaultRootWindow
+import Graphics.X11.Xlib.Display ( defaultRootWindow
                                  , connectionNumber
                                  )
 import Graphics.X11.Xlib.Misc ( keysymToKeycode
@@ -37,8 +37,8 @@ import Graphics.X11.Xlib.Misc ( keysymToKeycode
 import Bindings.XTest (fakeKeyEvent)
 import Bindings.Xkb ( xkbGetDescPtr
                     , xkbFetchControls
-                    , xkbIsDescPtrNotNull
                     , xkbGetGroupsCount
+                    , xkbGetDisplay
                     )
 
 
@@ -118,10 +118,37 @@ processEvent dpy rootWnd = do
           return ()
 
 
+xkbInit :: IO Display
+xkbInit = do
+
+  ret <- xkbGetDisplay
+  let (Either.Left  err) = ret
+      (Either.Right dpy) = ret
+  when (Either.isLeft ret) $
+    errPutStrLn ("Xkb open display error: " ++ show err)
+    >> exitFailure
+
+  ret <- xkbGetDescPtr dpy
+  let (Either.Left  err)        = ret
+      (Either.Right xkbDescPtr) = ret
+  when (Either.isLeft ret) $
+    errPutStrLn ("Xkb error: get keyboard data error" ++ show err)
+
+  isOkay <- xkbFetchControls dpy xkbDescPtr
+  unless isOkay $ errPutStrLn "Xkb error: fetch controls error"
+               >> exitFailure
+
+  count <- xkbGetGroupsCount xkbDescPtr
+  unless (count > 0) $ errPutStrLn "Xkb error: groups count is 0"
+                    >> exitFailure
+
+  return dpy
+
+
 main :: IO ()
 main = do
 
-  dpy <- openDisplay ""
+  dpy <- xkbInit
   let rootWnd = defaultRootWindow dpy
 
   -- prevent errors with closed windows
@@ -134,21 +161,6 @@ main = do
   putStrLn $ "Escape keycode: "       ++ show escapeKeycode
   putStrLn $ "Caps Lock keycode: "    ++ show capsLockKeycode
   putStrLn $ "Level3 Shift keycode: " ++ show level3ShiftKeycode
-
-
-  xkbDescPtr <- xkbGetDescPtr dpy
-  let isOkay = xkbIsDescPtrNotNull xkbDescPtr
-  unless isOkay $ errPutStrLn "Xkb init error: xkbDescPtr is null"
-               >> exitFailure
-
-  isOkay <- xkbFetchControls dpy xkbDescPtr
-  unless isOkay $ errPutStrLn "Xkb init error: status is not 0"
-               >> exitFailure
-
-  count <- xkbGetGroupsCount xkbDescPtr
-  unless (count > 0) $ errPutStrLn "Xkb init error: groups count is 0"
-                    >> exitFailure
-
 
   let eventLoop = processEvent dpy rootWnd
   eventLoop
