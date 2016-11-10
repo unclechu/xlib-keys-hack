@@ -26,6 +26,8 @@ executable xlib-keys-hack
   -- other-extensions:
   build-depends:       base >=4.7 && <4.8
                      , X11 >=1.6 && <1.7
+                     , lens >=4.15 && <4.16
+                     , template-haskell >=2.9 && <2.10
   build-tools:         hsc2hs
   extra-libraries:     "Xtst"
   hs-source-dirs:      src

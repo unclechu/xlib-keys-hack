@@ -27,6 +27,7 @@ import Bindings.Xkb ( xkbGetDescPtr
                     , xkbGetDisplay
                     )
 import Process (processEvents)
+import qualified State
 
 
 xmobarPipeFile = ".xmonad/xmobar.fifo"
@@ -76,10 +77,11 @@ main = do
   putStrLn $ "Caps Lock keycode: "    ++ show capsLockKeycode
   putStrLn $ "Level3 Shift keycode: " ++ show level3ShiftKeycode
 
+  let state = State.initState { State.lastWindow = rootWnd
+                              }
+
   -- event loop
-  processEvents dpy rootWnd
+  processEvents state dpy rootWnd
 
   -- fakeKeyEvent dpy xK_ISO_Level3_Shift True
   -- fakeKeyEvent dpy xK_ISO_Level3_Shift False
-
-  putStrLn "it's okay"
