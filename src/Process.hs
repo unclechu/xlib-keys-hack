@@ -6,6 +6,7 @@
 
 module Process
   ( processEvents
+  , initReset
   ) where
 
 import System.Exit (exitFailure)
@@ -22,64 +23,80 @@ import qualified Graphics.X11.Xlib.Extras as XExtras
 import Graphics.X11.Xlib.Misc ( getInputFocus
                               , grabKey
                               , ungrabKey
+                              , grabKeyboard
+                              , ungrabKeyboard
                               )
 import Graphics.X11.Xlib.Types (Display)
 import Graphics.X11.Types (Window)
 
 import Control.Lens ((.~), (^.))
 
-import Utils ((&), (.>), nextEvent', errPutStrLn)
+import Utils ( (&), (.>), (<||>)
+             , nextEvent'
+             , errPutStrLn
+             )
 import Bindings.Xkb (xkbSetGroup)
+import Bindings.XTest (fakeKeyEvent, fakeKeyCodeEvent)
 import qualified State
-
-
--- caps lock key that remapped to escape key
-capsEscKeycode = 66
+import qualified Keys
 
 
 -- reactive infinite monad
-processEvents :: State.State -> Display -> Window -> IO ()
-processEvents state dpy rootWnd = do
+processEvents :: Keys.KeyCodes -> State.State -> Display -> Window -> IO ()
+processEvents keyCodes state dpy rootWnd =
+  fmap fst (getInputFocus dpy)
+    >>= \wnd -> if wnd == rootWnd
+                   then again state
+                   else do
 
-  (wnd, _) <- getInputFocus dpy
-  if wnd == rootWnd
-  then again state
-  else do
+  XEvent.sync dpy False
 
-    XEvent.sync dpy False
+  XEvent.selectInput dpy wnd  (  XTypes.keyPressMask
+                             .|. XTypes.keyReleaseMask
+                             .|. XTypes.focusChangeMask
+                              )
 
-    XEvent.selectInput dpy wnd  (  XTypes.keyPressMask
-                               .|. XTypes.keyReleaseMask
-                               .|. XTypes.focusChangeMask
-                                )
-
-    grabKey dpy
-            capsEscKeycode
-            XTypes.anyModifier
-            wnd
+  unless (state ^. State.debugFlag') $ do
+    putStrLn "grab again"
+    _ <- grabKeyboard dpy wnd
+            -- XExtras.anyKey
+            -- XTypes.anyModifier
+            -- wnd
             False
             XTypes.grabModeAsync
             XTypes.grabModeAsync
+            XExtras.currentTime
+    return ()
 
-    evPtr <- XEvent.allocaXEvent return
-    nextEvent dpy evPtr
+  putStrLn "A"
+  evPtr <- XEvent.allocaXEvent return
+  putStrLn "A+"
+  nextEvent dpy evPtr
+  putStrLn "B"
 
-    ungrabKey dpy capsEscKeycode XTypes.anyModifier wnd
+  _ <- ungrabKeyboard dpy
+            -- XExtras.anyKey
+            -- XTypes.anyModifier
+            -- wnd
+            XExtras.currentTime
+  putStrLn "C"
 
-    ev <- XExtras.getEvent evPtr
-    let m = dealMap (XExtras.eventName ev) evPtr
+  ev <- XExtras.getEvent evPtr
+  putStrLn "D"
+  let m = dealMap (XExtras.eventName ev) evPtr
+  putStrLn "E"
+  newState <- Maybe.fromMaybe (return state) m
+  putStrLn "F"
+  again newState
 
-    newState <- Maybe.fromMaybe (return state) m
-    again newState
-
-  where again newState = processEvents newState dpy rootWnd
+  where again newState = processEvents keyCodes newState dpy rootWnd
         nextEvent = nextEvent'
 
         dealWithKey :: String -> XEvent.XEventPtr -> IO State.State
-        dealWithKey = processKeyEvent dpy state
+        dealWithKey = processKeyEvent dpy state keyCodes
 
         dealWithFocus :: String -> XEvent.XEventPtr -> IO State.State
-        dealWithFocus = processFocusEvent dpy state
+        dealWithFocus = processFocusEvent dpy state keyCodes
 
         dealMap :: String -> XEvent.XEventPtr -> Maybe (IO State.State)
         dealMap evName evPtr =
@@ -93,43 +110,67 @@ processEvents state dpy rootWnd = do
 
 processKeyEvent :: Display
                 -> State.State
+                -> Keys.KeyCodes
                 -> String
                 -> XEvent.XEventPtr
                 -> IO State.State
-processKeyEvent dpy state evName evPtr = do
+processKeyEvent dpy prevState keyCodes evName evPtr = do
 
   exEv <- XExtras.getEvent evPtr
-  let keycode :: XTypes.KeyCode
-      keycode = XExtras.ev_keycode exEv
+  let keyCode = XExtras.ev_keycode exEv
 
+
+  -- FIXME infinite loop
+  -- XEvent.putBackEvent dpy evPtr
+
+  -- doesn't help at all
+  -- case evName of
+  --      "KeyPress"   -> fakeKeyCodeEvent dpy keyCode True
+  --      "KeyRelease" -> fakeKeyCodeEvent dpy keyCode False
+
+
+  putStrLn "~~~~~~~~~~~~~~~~~~~~"
   putStrLn $ "key event: " ++ evName
-  putStrLn $ "key code: " ++ show keycode
+  putStrLn $ "key code: " ++ show keyCode
   putStrLn "--------------------"
 
-  return state
+  return (prevState & State.debugFlag' .~ True)
+  -- return prevState
 
 
 processFocusEvent :: Display
                   -> State.State
+                  -> Keys.KeyCodes
                   -> String
                   -> XEvent.XEventPtr
                   -> IO State.State
-processFocusEvent dpy prevState evName evPtr = do
+processFocusEvent dpy prevState keyCodes evName evPtr = do
 
   let lastWnd = State.lastWindow prevState
   curWnd <- XEvent.get_Window evPtr
 
+  putStrLn "~~~~~~~~~~~~~~~~~~~~"
   putStrLn $ "focus event: "  ++ evName
   putStrLn $ "wnd previous: " ++ show lastWnd
   putStrLn $ "wnd current: "  ++ show curWnd
   putStrLn "--------------------"
 
-  when (evName == "FocusOut") $
-    xkbSetGroup dpy 0
-      >>= flip unless (errPutStrLn "xkbSetGroup error" >> exitFailure)
+  when (evName == "FocusOut") $ resetKbdLayout dpy
 
   let newState = if curWnd /= lastWnd
                     then prevState & State.lastWindow' .~ curWnd
                     else prevState
 
   return newState
+
+
+resetKbdLayout :: Display -> IO ()
+resetKbdLayout dpy =
+  xkbSetGroup dpy 0
+    >>= flip unless (errPutStrLn "xkbSetGroup error" >> exitFailure)
+
+
+initReset :: Keys.RealKeyCodes -> Display -> Window -> IO ()
+initReset realKeyCodes dpy rootWnd = do
+  resetKbdLayout dpy
+  fakeKeyEvent dpy XTypes.xK_ISO_Level3_Shift False

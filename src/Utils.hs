@@ -3,6 +3,7 @@
 
 module Utils
   ( (&), (.>) -- pipes
+  , (<||>)
   , nextEvent'
   , errPutStrLn
   , makeApoLenses
@@ -39,16 +40,19 @@ infixl 0 &
 infixl 9 .>
 
 
+(<||>) :: a -> a -> (Bool -> a)
+a <||> b = \x -> if x then a else b
+infixl 2 <||>
+
+
 -- https://wiki.haskell.org/X_window_programming_in_Haskell
 -- A version of nextEvent that does not block in foreign calls.
 nextEvent' :: Display -> XEvent.XEventPtr -> IO ()
-nextEvent' dpy evPtr = do
-  pend <- pending dpy
-  if pend /= 0
-     then XEvent.nextEvent dpy evPtr
-     else do
-       threadWaitRead (Fd fd)
-       nextEvent' dpy evPtr
+nextEvent' dpy evPtr =
+  pending dpy
+    >>= return . (/= 0)
+    >>= XEvent.nextEvent dpy evPtr <||>
+        (threadWaitRead (Fd fd) >> nextEvent' dpy evPtr)
   where fd = connectionNumber dpy
 
 

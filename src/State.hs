@@ -13,30 +13,29 @@ module State
 
 import Graphics.X11.Types (Window)
 
--- import Control.Lens ((.~))
-
 import Utils (makeApoClassy)
 
 
 initState :: State
 initState =
   State { lastWindow  = undefined
-        , pressedKeys =
-            PressedKeys { caps   = False
-                        , enter  = False
-                        , lCtrl  = False
-                        , rCtrl  = False
-                        , lAlt   = False
-                        , rAlt   = False
-                        , lShift = False
-                        , rShift = False
-                        }
+        , pressedKeys = PressedKeys { caps   = False
+                                    , enter  = False
+                                    , lCtrl  = False
+                                    , rCtrl  = False
+                                    , lAlt   = False
+                                    , rAlt   = False
+                                    , lShift = False
+                                    , rShift = False
+                                    }
+        , debugFlag = False
         }
 
 
 data State =
   State { lastWindow  :: Window
         , pressedKeys :: PressedKeys
+        , debugFlag   :: Bool
         }
 
 

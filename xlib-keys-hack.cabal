@@ -23,6 +23,7 @@ executable xlib-keys-hack
                      , Bindings.XTest
                      , Utils
                      , Process
+                     , Keys
   -- other-extensions:
   build-depends:       base >=4.7 && <4.8
                      , X11 >=1.6 && <1.7

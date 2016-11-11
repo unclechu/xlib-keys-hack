@@ -1,6 +1,8 @@
 -- Author: Viacheslav Lotsmanov
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module Main (main) where
 
 -- import System.Console.GetOpt (getOpt) -- TODO (verbose arg)
@@ -19,15 +21,15 @@ import qualified Graphics.X11.Xlib.Extras as XExtras -- ev_keycode
 import Graphics.X11.Xlib.Display (defaultRootWindow)
 import Graphics.X11.Xlib.Misc (keysymToKeycode)
 
-import Utils (errPutStrLn)
-import Bindings.XTest (fakeKeyEvent)
+import Utils (errPutStrLn, (&), (.>))
 import Bindings.Xkb ( xkbGetDescPtr
                     , xkbFetchControls
                     , xkbGetGroupsCount
                     , xkbGetDisplay
                     )
-import Process (processEvents)
+import Process (initReset, processEvents)
 import qualified State
+import qualified Keys
 
 
 xmobarPipeFile = ".xmonad/xmobar.fifo"
@@ -36,26 +38,25 @@ xmobarPipeFile = ".xmonad/xmobar.fifo"
 xkbInit :: IO Display
 xkbInit = do
 
-  ret <- xkbGetDisplay
-  let (Either.Left  err) = ret
-      (Either.Right dpy) = ret
-  when (Either.isLeft ret) $
-    errPutStrLn ("Xkb open display error: " ++ show err)
-    >> exitFailure
+  (dpy :: Display) <- xkbGetDisplay >>= flip Either.either return
+    ( \err -> do
+      errPutStrLn $ "Xkb open display error: " ++ show err
+      exitFailure
+    )
 
-  ret <- xkbGetDescPtr dpy
-  let (Either.Left  err)        = ret
-      (Either.Right xkbDescPtr) = ret
-  when (Either.isLeft ret) $
-    errPutStrLn ("Xkb error: get keyboard data error" ++ show err)
+  xkbDescPtr <- xkbGetDescPtr dpy >>= flip Either.either return
+    ( \err -> do
+      errPutStrLn $ "Xkb error: get keyboard data error" ++ show err
+      exitFailure
+    )
 
-  isOkay <- xkbFetchControls dpy xkbDescPtr
-  unless isOkay $ errPutStrLn "Xkb error: fetch controls error"
-               >> exitFailure
+  xkbFetchControls dpy xkbDescPtr
+    >>= flip unless
+          (errPutStrLn "Xkb error: fetch controls error" >> exitFailure)
 
-  count <- xkbGetGroupsCount xkbDescPtr
-  unless (count > 0) $ errPutStrLn "Xkb error: groups count is 0"
-                    >> exitFailure
+  xkbGetGroupsCount xkbDescPtr
+    >>= return . (> 0)
+    >>= flip unless (errPutStrLn "Xkb error: groups count is 0" >> exitFailure)
 
   return dpy
 
@@ -80,8 +81,12 @@ main = do
   let state = State.initState { State.lastWindow = rootWnd
                               }
 
-  -- event loop
-  processEvents state dpy rootWnd
+  initReset Keys.getRealKeyCodes dpy rootWnd
 
-  -- fakeKeyEvent dpy xK_ISO_Level3_Shift True
-  -- fakeKeyEvent dpy xK_ISO_Level3_Shift False
+  let keyCodes = Keys.getKeyCodes
+        Keys.VirtualKeyCodes { Keys.capsLockKeyCode = capsLockKeycode
+                             , Keys.level3KeyCode   = level3ShiftKeycode
+                             }
+
+  -- event loop
+  processEvents keyCodes state dpy rootWnd
