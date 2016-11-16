@@ -180,7 +180,6 @@ instance Storable.Storable XkbControlsRec where
 
 
 
-data Stuff = Stuff deriving (Show)
 data XkbDescRec = XkbDescRec { dpy          :: Ptr Display
                              , flags        :: CTypes.CUShort
                              , device_spec  :: CTypes.CUShort
@@ -190,12 +189,12 @@ data XkbDescRec = XkbDescRec { dpy          :: Ptr Display
                              , ctrls        :: Ptr XkbControlsRec
 
                              -- not declared yet
-                             , server       :: Ptr Stuff -- :: Ptr XkbServerMapRec
-                             , map          :: Ptr Stuff -- :: Ptr XkbNamesRec
-                             , indicators   :: Ptr Stuff -- :: Ptr XkbIndicatorRec
-                             , names        :: Ptr Stuff -- :: Ptr XkbClientMapRec
-                             , compat       :: Ptr Stuff -- :: Ptr XkbGeometryRec
-                             , geom         :: Ptr Stuff -- :: Ptr XkbCompatMapRec
+                             , server       :: Ptr () -- :: TODO Ptr XkbServerMapRec
+                             , map          :: Ptr () -- :: TODO Ptr XkbNamesRec
+                             , indicators   :: Ptr () -- :: TODO Ptr XkbIndicatorRec
+                             , names        :: Ptr () -- :: TODO Ptr XkbClientMapRec
+                             , compat       :: Ptr () -- :: TODO Ptr XkbGeometryRec
+                             , geom         :: Ptr () -- :: TODO Ptr XkbCompatMapRec
                              } deriving (Show)
 
 instance Storable.Storable XkbDescRec where

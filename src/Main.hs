@@ -17,7 +17,7 @@ import qualified Graphics.X11.ExtraTypes as XTypes
 import Graphics.X11.Xlib.Types (Display)
 import Graphics.X11.Types (Window)
 
-import qualified Graphics.X11.Xlib.Extras as XExtras -- ev_keycode
+import qualified Graphics.X11.Xlib.Extras as XExtras
 import Graphics.X11.Xlib.Display (defaultRootWindow)
 import Graphics.X11.Xlib.Misc (keysymToKeycode)
 
@@ -30,6 +30,9 @@ import Bindings.Xkb ( xkbGetDescPtr
 import Process (initReset, processEvents)
 import qualified State
 import qualified Keys
+
+
+import qualified Bindings.LibInput as LI
 
 
 xmobarPipeFile = ".xmonad/xmobar.fifo"
@@ -63,6 +66,13 @@ xkbInit = do
 
 main :: IO ()
 main = do
+  putStrLn "~~~ begin ~~~"
+  LI.doStuff
+  putStrLn "~~~ end ~~~"
+
+
+mainTmp :: IO ()
+mainTmp = do
 
   dpy <- xkbInit
   let rootWnd = defaultRootWindow dpy
