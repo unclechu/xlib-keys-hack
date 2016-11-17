@@ -72,8 +72,8 @@ data RealKeyCodes =
 
 
 data VirtualKeyCodes =
-  VirtualKeyCodes { level3KeyCode   :: KeyCode
-                  , capsLockKeyCode :: KeyCode
+  VirtualKeyCodes { -- level3KeyCode   :: KeyCode
+                  -- , capsLockKeyCode :: KeyCode
                   }
 
 

@@ -11,6 +11,7 @@ import System.Exit (exitFailure)
 import Control.Monad (when, unless)
 
 import qualified Data.Either as Either
+import qualified Data.Maybe as Maybe
 
 import qualified Graphics.X11.Types      as XTypes
 import qualified Graphics.X11.ExtraTypes as XTypes
@@ -21,6 +22,11 @@ import qualified Graphics.X11.Xlib.Extras as XExtras
 import Graphics.X11.Xlib.Display (defaultRootWindow)
 import Graphics.X11.Xlib.Misc (keysymToKeycode)
 
+import qualified System.IO as SysIO
+import qualified GHC.IO.Handle as IOHandle
+import qualified GHC.IO.Handle.FD as IOHandleFD
+import qualified System.Linux.Input.Event as EvdevEvent
+
 import Utils (errPutStrLn, (&), (.>))
 import Bindings.Xkb ( xkbGetDescPtr
                     , xkbFetchControls
@@ -30,9 +36,6 @@ import Bindings.Xkb ( xkbGetDescPtr
 import Process (initReset, processEvents)
 import qualified State
 import qualified Keys
-
-
-import qualified Bindings.LibInput as LI
 
 
 xmobarPipeFile = ".xmonad/xmobar.fifo"
@@ -64,15 +67,36 @@ xkbInit = do
   return dpy
 
 
-main :: IO ()
-main = do
+mainX :: IO ()
+mainX = do
   putStrLn "~~~ begin ~~~"
-  LI.doStuff
+  -- LI.doStuff
+
+  let evfilepath = "/dev/input/by-id/usb-1d57_2.4G_Receiver-event-kbd"
+  handle <- IOHandleFD.openFile evfilepath SysIO.ReadMode
+  mainloop handle
+  SysIO.hClose handle
+
   putStrLn "~~~ end ~~~"
 
+  where mainloop :: IOHandle.Handle -> IO ()
+        mainloop handle = do
+          evMaybe <- EvdevEvent.hReadEvent handle
+          case evMaybe of
+            Maybe.Just EvdevEvent.KeyEvent
+                         { EvdevEvent.evKeyCode = keyCode
+                         , EvdevEvent.evKeyEventType = pressStatus
+                         }
+              -> putStrLn $ show pressStatus ++ ": " ++ show keyCode
+            _ -> return ()
 
-mainTmp :: IO ()
-mainTmp = do
+          mainloop handle
+
+
+main :: IO ()
+main = do
+
+  putStrLn "~~~ begin ~~~"
 
   dpy <- xkbInit
   let rootWnd = defaultRootWindow dpy
@@ -80,22 +104,13 @@ mainTmp = do
   -- prevent errors with closed windows
   XExtras.xSetErrorHandler
 
-  escapeKeycode      <- keysymToKeycode dpy XTypes.xK_Escape
-  capsLockKeycode    <- keysymToKeycode dpy XTypes.xK_Caps_Lock
-  level3ShiftKeycode <- keysymToKeycode dpy XTypes.xK_ISO_Level3_Shift
-
-  putStrLn $ "Escape keycode: "       ++ show escapeKeycode
-  putStrLn $ "Caps Lock keycode: "    ++ show capsLockKeycode
-  putStrLn $ "Level3 Shift keycode: " ++ show level3ShiftKeycode
-
   let state = State.initState { State.lastWindow = rootWnd
                               }
 
   initReset Keys.getRealKeyCodes dpy rootWnd
 
   let keyCodes = Keys.getKeyCodes
-        Keys.VirtualKeyCodes { Keys.capsLockKeyCode = capsLockKeycode
-                             , Keys.level3KeyCode   = level3ShiftKeycode
+        Keys.VirtualKeyCodes {
                              }
 
   -- event loop
