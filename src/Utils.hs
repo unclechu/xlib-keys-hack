@@ -6,6 +6,7 @@ module Utils
   , (<||>)
   , nextEvent'
   , errPutStrLn
+  , dieWith
   , makeApoLenses
   , makeApoClassy
   ) where
@@ -56,7 +57,11 @@ nextEvent' dpy evPtr =
   where fd = connectionNumber dpy
 
 
+errPutStrLn :: String -> IO ()
 errPutStrLn = hPutStrLn stderr
+
+dieWith :: String -> IO a
+dieWith = ioError . userError
 
 
 lensNamer :: LTH.FieldNamer

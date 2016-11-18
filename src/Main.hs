@@ -5,13 +5,13 @@
 
 module Main (main) where
 
--- import System.Console.GetOpt (getOpt) -- TODO (verbose arg)
-import System.Exit (exitFailure)
+import System.Exit (exitFailure, exitSuccess)
+import System.Environment (getArgs)
 
 import Control.Monad (when, unless)
 
-import qualified Data.Either as Either
-import qualified Data.Maybe as Maybe
+import Data.Either (Either(Left, Right), either)
+import Data.Maybe (Maybe(Just))
 
 import qualified Graphics.X11.Types      as XTypes
 import qualified Graphics.X11.ExtraTypes as XTypes
@@ -27,13 +27,16 @@ import qualified GHC.IO.Handle as IOHandle
 import qualified GHC.IO.Handle.FD as IOHandleFD
 import qualified System.Linux.Input.Event as EvdevEvent
 
-import Utils (errPutStrLn, (&), (.>))
+import Control.Lens ((.~), (%~), (^.))
+
+import Utils (errPutStrLn, dieWith, (&), (.>), makeApoLenses)
 import Bindings.Xkb ( xkbGetDescPtr
                     , xkbFetchControls
                     , xkbGetGroupsCount
                     , xkbGetDisplay
                     )
 import Process (initReset, processEvents)
+import qualified Options
 import qualified State
 import qualified Keys
 
@@ -44,25 +47,18 @@ xmobarPipeFile = ".xmonad/xmobar.fifo"
 xkbInit :: IO Display
 xkbInit = do
 
-  (dpy :: Display) <- xkbGetDisplay >>= flip Either.either return
-    ( \err -> do
-      errPutStrLn $ "Xkb open display error: " ++ show err
-      exitFailure
-    )
+  (dpy :: Display) <- xkbGetDisplay >>= flip either return
+    (\err -> dieWith $ "Xkb open display error: " ++ show err)
 
-  xkbDescPtr <- xkbGetDescPtr dpy >>= flip Either.either return
-    ( \err -> do
-      errPutStrLn $ "Xkb error: get keyboard data error" ++ show err
-      exitFailure
-    )
+  xkbDescPtr <- xkbGetDescPtr dpy >>= flip either return
+    (\err -> dieWith $ "Xkb error: get keyboard data error" ++ show err)
 
   xkbFetchControls dpy xkbDescPtr
-    >>= flip unless
-          (errPutStrLn "Xkb error: fetch controls error" >> exitFailure)
+    >>= flip unless (dieWith "Xkb error: fetch controls error")
 
   xkbGetGroupsCount xkbDescPtr
     >>= return . (> 0)
-    >>= flip unless (errPutStrLn "Xkb error: groups count is 0" >> exitFailure)
+    >>= flip unless (dieWith "Xkb error: groups count is 0")
 
   return dpy
 
@@ -83,18 +79,18 @@ mainX = do
         mainloop handle = do
           evMaybe <- EvdevEvent.hReadEvent handle
           case evMaybe of
-            Maybe.Just EvdevEvent.KeyEvent
-                         { EvdevEvent.evKeyCode = keyCode
-                         , EvdevEvent.evKeyEventType = pressStatus
-                         }
+            Just EvdevEvent.KeyEvent
+                   { EvdevEvent.evKeyCode = keyCode
+                   , EvdevEvent.evKeyEventType = pressStatus
+                   }
               -> putStrLn $ show pressStatus ++ ": " ++ show keyCode
             _ -> return ()
 
           mainloop handle
 
 
-main :: IO ()
-main = do
+mainY :: IO ()
+mainY = do
 
   putStrLn "~~~ begin ~~~"
 
@@ -115,3 +111,35 @@ main = do
 
   -- event loop
   processEvents keyCodes state dpy rootWnd
+
+
+main :: IO ()
+main = do
+
+  putStrLn "~~~ begin ~~~"
+
+  opts <- getArgs >>= \argv ->
+    let header = "Usage: xlib-keys-hack [OPTION...] devices fd paths..."
+    in case Options.extractOptions argv of
+
+      Right opts -> do
+
+        when (opts ^. Options.showHelp') $ do
+          putStrLn Options.usageInfo
+          exitSuccess
+
+        opts ^. Options.handleDevicePath' & length & (> 0) &
+          \x -> unless x $ do
+            errPutStrLn Options.usageInfo
+            dieWith "At least one device fd path must be specified!"
+
+        return opts
+
+      Left err -> do
+        errPutStrLn Options.usageInfo
+        dieWith err
+
+
+
+  print opts
+  putStrLn "~~~ end ~~~"

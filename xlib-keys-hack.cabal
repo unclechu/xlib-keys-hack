@@ -21,8 +21,9 @@ executable xlib-keys-hack
   other-modules:       Bindings.Xkb
                      , Bindings.Xkb.Types
                      , Bindings.XTest
-                     , Utils
                      , Process
+                     , Options
+                     , Utils
                      , Keys
   -- other-extensions:
   build-depends:       base >=4.7 && <4.8
