@@ -10,6 +10,7 @@ import System.Environment (getArgs)
 import System.Directory (doesFileExist)
 
 import Control.Monad (when, unless, filterM)
+import qualified Control.Monad.State as St
 import Control.Lens ((.~), (%~), (^.), set, over, view)
 
 import Data.Either (Either(Left, Right), either)
@@ -29,8 +30,7 @@ import qualified GHC.IO.Handle as IOHandle
 import qualified GHC.IO.Handle.FD as IOHandleFD
 import qualified System.Linux.Input.Event as EvdevEvent
 
-import Utils (errPutStrLn, dieWith, (&), (.>))
-import qualified Utils as U
+import Utils (errPutStrLn, dieWith, (&), (.>), updateState, updateStateM)
 import Bindings.Xkb ( xkbGetDescPtr
                     , xkbFetchControls
                     , xkbGetGroupsCount
@@ -148,31 +148,22 @@ main = do
         -- options or fail the application if there's no available
         -- devices.
         extractAvailableDevices :: Options.Options -> IO Options.Options
-        extractAvailableDevices opts =
+        extractAvailableDevices opts = flip St.execStateT opts $
+          fmap (^. Options.handleDevicePath') St.get
+            >>= St.lift . filterM doesFileExist
+            >>= St.lift . checkForCount
+            >>= updateState (\(s, x) -> s & Options.availableDevices' .~ x)
+            >>= St.lift . mapM (`IOHandleFD.openFile` SysIO.ReadMode)
+            >>= updateState (\(s, x) -> s & Options.handleDeviceFd' .~ x)
 
-          U.initIOState opts ()
-            >>= U.fromIOState (^. Options.handleDevicePath')
-            >>= U.keepIOState (filterM doesFileExist)
-            >>= storeAvailable
-            >>= U.keepIOState getHandlers
-            >>= U.updateIOState (\(s, x) -> s & Options.handleDeviceFd' .~ x)
-            >>= U.extractIOState
-
-          where checkForCount :: [FilePath] -> IO [FilePath]
+          where -- Checks if we have at least one available device
+                -- and gets files list back.
+                checkForCount :: [FilePath] -> IO [FilePath]
                 checkForCount files = do
                   when (length files < 1) $
                     dieWith "All specified devices to get events from \
                             \is unavailable!"
                   return files
-
-                getHandlers :: [FilePath] -> IO [IOHandle.Handle]
-                getHandlers = mapM $ flip IOHandleFD.openFile SysIO.ReadMode
-
-                storeAvailable :: (Options.Options, [FilePath])
-                               -> IO (Options.Options, [FilePath])
-                storeAvailable (opts, files) = do
-                  x <- checkForCount files
-                  return (opts & Options.availableDevices' .~ x, x)
 
         -- Completely parse input arguments and returns options
         -- data structure based on them.

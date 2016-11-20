@@ -1,6 +1,8 @@
 -- Author: Viacheslav Lotsmanov
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
+{-# LANGUAGE MultiParamTypeClasses #-}
+
 module Utils
   ( (&), (.>) -- pipes
   , (<||>)
@@ -13,11 +15,8 @@ module Utils
   , makeApoLenses
   , makeApoClassy
 
-  , initIOState
-  , keepIOState
-  , fromIOState
-  , updateIOState
-  , extractIOState
+  , updateState
+  , updateStateM
   ) where
 
 import Graphics.X11.Xlib (pending)
@@ -26,6 +25,8 @@ import qualified Graphics.X11.Xlib.Event as XEvent
 import Graphics.X11.Xlib.Display (connectionNumber)
 
 import Control.Concurrent (threadWaitRead)
+import qualified Control.Monad.State as St (get, put)
+import Control.Monad.State.Class (MonadState)
 
 import System.Posix.Types (Fd(Fd))
 import System.IO (hPutStrLn, stderr)
@@ -101,17 +102,10 @@ makeApoClassy = LTH.makeLensesWith rules
                      )
 
 
-initIOState :: s -> a -> IO (s, a)
-initIOState s a = return (s, a)
+-- updates a state and gets value back
+updateState :: (MonadState s m) => ((s, a) -> s) -> a -> m a
+updateState f x = St.get >>= (\s -> St.put $ f (s, x)) >> return x
 
-keepIOState :: (a -> IO b) -> (s, a) -> IO (s, b)
-keepIOState m (s, a) = m a >>= \b -> return (s, b)
-
-fromIOState :: (s -> b) -> (s, a) -> IO (s, b)
-fromIOState getter (s, _) = getter s & \b -> return (s, b)
-
-updateIOState :: ((s, a) -> t) -> (s, a) -> IO (t, a)
-updateIOState getNewState (s, a) = getNewState (s, a) & \t -> return (t, a)
-
-extractIOState :: (s, a) -> IO s
-extractIOState = return . fst
+-- monadic version of updateState
+updateStateM :: (MonadState s m) => ((s, a) -> m s) -> a -> m a
+updateStateM fm x = St.get >>= (\s -> fm (s, x)) >>= St.put >> return x
