@@ -7,8 +7,10 @@ module Main (main) where
 
 import System.Exit (exitFailure, exitSuccess)
 import System.Environment (getArgs)
+import System.Directory (doesFileExist)
 
-import Control.Monad (when, unless)
+import Control.Monad (when, unless, filterM)
+import Control.Lens ((.~), (%~), (^.), set, over, view)
 
 import Data.Either (Either(Left, Right), either)
 import Data.Maybe (Maybe(Just))
@@ -27,9 +29,8 @@ import qualified GHC.IO.Handle as IOHandle
 import qualified GHC.IO.Handle.FD as IOHandleFD
 import qualified System.Linux.Input.Event as EvdevEvent
 
-import Control.Lens ((.~), (%~), (^.))
-
-import Utils (errPutStrLn, dieWith, (&), (.>), makeApoLenses)
+import Utils (errPutStrLn, dieWith, (&), (.>))
+import qualified Utils as U
 import Bindings.Xkb ( xkbGetDescPtr
                     , xkbFetchControls
                     , xkbGetGroupsCount
@@ -44,6 +45,8 @@ import qualified Keys
 xmobarPipeFile = ".xmonad/xmobar.fifo"
 
 
+-- Initializes Xlib and Xkb and checks if everything is okay
+-- and returns Xlib Display pointer then.
 xkbInit :: IO Display
 xkbInit = do
 
@@ -116,30 +119,64 @@ mainY = do
 main :: IO ()
 main = do
 
-  putStrLn "~~~ begin ~~~"
-
-  opts <- getArgs >>= \argv ->
-    let header = "Usage: xlib-keys-hack [OPTION...] devices fd paths..."
-    in case Options.extractOptions argv of
-
-      Right opts -> do
-
-        when (opts ^. Options.showHelp') $ do
-          putStrLn Options.usageInfo
-          exitSuccess
-
-        opts ^. Options.handleDevicePath' & length & (> 0) &
-          \x -> unless x $ do
-            errPutStrLn Options.usageInfo
-            dieWith "At least one device fd path must be specified!"
-
-        return opts
-
-      Left err -> do
-        errPutStrLn Options.usageInfo
-        dieWith err
-
-
+  opts <- getArgs >>= parseOpts
 
   print opts
   putStrLn "~~~ end ~~~"
+
+  where -- Parses arguments and returns options data structure
+        -- or shows usage info and exit the application
+        -- (by --help flag or because of error).
+        getOptsFromArgs :: [String] -> IO Options.Options
+        getOptsFromArgs argv = case Options.extractOptions argv of
+          Left err -> errPutStrLn Options.usageInfo >> dieWith err
+          Right opts -> do
+
+            when (opts ^. Options.showHelp') $ do
+              putStrLn Options.usageInfo
+              exitSuccess
+
+            opts ^. Options.handleDevicePath' & length & (> 0) &
+              \x -> unless x $ do
+                errPutStrLn Options.usageInfo
+                dieWith "At least one device fd path must be specified!"
+
+            return opts
+
+        -- Filters only existing descriptors files of devices and
+        -- open these files to read and puts these descriptors to
+        -- options or fail the application if there's no available
+        -- devices.
+        extractAvailableDevices :: Options.Options -> IO Options.Options
+        extractAvailableDevices opts =
+
+          U.initIOState opts ()
+            >>= U.fromIOState (^. Options.handleDevicePath')
+            >>= U.keepIOState (filterM doesFileExist)
+            >>= storeAvailable
+            >>= U.keepIOState getHandlers
+            >>= U.updateIOState (\(s, x) -> s & Options.handleDeviceFd' .~ x)
+            >>= U.extractIOState
+
+          where checkForCount :: [FilePath] -> IO [FilePath]
+                checkForCount files = do
+                  when (length files < 1) $
+                    dieWith "All specified devices to get events from \
+                            \is unavailable!"
+                  return files
+
+                getHandlers :: [FilePath] -> IO [IOHandle.Handle]
+                getHandlers = mapM $ flip IOHandleFD.openFile SysIO.ReadMode
+
+                storeAvailable :: (Options.Options, [FilePath])
+                               -> IO (Options.Options, [FilePath])
+                storeAvailable (opts, files) = do
+                  x <- checkForCount files
+                  return (opts & Options.availableDevices' .~ x, x)
+
+        -- Completely parse input arguments and returns options
+        -- data structure based on them.
+        parseOpts :: [String] -> IO Options.Options
+        parseOpts argv =
+          getOptsFromArgs argv
+            >>= extractAvailableDevices

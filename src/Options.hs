@@ -12,7 +12,9 @@ module Options
   , usageInfo
   ) where
 
+import qualified GHC.IO.Handle as IOHandle
 import qualified System.Console.GetOpt as GetOpt
+
 import Data.Either (Either(Left, Right))
 import Data.Maybe (fromJust)
 import Control.Lens ((.~), (%~))
@@ -26,6 +28,9 @@ data Options =
           , disableXInputDeviceName :: [String]
           , disableXInputDeviceId   :: [Int]
           , handleDevicePath        :: [FilePath]
+
+          , handleDeviceFd          :: [IOHandle.Handle]
+          , availableDevices        :: [FilePath]
           }
   deriving Show
 
@@ -33,11 +38,26 @@ makeApoClassy ''Options
 
 
 defaultOptions =
-  Options { showHelp                = False
+  Options {
+
+          -- from arguments
+            showHelp                = False
           , verboseMode             = False
           , disableXInputDeviceName = []
           , disableXInputDeviceId   = []
           , handleDevicePath        = []
+
+          -- Will be extracted from `handleDevicePath`
+          -- and will be reduced with only available
+          -- devices (that connected to pc).
+          , handleDeviceFd          = []
+
+          -- Same as `handleDevicePath` but contains only
+          -- available devies (that exist in file system).
+          -- Will be extracted at initialization step
+          -- (as `handleDeviceFd`).
+          , availableDevices        = []
+
           }
 
 

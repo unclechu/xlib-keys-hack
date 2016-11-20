@@ -4,11 +4,20 @@
 module Utils
   ( (&), (.>) -- pipes
   , (<||>)
+
   , nextEvent'
+
   , errPutStrLn
   , dieWith
+
   , makeApoLenses
   , makeApoClassy
+
+  , initIOState
+  , keepIOState
+  , fromIOState
+  , updateIOState
+  , extractIOState
   ) where
 
 import Graphics.X11.Xlib (pending)
@@ -90,3 +99,19 @@ makeApoClassy = LTH.makeLensesWith rules
           Maybe.Just ( TH.mkName $ "Has" ++ base
                      , TH.mkName $ [toLower $ head base] ++ tail base ++ "'c"
                      )
+
+
+initIOState :: s -> a -> IO (s, a)
+initIOState s a = return (s, a)
+
+keepIOState :: (a -> IO b) -> (s, a) -> IO (s, b)
+keepIOState m (s, a) = m a >>= \b -> return (s, b)
+
+fromIOState :: (s -> b) -> (s, a) -> IO (s, b)
+fromIOState getter (s, _) = getter s & \b -> return (s, b)
+
+updateIOState :: ((s, a) -> t) -> (s, a) -> IO (t, a)
+updateIOState getNewState (s, a) = getNewState (s, a) & \t -> return (t, a)
+
+extractIOState :: (s, a) -> IO s
+extractIOState = return . fst
