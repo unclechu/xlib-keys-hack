@@ -10,13 +10,16 @@ module Utils
   , nextEvent'
 
   , errPutStrLn
+  , errPutStr
   , dieWith
 
   , makeApoLenses
   , makeApoClassy
 
   , updateState
+  , updateState'
   , updateStateM
+  , updateStateM'
   ) where
 
 import Graphics.X11.Xlib (pending)
@@ -29,7 +32,7 @@ import qualified Control.Monad.State as St (get, put)
 import Control.Monad.State.Class (MonadState)
 
 import System.Posix.Types (Fd(Fd))
-import System.IO (hPutStrLn, stderr)
+import System.IO (hPutStrLn, hPutStr, stderr)
 
 import qualified Language.Haskell.TH as TH
 
@@ -70,6 +73,9 @@ nextEvent' dpy evPtr =
 errPutStrLn :: String -> IO ()
 errPutStrLn = hPutStrLn stderr
 
+errPutStr :: String -> IO ()
+errPutStr = hPutStr stderr
+
 dieWith :: String -> IO a
 dieWith = ioError . userError
 
@@ -102,10 +108,19 @@ makeApoClassy = LTH.makeLensesWith rules
                      )
 
 
--- updates a state and gets value back
+-- Updates a state and gets value back.
 updateState :: (MonadState s m) => ((s, a) -> s) -> a -> m a
 updateState f x = St.get >>= (\s -> St.put $ f (s, x)) >> return x
 
--- monadic version of updateState
+-- Alternative version of `updateState` that call `f` function
+-- with two arguments instead of touple.
+updateState' :: (MonadState s m) => (s -> a -> s) -> a -> m a
+updateState' f x = St.get >>= (\s -> St.put $ f s x) >> return x
+
+-- Monadic version of `updateState`.
 updateStateM :: (MonadState s m) => ((s, a) -> m s) -> a -> m a
 updateStateM fm x = St.get >>= (\s -> fm (s, x)) >>= St.put >> return x
+
+-- Monadic version of `updateState'`.
+updateStateM' :: (MonadState s m) => (s -> a -> m s) -> a -> m a
+updateStateM' fm x = St.get >>= (\s -> fm s x) >>= St.put >> return x

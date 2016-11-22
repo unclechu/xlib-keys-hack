@@ -31,6 +31,7 @@ data Options =
 
           , handleDeviceFd          :: [IOHandle.Handle]
           , availableDevices        :: [FilePath]
+          , availableXInputDevices  :: [Int]
           }
   deriving Show
 
@@ -47,6 +48,7 @@ defaultOptions =
           , disableXInputDeviceId   = []
           , handleDevicePath        = []
 
+
           -- Will be extracted from `handleDevicePath`
           -- and will be reduced with only available
           -- devices (that connected to pc).
@@ -57,6 +59,11 @@ defaultOptions =
           -- Will be extracted at initialization step
           -- (as `handleDeviceFd`).
           , availableDevices        = []
+
+          -- Will be extracted from `disableXInputDeviceName`
+          -- and from `disableXInputDeviceId` and filtered
+          -- with only available devices.
+          , availableXInputDevices  = []
 
           }
 
@@ -73,12 +80,12 @@ options =
       (GetOpt.OptArg
         (\x -> disableXInputDeviceName' %~ (++ [fromJust x]))
         "NAME")
-      "Name of device to disable using xinput"
+      "Name of device to disable using 'xinput' tool"
   , GetOpt.Option  [ ]  ["disable-xinput-device-id"]
       (GetOpt.OptArg
         (\x -> disableXInputDeviceId' %~ (++ [fromJust x & read]))
         "ID")
-      "Id of device to disable using xinput"
+      "Id of device to disable using 'xinput' tool"
   , GetOpt.Option  [ ]  ["device-fd-path"]
       (GetOpt.OptArg
         (\x -> handleDevicePath' %~ (++ [fromJust x]))

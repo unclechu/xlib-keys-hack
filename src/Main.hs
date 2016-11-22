@@ -30,14 +30,15 @@ import qualified GHC.IO.Handle as IOHandle
 import qualified GHC.IO.Handle.FD as IOHandleFD
 import qualified System.Linux.Input.Event as EvdevEvent
 
-import Utils (errPutStrLn, dieWith, (&), (.>), updateState, updateStateM)
+import Utils (errPutStrLn, dieWith, (&), (.>), updateState')
 import Bindings.Xkb ( xkbGetDescPtr
                     , xkbFetchControls
                     , xkbGetGroupsCount
                     , xkbGetDisplay
                     )
 import Process (initReset, processEvents)
-import qualified Options
+import qualified Options as O
+import qualified XInput
 import qualified State
 import qualified Keys
 
@@ -127,34 +128,35 @@ main = do
   where -- Parses arguments and returns options data structure
         -- or shows usage info and exit the application
         -- (by --help flag or because of error).
-        getOptsFromArgs :: [String] -> IO Options.Options
-        getOptsFromArgs argv = case Options.extractOptions argv of
-          Left err -> errPutStrLn Options.usageInfo >> dieWith err
+        getOptsFromArgs :: [String] -> IO O.Options
+        getOptsFromArgs argv = case O.extractOptions argv of
+          Left err -> errPutStrLn O.usageInfo >> dieWith err
           Right opts -> do
 
-            when (opts ^. Options.showHelp') $ do
-              putStrLn Options.usageInfo
+            when (opts ^. O.showHelp') $ do
+              putStrLn O.usageInfo
               exitSuccess
 
-            opts ^. Options.handleDevicePath' & length & (> 0) &
+            opts ^. O.handleDevicePath' & length & (> 0) &
               \x -> unless x $ do
-                errPutStrLn Options.usageInfo
+                errPutStrLn O.usageInfo
                 dieWith "At least one device fd path must be specified!"
 
             return opts
 
-        -- Filters only existing descriptors files of devices and
+        -- Filters only existing descriptors files of devices,
+        -- stores this list to 'availableDevices' option and
         -- open these files to read and puts these descriptors to
-        -- options or fail the application if there's no available
-        -- devices.
-        extractAvailableDevices :: Options.Options -> IO Options.Options
+        -- 'handleDeviceFd' option or fail the application
+        -- if there's no available devices.
+        extractAvailableDevices :: O.Options -> IO O.Options
         extractAvailableDevices opts = flip St.execStateT opts $
-          fmap (^. Options.handleDevicePath') St.get
+          fmap (^. O.handleDevicePath') St.get
             >>= St.lift . filterM doesFileExist
             >>= St.lift . checkForCount
-            >>= updateState (\(s, x) -> s & Options.availableDevices' .~ x)
-            >>= St.lift . mapM (`IOHandleFD.openFile` SysIO.ReadMode)
-            >>= updateState (\(s, x) -> s & Options.handleDeviceFd' .~ x)
+            >>= updateState' (flip $ set O.availableDevices')
+            >>= St.lift . mapM (flip IOHandleFD.openFile SysIO.ReadMode)
+            >>= updateState' (flip $ set O.handleDeviceFd')
 
           where -- Checks if we have at least one available device
                 -- and gets files list back.
@@ -167,7 +169,8 @@ main = do
 
         -- Completely parse input arguments and returns options
         -- data structure based on them.
-        parseOpts :: [String] -> IO Options.Options
+        parseOpts :: [String] -> IO O.Options
         parseOpts argv =
           getOptsFromArgs argv
             >>= extractAvailableDevices
+            >>= XInput.getAvailable
