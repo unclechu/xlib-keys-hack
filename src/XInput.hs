@@ -14,7 +14,7 @@ import qualified System.Process as P
 
 import qualified Control.Monad.State as St
 import Control.Monad.State.Class (MonadState)
-import Control.Monad (when, unless, filterM)
+import Control.Monad (when, unless)
 import Control.Lens ( (.~), (%~), (^.), (.=), (&~)
                     , set, over, view
                     )
@@ -32,7 +32,7 @@ getAvailable :: O.Options -> IO O.Options
 getAvailable opts = flip St.execStateT opts $
   -- Deal with bare ids first.
   St.lift (fromProc "xinput" ["list", "--id-only"])
-    >>= mapM (\x -> return (read x :: Int))
+    >>= return . map (\x -> read x :: Int)
     >>= filterAvailableDeviceId
     >>= updateState' (flip $ set O.availableXInputDevices')
 
@@ -55,31 +55,44 @@ getAvailable opts = flip St.execStateT opts $
           errPutStr $ "'xinput' error: " ++ err
           dieWith $ "'xinput' failed with exit status: " ++ show n
 
+        rmTabs '\t' = ' '
+        rmTabs   x  =  x
+
         -- Run child process and extract its output.
         fromProc :: String -> [String] -> IO [String]
         fromProc proc args = P.readProcessWithExitCode proc args ""
                          >>= checkExitCode (proc:args)
-                         >>= return . map (\x -> if x == '\t' then ' ' else x)
+                         >>= return . map rmTabs
                          >>= return . lines
 
         -- Filters only available devices ids.
         filterAvailableDeviceId :: (MonadState s m, O.HasOptions s, Functor m)
                                 => [Int] -> m [Int]
         filterAvailableDeviceId all = fmap (^. O.disableXInputDeviceId') St.get
-                                  >>= filterM (return . (`elem` all))
+                                  >>= return . filter (`elem` all)
 
         -- Get pair with (id, name) from single line of 'xinput' output.
-        -- FIXME it looks awful, refactor it!
         extractIdNamePair :: String -> (Int, String)
         extractIdNamePair = words .> reducer (0, "")
-          where reducer :: (Int, String) -> [String] -> (Int, String)
-                reducer (id, "") ((hasNameSymbols -> False):xs) =
-                  reducer (id, "") xs
-                reducer (_, "")   [] = (0, "")
-                reducer (_, "")   ((getId -> Just id):_) = (0, "")
-                reducer (_, name) ((getId -> Just id):_) = (id, name)
-                reducer (_, "")   (x:xs) = reducer (0, x) xs
-                reducer (_, name) (x:xs) = reducer (0, name ++ " " ++ x) xs
+          where -- Parse next word from line.
+                reducer :: (Int, String) -> [String] -> (Int, String)
+                -- If we have no more symbols for extracting name
+                -- and it's end of the line, it means this line
+                -- doesn't contain name or id of device.
+                reducer (_, "") [] = (0, "")
+                -- If we don't have any extracted name symbols yet
+                -- and we don't have any valid name symbol in current word
+                -- then it's decorative symbols, skip it.
+                reducer (_, "")
+                        ((hasNameSymbols -> False):xs) = reducer (0, "") xs
+                -- Got id, end of recursion.
+                reducer (_, name) ((getId -> Just id):_)
+                  | name == "" = (0, "") -- no name, invalid line
+                  | otherwise  = (id, name) -- got id and name, done
+                -- Extracting name.
+                reducer (_, name) (x:xs)
+                  | name == "" = reducer (0, x) xs -- first word of name
+                  | otherwise  = reducer (0, name ++ " " ++ x) xs -- another word
 
                 getId :: String -> Maybe Int
                 getId ('i':'d':'=':(read -> id :: Int)) = Just id
@@ -88,8 +101,8 @@ getAvailable opts = flip St.execStateT opts $
                 hasNameSymbols :: String -> Bool
                 hasNameSymbols "" = False
                 hasNameSymbols ((flip elem nameSymbols -> True):_) = True
-                hasNameSymbols (x:xs) = hasNameSymbols xs
-                nameSymbols = ['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9'] ++ "_-"
+                hasNameSymbols (_:xs) = hasNameSymbols xs
+                nameSymbols = ['a'..'z'] ++ ['A'..'Z'] ++ ['0'..'9']
 
         -- Gets ids from 'disableXInputDeviceName' but only available.
         -- This typing means we can touch only state but never IO.
@@ -99,7 +112,9 @@ getAvailable opts = flip St.execStateT opts $
           (names :: [String]) <-
             -- `unwords.words` is removing double spaces
             -- (becaused they are removed in `available`).
-            let f = view O.disableXInputDeviceName' .> map (unwords . words)
+            let f = view O.disableXInputDeviceName'
+                 .> map (map rmTabs)
+                 .> map (unwords . words)
             in fmap f St.get
 
           return [ avId
