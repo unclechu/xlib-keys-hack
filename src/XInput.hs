@@ -20,7 +20,7 @@ import Control.Lens ( (.~), (%~), (^.), (.=), (&~)
                     )
 
 import Data.Maybe (Maybe(Just, Nothing))
-import Data.Set (toList, fromList, insert)
+import Data.Set (toList, fromList, insert, difference)
 
 import qualified Options as O
 import Utils (errPutStrLn, errPutStr, dieWith, (&), (.>), updateState')
@@ -34,6 +34,7 @@ getAvailable opts = flip St.execStateT opts $
   St.lift (fromProc "xinput" ["list", "--id-only"])
     >>= return . map (\x -> read x :: Int)
     >>= filterAvailableDeviceId
+    >>= checkForExplicitAvailable
     >>= updateState' (flip $ set O.availableXInputDevices')
 
     -- Extract ids from names.
@@ -62,14 +63,29 @@ getAvailable opts = flip St.execStateT opts $
         fromProc :: String -> [String] -> IO [String]
         fromProc proc args = P.readProcessWithExitCode proc args ""
                          >>= checkExitCode (proc:args)
-                         >>= return . map rmTabs
-                         >>= return . lines
+                         >>= return . lines . map rmTabs
 
         -- Filters only available devices ids.
         filterAvailableDeviceId :: (MonadState s m, O.HasOptions s, Functor m)
                                 => [Int] -> m [Int]
-        filterAvailableDeviceId all = fmap (^. O.disableXInputDeviceId') St.get
-                                  >>= return . filter (`elem` all)
+        filterAvailableDeviceId all = fmap f St.get
+          where f = view O.disableXInputDeviceId' .> filter (`elem` all)
+
+        -- All explicit devices ids from arguments
+        -- must be available! Check if it's true.
+        checkForExplicitAvailable :: [Int] -> St.StateT O.Options IO [Int]
+        checkForExplicitAvailable filteredAvailable =
+          fmap f St.get
+            >>= St.lift . check
+            >> return filteredAvailable
+          where f = (fromList . view O.disableXInputDeviceId')
+                 .> (\x -> (x, fromList filteredAvailable))
+                check (a, b) = when (a /= b) $ do
+                  errPutStrLn  $  "'xinput' error: these ids is unavailable: "
+                              ++  show diff
+                  dieWith "'xinput': all explicit ids of devices\
+                          \ must be available"
+                  where diff = toList $ difference a b
 
         -- Get pair with (id, name) from single line of 'xinput' output.
         extractIdNamePair :: String -> (Int, String)
