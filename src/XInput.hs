@@ -7,6 +7,7 @@
 
 module XInput
   ( getAvailable
+  , disable
   ) where
 
 import System.Exit (ExitCode(ExitSuccess, ExitFailure))
@@ -47,25 +48,7 @@ getAvailable opts = flip St.execStateT opts $
     >>= mergeAvailableIdsWithPrevious
     >>= updateState' (flip $ set O.availableXInputDevices')
 
-  where -- Check if exit code is okay and then return stdout,
-        -- or fail the application and print to stderr error message.
-        checkExitCode :: [String] -> (ExitCode, String, String) -> IO String
-        checkExitCode  _  (ExitSuccess,   out,  _ ) = return out
-        checkExitCode cmd (ExitFailure n,  _ , err) = do
-          unless (null cmd) $ errPutStrLn $ "'xinput' command: " ++ unwords cmd
-          errPutStr $ "'xinput' error: " ++ err
-          dieWith $ "'xinput' failed with exit status: " ++ show n
-
-        rmTabs '\t' = ' '
-        rmTabs   x  =  x
-
-        -- Run child process and extract its output.
-        fromProc :: String -> [String] -> IO [String]
-        fromProc proc args = P.readProcessWithExitCode proc args ""
-                         >>= checkExitCode (proc:args)
-                         >>= return . lines . map rmTabs
-
-        -- Filters only available devices ids.
+  where -- Filters only available devices ids.
         filterAvailableDeviceId :: (MonadState s m, O.HasOptions s, Functor m)
                                 => [Int] -> m [Int]
         filterAvailableDeviceId all = fmap f St.get
@@ -81,8 +64,8 @@ getAvailable opts = flip St.execStateT opts $
           where f = (fromList . view O.disableXInputDeviceId')
                  .> (\x -> (x, fromList filteredAvailable))
                 check (a, b) = when (a /= b) $ do
-                  errPutStrLn  $  "'xinput' error: these ids is unavailable: "
-                              ++  show diff
+                  errPutStrLn $ "'xinput' error: these ids is unavailable: "
+                             ++ show diff
                   dieWith "'xinput': all explicit ids of devices\
                           \ must be available"
                   where diff = toList $ difference a b
@@ -145,3 +128,31 @@ getAvailable opts = flip St.execStateT opts $
         mergeAvailableIdsWithPrevious new = fmap f St.get
           where f = view O.availableXInputDevices'
                  .> (++ new) .> fromList .> toList
+
+
+disable :: (O.HasOptions o) => o -> IO o
+disable opts = return (opts ^. O.availableXInputDevices')
+           >>= mapM off
+           >>  return opts
+  where off :: Int -> IO [String]
+        off id = fromProc "xinput" ["disable", show id]
+
+
+rmTabs :: Char -> Char
+rmTabs '\t' = ' '
+rmTabs   x  =  x
+
+-- Run child process and extract its output.
+fromProc :: String -> [String] -> IO [String]
+fromProc proc args = P.readProcessWithExitCode proc args ""
+                 >>= checkExitCode (proc:args)
+                 >>= return . lines . map rmTabs
+
+-- Check if exit code is okay and then return stdout,
+-- or fail the application and print to stderr error message.
+checkExitCode :: [String] -> (ExitCode, String, String) -> IO String
+checkExitCode  _  (ExitSuccess,   out,  _ ) = return out
+checkExitCode cmd (ExitFailure n,  _ , err) = do
+  unless (null cmd) $ errPutStrLn $ "'xinput' command: " ++ unwords cmd
+  errPutStr $ "'xinput' error: " ++ err
+  dieWith $ "'xinput' failed with exit status: " ++ show n

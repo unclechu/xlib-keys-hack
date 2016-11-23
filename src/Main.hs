@@ -174,3 +174,4 @@ main = do
           getOptsFromArgs argv
             >>= extractAvailableDevices
             >>= XInput.getAvailable
+            >>= XInput.disable
