@@ -9,19 +9,20 @@ import System.Exit (exitFailure, exitSuccess)
 import System.Environment (getArgs)
 import System.Directory (doesFileExist)
 
-import Control.Monad (when, unless, filterM)
 import qualified Control.Monad.State as St
+import Control.Monad (when, unless, filterM, forever, forM_)
 import Control.Lens ((.~), (%~), (^.), set, over, view)
+import Control.Concurrent (forkIO, threadDelay)
+import Control.Concurrent.MVar (newMVar, newEmptyMVar, isEmptyMVar, takeMVar)
 
 import Data.Either (Either(Left, Right), either)
 import Data.Maybe (Maybe(Just))
 
-import qualified Graphics.X11.Types      as XTypes
-import qualified Graphics.X11.ExtraTypes as XTypes
-import Graphics.X11.Xlib.Types (Display)
-import Graphics.X11.Types (Window)
-
+import qualified Graphics.X11.Types       as XTypes
+import qualified Graphics.X11.ExtraTypes  as XTypes
 import qualified Graphics.X11.Xlib.Extras as XExtras
+import Graphics.X11.Types (Window)
+import Graphics.X11.Xlib.Types (Display)
 import Graphics.X11.Xlib.Display (defaultRootWindow)
 import Graphics.X11.Xlib.Misc (keysymToKeycode)
 
@@ -36,7 +37,7 @@ import Bindings.Xkb ( xkbGetDescPtr
                     , xkbGetGroupsCount
                     , xkbGetDisplay
                     )
-import Process (initReset, processEvents)
+import Process (initReset, processXEvents)
 import qualified Options as O
 import qualified XInput
 import qualified State
@@ -67,63 +68,96 @@ xkbInit = do
   return dpy
 
 
-mainX :: IO ()
-mainX = do
-  putStrLn "~~~ begin ~~~"
-  -- LI.doStuff
+-- mainX :: IO ()
+-- mainX = do
+--   putStrLn "~~~ begin ~~~"
+--   -- LI.doStuff
 
-  let evfilepath = "/dev/input/by-id/usb-1d57_2.4G_Receiver-event-kbd"
-  handle <- IOHandleFD.openFile evfilepath SysIO.ReadMode
-  mainloop handle
-  SysIO.hClose handle
+--   let evfilepath = "/dev/input/by-id/usb-1d57_2.4G_Receiver-event-kbd"
+--   handle <- IOHandleFD.openFile evfilepath SysIO.ReadMode
+--   mainloop handle
+--   SysIO.hClose handle
 
-  putStrLn "~~~ end ~~~"
+--   putStrLn "~~~ end ~~~"
 
-  where mainloop :: IOHandle.Handle -> IO ()
-        mainloop handle = do
-          evMaybe <- EvdevEvent.hReadEvent handle
-          case evMaybe of
-            Just EvdevEvent.KeyEvent
-                   { EvdevEvent.evKeyCode = keyCode
-                   , EvdevEvent.evKeyEventType = pressStatus
-                   }
-              -> putStrLn $ show pressStatus ++ ": " ++ show keyCode
-            _ -> return ()
+--   where mainloop :: IOHandle.Handle -> IO ()
+--         mainloop handle = do
+--           evMaybe <- EvdevEvent.hReadEvent handle
+--           case evMaybe of
+--             Just EvdevEvent.KeyEvent
+--                    { EvdevEvent.evKeyCode = keyCode
+--                    , EvdevEvent.evKeyEventType = pressStatus
+--                    }
+--               -> putStrLn $ show pressStatus ++ ": " ++ show keyCode
+--             _ -> return ()
 
-          mainloop handle
+--           mainloop handle
 
 
-mainY :: IO ()
-mainY = do
+-- mainY :: IO ()
+-- mainY = do
 
-  putStrLn "~~~ begin ~~~"
+--   putStrLn "~~~ begin ~~~"
 
-  dpy <- xkbInit
-  let rootWnd = defaultRootWindow dpy
+--   dpy <- xkbInit
+--   let rootWnd = defaultRootWindow dpy
 
-  -- prevent errors with closed windows
-  XExtras.xSetErrorHandler
+--   -- prevent errors with closed windows
+--   XExtras.xSetErrorHandler
 
-  let state = State.initState { State.lastWindow = rootWnd
-                              }
+--   let state = State.initState { State.lastWindow = rootWnd
+--                               }
 
-  initReset Keys.getRealKeyCodes dpy rootWnd
+--   initReset Keys.getRealKeyCodes dpy rootWnd
 
-  let keyCodes = Keys.getKeyCodes
-        Keys.VirtualKeyCodes {
-                             }
+--   let keyCodes = Keys.getKeyCodes
+--         Keys.VirtualKeyCodes {
+--                              }
 
-  -- event loop
-  processEvents keyCodes state dpy rootWnd
+--   -- event loop
+--   processXEvents keyCodes state dpy rootWnd
 
 
 main :: IO ()
 main = do
 
   opts <- getArgs >>= parseOpts
+  let noise = O.noise opts
 
-  print opts
-  putStrLn "~~~ end ~~~"
+  noise "Started in verbose mode"
+
+  let ids = show $ O.availableXInputDevices opts
+      in noise $ "XInput devices ids that was disabled : " ++ ids
+
+  noise $ "Devices that will be handled: " ++ show (O.availableDevices opts)
+
+  noise "Initialization of Xkb..."
+  dpy <- xkbInit
+  let rootWnd = defaultRootWindow dpy
+
+  -- prevent errors with closed windows
+  XExtras.xSetErrorHandler
+
+  initReset Keys.getRealKeyCodes dpy rootWnd
+
+  noise "Making cross-thread variables..."
+  mVars <- do
+    mState <- newMVar $ State.initState { State.lastWindow = rootWnd }
+    mDebug <- newEmptyMVar
+    return State.MVars { State.stateMVar = mState
+                       , State.debugMVar = mDebug
+                       }
+
+  let keyCodes = Keys.getKeyCodes Keys.VirtualKeyCodes
+
+  noise "Starting window focus handler thread..."
+  forkIO $ forever $ processXEvents mVars opts keyCodes dpy rootWnd
+
+  noise "Starting listening for debug data in main thread..."
+  forever $ do
+    (debugList :: [State.DebugData]) <- takeMVar $ State.debugMVar mVars
+    let f (State.Noise x) = noise x
+        in forM_ debugList f
 
   where -- Parses arguments and returns options data structure
         -- or shows usage info and exit the application

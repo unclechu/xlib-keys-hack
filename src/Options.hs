@@ -10,6 +10,7 @@ module Options
   , HasOptions(..)
   , extractOptions
   , usageInfo
+  , noise
   ) where
 
 import qualified GHC.IO.Handle as IOHandle
@@ -33,7 +34,7 @@ data Options =
           , availableDevices        :: [FilePath]
           , availableXInputDevices  :: [Int]
           }
-  deriving Show
+  deriving (Show, Eq)
 
 makeApoClassy ''Options
 
@@ -109,3 +110,8 @@ extractOptions argv =
 usageInfo :: String
 usageInfo = '\n' : GetOpt.usageInfo header options
   where header = "Usage: xlib-keys-hack [OPTION...] devices fd paths..."
+
+
+noise :: Options -> String -> IO ()
+noise (verboseMode -> True) msg = putStrLn msg
+noise _ _ = return ()

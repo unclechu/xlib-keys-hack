@@ -5,15 +5,20 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Process
-  ( processEvents
+  ( processXEvents
   , initReset
   ) where
 
 import System.Exit (exitFailure)
 
 import Control.Monad (when, unless)
+import qualified Control.Monad.State as St
+import Control.Monad.State.Class (MonadState)
+import Control.Lens ((.~), (^.))
+import Control.Concurrent (forkIO, ThreadId)
+import Control.Concurrent.MVar (MVar, takeMVar, modifyMVar_, putMVar)
 
-import qualified Data.Maybe as Maybe
+import Data.Maybe (Maybe(Just, Nothing))
 import Data.Bits ((.|.))
 
 import qualified Graphics.X11.Types       as XTypes
@@ -24,25 +29,26 @@ import Graphics.X11.Xlib.Misc (getInputFocus)
 import Graphics.X11.Xlib.Types (Display)
 import Graphics.X11.Types (Window)
 
-import Control.Lens ((.~), (^.))
-
 import Utils ( (&), (.>), (<||>)
              , nextEvent'
              , errPutStrLn
+             , dieWith
+             , updateState'
              )
 import Bindings.Xkb (xkbSetGroup)
 import Bindings.XTest (fakeKeyEvent, fakeKeyCodeEvent)
+import qualified Options as O
 import qualified State
 import qualified Keys
 
 
--- reactive infinite monad
-processEvents :: Keys.KeyCodes -> State.State -> Display -> Window -> IO ()
-processEvents keyCodes state dpy rootWnd =
-  fmap fst (getInputFocus dpy)
-    >>= \wnd -> if wnd == rootWnd
-                   then again state
-                   else do
+processXEvents :: State.MVars
+               -> O.Options
+               -> Keys.KeyCodes
+               -> Display
+               -> Window
+               -> IO ()
+processXEvents mVars opts keyCodes dpy rootWnd = process $ \wnd -> do
 
   XEvent.sync dpy False
   XEvent.selectInput dpy wnd XTypes.focusChangeMask
@@ -51,51 +57,53 @@ processEvents keyCodes state dpy rootWnd =
   nextEvent dpy evPtr
   ev <- XExtras.getEvent evPtr
 
-  Maybe.fromMaybe
-      (return state)
-      (dealMap (XExtras.eventName ev) evPtr)
-    >>= again
+  dealMap (XExtras.eventName ev) evPtr
 
-  where again newState = processEvents keyCodes newState dpy rootWnd
-        nextEvent = nextEvent'
+  where nextEvent = nextEvent'
 
-        dealWithFocus :: String -> XEvent.XEventPtr -> IO State.State
-        dealWithFocus = processFocusEvent dpy state keyCodes
+        process :: (Window -> IO ()) -> IO ()
+        process m =
+          fmap fst (getInputFocus dpy)
+            >>= (\wnd -> when (wnd /= rootWnd) $ m wnd)
 
-        dealMap :: String -> XEvent.XEventPtr -> Maybe (IO State.State)
+        dealMap :: String -> XEvent.XEventPtr -> IO ()
         dealMap evName evPtr
           | evName `elem` ["FocusIn", "FocusOut"] =
-              Maybe.Just $ dealWithFocus evName evPtr
-          | otherwise = Maybe.Nothing
+              processXFocusEvent evName evPtr
+          | otherwise = return ()
 
+        processXFocusEvent :: String -> XEvent.XEventPtr -> IO ()
+        processXFocusEvent evName evPtr = f $ \prevState -> do
 
-processFocusEvent :: Display
-                  -> State.State
-                  -> Keys.KeyCodes
-                  -> String
-                  -> XEvent.XEventPtr
-                  -> IO State.State
-processFocusEvent dpy prevState keyCodes evName evPtr = do
+          noise $ "Handling focus event: " ++ evName ++ "..."
 
-  let lastWnd = State.lastWindow prevState
-  curWnd <- XEvent.get_Window evPtr
+          let lastWnd = State.lastWindow prevState
+          curWnd <- XEvent.get_Window evPtr
 
-  when (evName == "FocusOut") $ resetKbdLayout dpy
+          when (evName == "FocusOut") $ do
+            noise "Resetting keyboard layout..."
+            resetKbdLayout dpy
 
-  let newState = if curWnd /= lastWnd
-                    then prevState & State.lastWindow' .~ curWnd
-                    else prevState
+          if curWnd == lastWnd
+             then return prevState
+             else do
+               noise $ "Window focus moved from "
+                         ++ show lastWnd
+                         ++ " to " ++ show curWnd
+               return $ prevState { State.lastWindow = curWnd }
 
-  return newState
+          where f :: (State.State -> IO State.State) -> IO ()
+                f = modifyMVar_ $ State.stateMVar mVars
+
+                noise :: String -> IO ()
+                noise msg = when (O.verboseMode opts)
+                          $ putMVar (State.debugMVar mVars) [State.Noise msg]
 
 
 resetKbdLayout :: Display -> IO ()
 resetKbdLayout dpy =
-  xkbSetGroup dpy 0
-    >>= flip unless (errPutStrLn "xkbSetGroup error" >> exitFailure)
+  xkbSetGroup dpy 0 >>= flip unless (dieWith "xkbSetGroup error")
 
 
 initReset :: Keys.RealKeyCodes -> Display -> Window -> IO ()
-initReset realKeyCodes dpy rootWnd = do
-  resetKbdLayout dpy
-  -- fakeKeyEvent dpy XTypes.xK_ISO_Level3_Shift False
+initReset realKeyCodes dpy rootWnd = resetKbdLayout dpy
