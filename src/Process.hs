@@ -135,15 +135,30 @@ watchLeds :: State.MVars
           -> Display
           -> Window
           -> IO ()
-watchLeds mVars opts keyCodes dpy rootWnd = do
+watchLeds mVars opts keyCodes dpy rootWnd = f $ \leds prevState -> do
 
-  leds <- getLeds dpy
-  f $ \prevState -> do
+  let prevCapsLock = prevState ^. State.leds' . State.capsLockLed'
+      newCapsLock  = leds ^. State.capsLockLed'
+      prevNumLock  = prevState ^. State.leds' . State.numLockLed'
+      newNumLock   = leds ^. State.numLockLed'
 
-    let prevCapsLock = prevState ^. State.leds' . State.capsLockLed'
-        newCapsLock  = leds ^. State.capsLockLed'
-        prevNumLock  = prevState ^. State.leds' . State.numLockLed'
-        newNumLock   = leds ^. State.numLockLed'
+  when (view State.leds' prevState /= leds) $ do
+
+    when (prevCapsLock /= newCapsLock) $ do
+      ifHasXmobarFd $ flip IOHandle.hPutStr
+                    $ "capslock:" ++ notifyStatus newCapsLock
+      noise $ "Caps Lock is " ++ status newCapsLock
+
+    when (prevNumLock /= newNumLock) $ do
+      ifHasXmobarFd $ flip IOHandle.hPutStr
+                    $ "numlock:" ++ notifyStatus newNumLock
+      noise $ "Num Lock is " ++ status newNumLock
+
+  return (prevState & State.leds' .~ leds)
+
+  where noise :: String -> IO ()
+        noise msg = when (O.verboseMode opts)
+                  $ putMVar (State.debugMVar mVars) [State.Noise msg]
 
         status = "On" <||> "Off"
         notifyStatus = "on\n" <||> "off\n"
@@ -157,25 +172,8 @@ watchLeds mVars opts keyCodes dpy rootWnd = do
             >>= (\fd -> do m fd; return fd)
             >>= IOHandle.hFlushAll
 
-    when (view State.leds' prevState /= leds) $ do
-
-      when (prevCapsLock /= newCapsLock) $ do
-        ifHasXmobarFd $ flip IOHandle.hPutStr
-                      $ "capslock:" ++ notifyStatus newCapsLock
-        noise $ "Caps Lock is " ++ status newCapsLock
-
-      when (prevNumLock /= newNumLock) $ do
-        ifHasXmobarFd $ flip IOHandle.hPutStr
-                      $ "numlock:" ++ notifyStatus newNumLock
-        noise $ "Num Lock is " ++ status newNumLock
-
-    return (prevState & State.leds' .~ leds)
-
-  threadDelay $ 100 * 1000
-
-  where noise :: String -> IO ()
-        noise msg = when (O.verboseMode opts)
-                  $ putMVar (State.debugMVar mVars) [State.Noise msg]
-
-        f :: (State.State -> IO State.State) -> IO ()
-        f = modifyMVar_ $ State.stateMVar mVars
+        f :: (State.LedModes -> State.State -> IO State.State) -> IO ()
+        f m = do
+          leds <- getLeds dpy
+          modifyMVar_ (State.stateMVar mVars) (m leds)
+          threadDelay $ 100 * 1000
