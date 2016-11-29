@@ -16,9 +16,10 @@ module Options
 import qualified GHC.IO.Handle as IOHandle
 import qualified System.Console.GetOpt as GetOpt
 
+import Control.Lens ((.~), (%~), (^.), set, over, view)
+
 import Data.Either (Either(Left, Right))
-import Data.Maybe (fromJust)
-import Control.Lens ((.~), (%~))
+import Data.Maybe (Maybe(Just, Nothing), fromJust, fromMaybe)
 
 import Utils ((&), (.>), makeApoClassy)
 
@@ -29,10 +30,12 @@ data Options =
           , disableXInputDeviceName :: [String]
           , disableXInputDeviceId   :: [Int]
           , handleDevicePath        :: [FilePath]
+          , xmobarPipeFile          :: Maybe FilePath
 
           , handleDeviceFd          :: [IOHandle.Handle]
           , availableDevices        :: [FilePath]
           , availableXInputDevices  :: [Int]
+          , xmobarPipeFd            :: Maybe IOHandle.Handle
           }
   deriving (Show, Eq)
 
@@ -48,6 +51,7 @@ defaultOptions =
           , disableXInputDeviceName = []
           , disableXInputDeviceId   = []
           , handleDevicePath        = []
+          , xmobarPipeFile          = Nothing
 
 
           -- Will be extracted from `handleDevicePath`
@@ -65,6 +69,10 @@ defaultOptions =
           -- and from `disableXInputDeviceId` and filtered
           -- with only available devices.
           , availableXInputDevices  = []
+
+          -- Pipe file handler.
+          -- Will be extracted at initialization step.
+          , xmobarPipeFd            = Nothing
 
           }
 
@@ -92,6 +100,9 @@ options =
         (\x -> handleDevicePath' %~ (++ [fromJust x]))
         "FDPATH")
       "Path to device file descriptor to get events from"
+  , GetOpt.Option  [ ]  ["xmobar-pipe"]
+      (GetOpt.OptArg (set xmobarPipeFile') "FILE")
+      "Path to pipe file of xmobar to notify it about modes"
   ]
 
 
@@ -113,5 +124,5 @@ usageInfo = '\n' : GetOpt.usageInfo header options
 
 
 noise :: Options -> String -> IO ()
-noise (verboseMode -> True) msg = putStrLn msg
+noise ((^. verboseMode') -> True) msg = putStrLn msg
 noise _ _ = return ()

@@ -5,8 +5,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Process
-  ( processXEvents
-  , initReset
+  ( initReset
+  , processXEvents
+  , xmobarNotify
   ) where
 
 import System.Exit (exitFailure)
@@ -14,8 +15,8 @@ import System.Exit (exitFailure)
 import Control.Monad (when, unless)
 import qualified Control.Monad.State as St
 import Control.Monad.State.Class (MonadState)
-import Control.Lens ((.~), (^.))
-import Control.Concurrent (forkIO, ThreadId)
+import Control.Lens ((.~), (%~), (^.), set, over, view)
+import Control.Concurrent (forkIO, ThreadId, threadDelay)
 import Control.Concurrent.MVar (MVar, takeMVar, modifyMVar_, putMVar)
 
 import Data.Maybe (Maybe(Just, Nothing))
@@ -40,6 +41,15 @@ import Bindings.XTest (fakeKeyEvent, fakeKeyCodeEvent)
 import qualified Options as O
 import qualified State
 import qualified Keys
+
+
+resetKbdLayout :: Display -> IO ()
+resetKbdLayout dpy =
+  xkbSetGroup dpy 0 >>= flip unless (dieWith "xkbSetGroup error")
+
+
+initReset :: Keys.RealKeyCodes -> Display -> Window -> IO ()
+initReset realKeyCodes dpy rootWnd = resetKbdLayout dpy
 
 
 processXEvents :: State.MVars
@@ -100,10 +110,17 @@ processXEvents mVars opts keyCodes dpy rootWnd = process $ \wnd -> do
                           $ putMVar (State.debugMVar mVars) [State.Noise msg]
 
 
-resetKbdLayout :: Display -> IO ()
-resetKbdLayout dpy =
-  xkbSetGroup dpy 0 >>= flip unless (dieWith "xkbSetGroup error")
 
+xmobarNotify :: State.MVars
+             -> O.Options
+             -> Keys.KeyCodes
+             -> Display
+             -> Window
+             -> IO ()
+xmobarNotify mVars opts keyCodes dpy rootWnd = do
+  noise "xmobarNotify"
+  threadDelay $ 5 * 1000 * 1000
 
-initReset :: Keys.RealKeyCodes -> Display -> Window -> IO ()
-initReset realKeyCodes dpy rootWnd = resetKbdLayout dpy
+  where noise :: String -> IO ()
+        noise msg = when (O.verboseMode opts)
+                  $ putMVar (State.debugMVar mVars) [State.Noise msg]

@@ -130,7 +130,7 @@ getAvailable opts = flip St.execStateT opts $
                  .> (++ new) .> fromList .> toList
 
 
-disable :: (O.HasOptions o) => o -> IO o
+disable :: O.HasOptions o => o -> IO o
 disable opts = return (opts ^. O.availableXInputDevices')
            >>= mapM off
            >>  return opts

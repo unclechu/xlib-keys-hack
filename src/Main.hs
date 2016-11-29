@@ -31,13 +31,13 @@ import qualified GHC.IO.Handle as IOHandle
 import qualified GHC.IO.Handle.FD as IOHandleFD
 import qualified System.Linux.Input.Event as EvdevEvent
 
-import Utils (errPutStrLn, dieWith, (&), (.>), updateState')
+import Utils (errPutStrLn, dieWith, (&), (.>), updateState', updateStateM')
 import Bindings.Xkb ( xkbGetDescPtr
                     , xkbFetchControls
                     , xkbGetGroupsCount
                     , xkbGetDisplay
                     )
-import Process (initReset, processXEvents)
+import Process (initReset, processXEvents, xmobarNotify)
 import qualified Options as O
 import qualified XInput
 import qualified State
@@ -124,13 +124,6 @@ main = do
   opts <- getArgs >>= parseOpts
   let noise = O.noise opts
 
-  noise "Started in verbose mode"
-
-  let ids = show $ O.availableXInputDevices opts
-      in noise $ "XInput devices ids that was disabled : " ++ ids
-
-  noise $ "Devices that will be handled: " ++ show (O.availableDevices opts)
-
   noise "Initialization of Xkb..."
   dpy <- xkbInit
   let rootWnd = defaultRootWindow dpy
@@ -149,9 +142,15 @@ main = do
                        }
 
   let keyCodes = Keys.getKeyCodes Keys.VirtualKeyCodes
+  let withData m = m mVars opts keyCodes dpy rootWnd
+
+  noise $ show opts
 
   noise "Starting window focus handler thread..."
-  forkIO $ forever $ processXEvents mVars opts keyCodes dpy rootWnd
+  forkIO $ forever $ withData processXEvents
+
+  noise "Starting xmobar notifier thread..."
+  forkIO $ forever $ withData xmobarNotify
 
   noise "Starting listening for debug data in main thread..."
   forever $ do
@@ -176,6 +175,7 @@ main = do
                 errPutStrLn O.usageInfo
                 dieWith "At least one device fd path must be specified!"
 
+            O.noise opts "Started in verbose mode"
             return opts
 
         -- Filters only existing descriptors files of devices,
@@ -188,11 +188,22 @@ main = do
           fmap (^. O.handleDevicePath') St.get
             >>= St.lift . filterM doesFileExist
             >>= St.lift . checkForCount
-            >>= updateState' (flip $ set O.availableDevices')
+            >>= updateStateM' logAndStoreAvailable
+            >>= liftBetween
+                  (noise "Opening devices files descriptors for reading...")
             >>= St.lift . mapM (flip IOHandleFD.openFile SysIO.ReadMode)
             >>= updateState' (flip $ set O.handleDeviceFd')
 
-          where -- Checks if we have at least one available device
+          where noise = O.noise opts
+
+                logAndStoreAvailable :: O.HasOptions s
+                                     => s -> [FilePath] -> St.StateT s IO s
+                logAndStoreAvailable state files = do
+                  St.lift $ noise
+                          $ "Devices that will be handled: " ++ show files
+                  return (state & O.availableDevices' .~ files)
+
+                -- Checks if we have at least one available device
                 -- and gets files list back.
                 checkForCount :: [FilePath] -> IO [FilePath]
                 checkForCount files = do
@@ -200,6 +211,26 @@ main = do
                     dieWith "All specified devices to get events from \
                             \is unavailable!"
                   return files
+
+        -- Opens xmobar pipe file descriptor for writing.
+        extractPipeFd :: O.Options -> IO O.Options
+        extractPipeFd opts =
+          whenHasFile (opts ^. O.xmobarPipeFile') $ \file -> do
+            noise "Opening xmobar pipe file for writing..."
+            fd <- IOHandleFD.openFile file SysIO.WriteMode
+            return (opts & O.xmobarPipeFd' .~ Just fd)
+
+          where noise = O.noise opts
+
+                whenHasFile :: Maybe FilePath
+                            -> (FilePath -> IO O.Options)
+                            -> IO O.Options
+                whenHasFile (Just file) m = m file
+                whenHasFile Nothing     _ = return opts
+
+        -- Lift up a monad and return back original state.
+        liftBetween :: Monad m => m () -> a -> St.StateT s m a
+        liftBetween monad x = St.lift monad >> return x
 
         -- Completely parse input arguments and returns options
         -- data structure based on them.
@@ -209,3 +240,10 @@ main = do
             >>= extractAvailableDevices
             >>= XInput.getAvailable
             >>= XInput.disable
+            >>= logDisabled
+            >>= extractPipeFd
+
+          where logDisabled :: O.Options -> IO O.Options
+                logDisabled opts = opts ^. O.availableXInputDevices'
+                  & show .> ("XInput devices ids that was disabled : " ++)
+                  & (\x -> O.noise opts x >> return opts)
