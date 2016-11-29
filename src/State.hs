@@ -4,10 +4,11 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module State
-  ( State(..), HasState(..)
+  ( State(..),       HasState(..)
   , PressedKeys(..), HasPressedKeys(..)
+  , LedModes(..),    HasLedModes(..)
 
-  , MVars(..), HasMVars(..)
+  , MVars(..),     HasMVars(..)
   , DebugData(..), HasDebugData(..)
 
   , initState
@@ -23,23 +24,15 @@ import Utils (makeApoClassy)
 initState :: State
 initState =
   State { lastWindow  = undefined
-        , pressedKeys = PressedKeys { caps   = False
-                                    , enter  = False
-                                    , lCtrl  = False
-                                    , rCtrl  = False
-                                    , lAlt   = False
-                                    , rAlt   = False
-                                    , lShift = False
-                                    , rShift = False
-                                    }
-        , debugFlag = False
+        , pressedKeys = defaultPressedKeys
+        , leds        = defaultLedModes
         }
 
 
 data State =
   State { lastWindow  :: Window
         , pressedKeys :: PressedKeys
-        , debugFlag   :: Bool
+        , leds        :: LedModes
         }
   deriving (Show, Eq)
 
@@ -57,6 +50,30 @@ data PressedKeys =
               }
   deriving (Show, Eq)
 
+defaultPressedKeys :: PressedKeys
+defaultPressedKeys =
+  PressedKeys { caps   = False
+              , enter  = False
+              , lCtrl  = False
+              , rCtrl  = False
+              , lAlt   = False
+              , rAlt   = False
+              , lShift = False
+              , rShift = False
+              }
+
+
+data LedModes =
+  LedModes { capsLockLed :: Bool
+           , numLockLed  :: Bool
+           }
+  deriving (Show, Eq)
+
+defaultLedModes :: LedModes
+defaultLedModes = LedModes { capsLockLed = False
+                           , numLockLed  = False
+                           }
+
 
 data DebugData = Noise String
                  deriving Show
@@ -72,5 +89,6 @@ instance Show MVars where
 
 makeApoClassy ''State
 makeApoClassy ''PressedKeys
+makeApoClassy ''LedModes
 makeApoClassy ''MVars
 makeApoClassy ''DebugData

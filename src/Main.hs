@@ -37,7 +37,8 @@ import Bindings.Xkb ( xkbGetDescPtr
                     , xkbGetGroupsCount
                     , xkbGetDisplay
                     )
-import Process (initReset, processXEvents, xmobarNotify)
+import Bindings.MoreXlib (initThreads)
+import Process (initReset, processXEvents, watchLeds)
 import qualified Options as O
 import qualified XInput
 import qualified State
@@ -94,35 +95,14 @@ xkbInit = do
 --           mainloop handle
 
 
--- mainY :: IO ()
--- mainY = do
-
---   putStrLn "~~~ begin ~~~"
-
---   dpy <- xkbInit
---   let rootWnd = defaultRootWindow dpy
-
---   -- prevent errors with closed windows
---   XExtras.xSetErrorHandler
-
---   let state = State.initState { State.lastWindow = rootWnd
---                               }
-
---   initReset Keys.getRealKeyCodes dpy rootWnd
-
---   let keyCodes = Keys.getKeyCodes
---         Keys.VirtualKeyCodes {
---                              }
-
---   -- event loop
---   processXEvents keyCodes state dpy rootWnd
-
-
 main :: IO ()
 main = do
 
   opts <- getArgs >>= parseOpts
   let noise = O.noise opts
+
+  noise "Enabling threads support for Xlib..."
+  initThreads
 
   noise "Initialization of Xkb..."
   dpy <- xkbInit
@@ -131,7 +111,8 @@ main = do
   -- prevent errors with closed windows
   XExtras.xSetErrorHandler
 
-  initReset Keys.getRealKeyCodes dpy rootWnd
+  noise "Initial resetting..."
+  initReset opts Keys.getRealKeyCodes dpy rootWnd
 
   noise "Making cross-thread variables..."
   mVars <- do
@@ -144,13 +125,11 @@ main = do
   let keyCodes = Keys.getKeyCodes Keys.VirtualKeyCodes
   let withData m = m mVars opts keyCodes dpy rootWnd
 
-  noise $ show opts
-
   noise "Starting window focus handler thread..."
   forkIO $ forever $ withData processXEvents
 
-  noise "Starting xmobar notifier thread..."
-  forkIO $ forever $ withData xmobarNotify
+  noise "Starting leds watcher thread..."
+  forkIO $ forever $ withData watchLeds
 
   noise "Starting listening for debug data in main thread..."
   forever $ do

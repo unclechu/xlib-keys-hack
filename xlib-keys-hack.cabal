@@ -21,6 +21,7 @@ executable xlib-keys-hack
   other-modules:       Bindings.Xkb
                      , Bindings.Xkb.Types
                      , Bindings.XTest
+                     , Bindings.MoreXlib
                      , Process
                      , Options
                      , XInput
