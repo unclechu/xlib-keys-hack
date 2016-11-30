@@ -12,6 +12,7 @@ import Utils (makeApoClassy)
 
 
 data Action = Noise String
+            | NotifyXmobar String
               deriving (Show, Eq)
 
 

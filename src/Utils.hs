@@ -20,6 +20,8 @@ module Utils
   , updateState'
   , updateStateM
   , updateStateM'
+
+  , writeToFd
   ) where
 
 import Graphics.X11.Xlib (pending)
@@ -33,13 +35,14 @@ import Control.Monad.State.Class (MonadState)
 
 import System.Posix.Types (Fd(Fd))
 import System.IO (hPutStrLn, hPutStr, stderr)
+import qualified GHC.IO.Handle as IOHandle
 
 import qualified Language.Haskell.TH as TH
 
 import Control.Lens ((.~))
 import qualified Control.Lens.TH as LTH
 
-import qualified Data.Maybe as Maybe
+import Data.Maybe (Maybe(Nothing, Just))
 import Data.Char (toLower)
 
 
@@ -101,11 +104,11 @@ makeApoClassy = LTH.makeLensesWith rules
         rules = LTH.classyRules
               & LTH.lensField .~ lensNamer
               & LTH.lensClass .~ classNamer
-        classNamer :: TH.Name -> Maybe.Maybe (TH.Name, TH.Name)
+        classNamer :: TH.Name -> Maybe (TH.Name, TH.Name)
         classNamer name = let base = TH.nameBase name in
-          Maybe.Just ( TH.mkName $ "Has" ++ base
-                     , TH.mkName $ [toLower $ head base] ++ tail base ++ "'c"
-                     )
+          Just ( TH.mkName $ "Has" ++ base
+               , TH.mkName $ [toLower $ head base] ++ tail base ++ "'c"
+               )
 
 
 -- Updates a state and gets value back.
@@ -124,3 +127,11 @@ updateStateM fm x = St.get >>= (\s -> fm (s, x)) >>= St.put >> return x
 -- Monadic version of `updateState'`.
 updateStateM' :: (MonadState s m) => (s -> a -> m s) -> a -> m a
 updateStateM' fm x = St.get >>= (\s -> fm s x) >>= St.put >> return x
+
+
+writeToFd :: IOHandle.Handle -> String -> IO ()
+writeToFd fd chunk = do
+  isWritable <- IOHandle.hIsWritable fd
+  if isWritable
+     then IOHandle.hPutStr fd chunk >> IOHandle.hFlushAll fd
+     else writeToFd fd chunk -- try again

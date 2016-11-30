@@ -37,6 +37,7 @@ import Utils ( (&), (.>), (<||>)
              , errPutStrLn
              , dieWith
              , updateState'
+             , writeToFd
              )
 import Bindings.Xkb (xkbSetGroup)
 import Bindings.XTest (fakeKeyEvent, fakeKeyCodeEvent)
@@ -62,8 +63,8 @@ initReset opts realKeyCodes dpy rootWnd = do
   when (isJust xmobarFd) $ do
     noise "Initial resetting of xmobar leds..."
     let fd = fromJust xmobarFd
-    IOHandle.hPutStr fd "capslock:off\n" >> IOHandle.hFlushAll fd
-    IOHandle.hPutStr fd "numlock:off\n" >> IOHandle.hFlushAll fd
+    writeToFd fd "capslock:off\n"
+    writeToFd fd "numlock:off\n"
 
   where noise = O.noise opts
 
@@ -147,13 +148,11 @@ watchLeds ctVars opts keyCodes dpy rootWnd = f $ \leds prevState -> do
   when (view State.leds' prevState /= leds) $ do
 
     when (prevCapsLock /= newCapsLock) $ do
-      ifHasXmobarFd $ flip IOHandle.hPutStr
-                    $ "capslock:" ++ notifyStatus newCapsLock
+      notify $ "capslock:" ++ notifyStatus newCapsLock
       noise $ "Caps Lock is " ++ status newCapsLock
 
     when (prevNumLock /= newNumLock) $ do
-      ifHasXmobarFd $ flip IOHandle.hPutStr
-                    $ "numlock:" ++ notifyStatus newNumLock
+      notify $ "numlock:" ++ notifyStatus newNumLock
       noise $ "Num Lock is " ++ status newNumLock
 
   return (prevState & State.leds' .~ leds)
@@ -164,14 +163,8 @@ watchLeds ctVars opts keyCodes dpy rootWnd = f $ \leds prevState -> do
         status = "On" <||> "Off"
         notifyStatus = "on\n" <||> "off\n"
 
-        xmobarFd :: Maybe IOHandle.Handle
-        xmobarFd = opts ^. O.xmobarPipeFd'
-
-        ifHasXmobarFd :: (IOHandle.Handle -> IO ()) -> IO ()
-        ifHasXmobarFd m = when (isJust xmobarFd) $
-          return (fromJust xmobarFd)
-            >>= (\fd -> do m fd; return fd)
-            >>= IOHandle.hFlushAll
+        notify :: String -> IO ()
+        notify = Actions.notifyXmobar opts ctVars
 
         f :: (State.LedModes -> State.State -> IO State.State) -> IO ()
         f m = do

@@ -18,7 +18,7 @@ import Control.Concurrent.MVar (newMVar)
 import Control.Concurrent.Chan (Chan, newChan, readChan)
 
 import Data.Either (Either(Left, Right), either)
-import Data.Maybe (Maybe(Just))
+import Data.Maybe (Maybe(Nothing, Just), fromJust, isJust)
 
 import qualified Graphics.X11.Types       as XTypes
 import qualified Graphics.X11.ExtraTypes  as XTypes
@@ -33,7 +33,13 @@ import qualified GHC.IO.Handle as IOHandle
 import qualified GHC.IO.Handle.FD as IOHandleFD
 import qualified System.Linux.Input.Event as EvdevEvent
 
-import Utils (errPutStrLn, dieWith, (&), (.>), updateState', updateStateM')
+import Utils ( (&), (.>)
+             , errPutStrLn
+             , dieWith
+             , updateState'
+             , updateStateM'
+             , writeToFd
+             )
 import Bindings.Xkb ( xkbGetDescPtr
                     , xkbFetchControls
                     , xkbGetGroupsCount
@@ -144,6 +150,16 @@ main = do
 
         m :: Actions.Action -> IO ()
         m (Actions.Noise msg) = noise msg
+        m (Actions.NotifyXmobar msg) =
+          let pipeFd = opts ^. O.xmobarPipeFd'
+              log :: String -> String
+              log (reverse -> '\n':msg) = reverse msg
+              log msg = msg
+              in when (isJust pipeFd) $ do
+                noise $ "Notifying xmobar with message '" ++ log msg ++ "'..."
+                let xmobarFd = fromJust pipeFd
+                writeToFd xmobarFd msg
+
         in f action
 
   where -- Parses arguments and returns options data structure
