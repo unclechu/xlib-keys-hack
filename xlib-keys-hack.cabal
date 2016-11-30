@@ -24,6 +24,9 @@ executable xlib-keys-hack
                      , Bindings.MoreXlib
                      , Process
                      , Options
+                     , Actions
+                     , Actions.Types
+                     , State
                      , XInput
                      , Utils
                      , Keys

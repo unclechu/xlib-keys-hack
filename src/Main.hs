@@ -2,6 +2,7 @@
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Main (main) where
 
@@ -13,7 +14,8 @@ import qualified Control.Monad.State as St
 import Control.Monad (when, unless, filterM, forever, forM_)
 import Control.Lens ((.~), (%~), (^.), set, over, view)
 import Control.Concurrent (forkIO, threadDelay)
-import Control.Concurrent.MVar (newMVar, newEmptyMVar, isEmptyMVar, takeMVar)
+import Control.Concurrent.MVar (newMVar)
+import Control.Concurrent.Chan (Chan, newChan, readChan)
 
 import Data.Either (Either(Left, Right), either)
 import Data.Maybe (Maybe(Just))
@@ -42,6 +44,7 @@ import Process (initReset, processXEvents, watchLeds)
 import qualified Options as O
 import qualified XInput
 import qualified State
+import qualified Actions
 import qualified Keys
 
 
@@ -115,15 +118,15 @@ main = do
   initReset opts Keys.getRealKeyCodes dpy rootWnd
 
   noise "Making cross-thread variables..."
-  mVars <- do
-    mState <- newMVar $ State.initState { State.lastWindow = rootWnd }
-    mDebug <- newEmptyMVar
-    return State.MVars { State.stateMVar = mState
-                       , State.debugMVar = mDebug
-                       }
+  ctVars <- do
+    ctState <- newMVar $ State.initState { State.lastWindow = rootWnd }
+    (ctActions :: Chan Actions.ActionType) <- newChan
+    return State.CrossThreadVars { State.stateMVar   = ctState
+                                 , State.actionsChan = ctActions
+                                 }
 
   let keyCodes = Keys.getKeyCodes Keys.VirtualKeyCodes
-  let withData m = m mVars opts keyCodes dpy rootWnd
+  let withData m = m ctVars opts keyCodes dpy rootWnd
 
   noise "Starting window focus handler thread..."
   forkIO $ forever $ withData processXEvents
@@ -133,9 +136,15 @@ main = do
 
   noise "Starting listening for debug data in main thread..."
   forever $ do
-    (debugList :: [State.DebugData]) <- takeMVar $ State.debugMVar mVars
-    let f (State.Noise x) = noise x
-        in forM_ debugList f
+    (action :: Actions.ActionType) <- readChan $ State.actionsChan ctVars
+    let f :: Actions.ActionType -> IO ()
+        f (Actions.Single a) = m a
+        f (Actions.Sequence []) = return ()
+        f (Actions.seqHead -> (x, xs)) = m x >> f xs
+
+        m :: Actions.Action -> IO ()
+        m (Actions.Noise msg) = noise msg
+        in f action
 
   where -- Parses arguments and returns options data structure
         -- or shows usage info and exit the application

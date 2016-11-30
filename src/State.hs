@@ -8,17 +8,18 @@ module State
   , PressedKeys(..), HasPressedKeys(..)
   , LedModes(..),    HasLedModes(..)
 
-  , MVars(..),     HasMVars(..)
-  , DebugData(..), HasDebugData(..)
+  , CrossThreadVars(..), HasCrossThreadVars(..)
 
   , initState
   ) where
 
 import Control.Concurrent.MVar (MVar)
+import Control.Concurrent.Chan (Chan)
 
 import Graphics.X11.Types (Window)
 
 import Utils (makeApoClassy)
+import Actions.Types (ActionType)
 
 
 initState :: State
@@ -75,20 +76,16 @@ defaultLedModes = LedModes { capsLockLed = False
                            }
 
 
-data DebugData = Noise String
-                 deriving Show
+data CrossThreadVars =
+  CrossThreadVars { stateMVar   :: MVar State
+                  , actionsChan :: Chan ActionType
+                  }
 
-
-data MVars =
-  MVars { stateMVar :: MVar State
-        , debugMVar :: MVar [DebugData]
-        }
-instance Show MVars where
-  show _ = "MVars"
+instance Show CrossThreadVars where
+  show _ = "CrossThreadVars"
 
 
 makeApoClassy ''State
 makeApoClassy ''PressedKeys
 makeApoClassy ''LedModes
-makeApoClassy ''MVars
-makeApoClassy ''DebugData
+makeApoClassy ''CrossThreadVars

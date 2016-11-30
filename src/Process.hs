@@ -18,7 +18,8 @@ import qualified Control.Monad.State as St
 import Control.Monad.State.Class (MonadState)
 import Control.Lens ((.~), (%~), (^.), set, over, view)
 import Control.Concurrent (forkIO, ThreadId, threadDelay)
-import Control.Concurrent.MVar (MVar, takeMVar, modifyMVar_, putMVar)
+import Control.Concurrent.MVar (MVar, modifyMVar_)
+import Control.Concurrent.Chan (Chan, writeChan)
 
 import Data.Maybe (Maybe(Just, Nothing), fromJust, isJust)
 import Data.Bits ((.|.))
@@ -41,6 +42,7 @@ import Bindings.Xkb (xkbSetGroup)
 import Bindings.XTest (fakeKeyEvent, fakeKeyCodeEvent)
 import Bindings.MoreXlib (getLeds)
 import qualified Options as O
+import qualified Actions
 import qualified State
 import qualified Keys
 
@@ -66,19 +68,20 @@ initReset opts realKeyCodes dpy rootWnd = do
   where noise = O.noise opts
 
 
-processXEvents :: State.MVars
+processXEvents :: State.CrossThreadVars
                -> O.Options
                -> Keys.KeyCodes
                -> Display
                -> Window
                -> IO ()
-processXEvents mVars opts keyCodes dpy rootWnd = process $ \wnd -> do
+processXEvents ctVars opts keyCodes dpy rootWnd = process $ \wnd -> do
 
   XEvent.sync dpy False
   XEvent.selectInput dpy wnd XTypes.focusChangeMask
 
   evPtr <- XEvent.allocaXEvent return
   noise "Waiting for next X event..."
+
   nextEvent dpy evPtr
   ev <- XExtras.getEvent evPtr
 
@@ -87,8 +90,7 @@ processXEvents mVars opts keyCodes dpy rootWnd = process $ \wnd -> do
   where nextEvent = nextEvent'
 
         noise :: String -> IO ()
-        noise msg = when (O.verboseMode opts)
-                  $ putMVar (State.debugMVar mVars) [State.Noise msg]
+        noise = Actions.noise opts ctVars
 
         process :: (Window -> IO ()) -> IO ()
         process m =
@@ -122,20 +124,20 @@ processXEvents mVars opts keyCodes dpy rootWnd = process $ \wnd -> do
                return $ prevState { State.lastWindow = curWnd }
 
           where f :: (State.State -> IO State.State) -> IO ()
-                f = modifyMVar_ $ State.stateMVar mVars
+                f = modifyMVar_ $ State.stateMVar ctVars
 
 
 
 -- FIXME waiting in blocking-mode for new leds event
 -- Watch for new leds state and when new leds state is coming
 -- store it in State, notify xmobar pipe and log.
-watchLeds :: State.MVars
+watchLeds :: State.CrossThreadVars
           -> O.Options
           -> Keys.KeyCodes
           -> Display
           -> Window
           -> IO ()
-watchLeds mVars opts keyCodes dpy rootWnd = f $ \leds prevState -> do
+watchLeds ctVars opts keyCodes dpy rootWnd = f $ \leds prevState -> do
 
   let prevCapsLock = prevState ^. State.leds' . State.capsLockLed'
       newCapsLock  = leds ^. State.capsLockLed'
@@ -157,8 +159,7 @@ watchLeds mVars opts keyCodes dpy rootWnd = f $ \leds prevState -> do
   return (prevState & State.leds' .~ leds)
 
   where noise :: String -> IO ()
-        noise msg = when (O.verboseMode opts)
-                  $ putMVar (State.debugMVar mVars) [State.Noise msg]
+        noise = Actions.noise opts ctVars
 
         status = "On" <||> "Off"
         notifyStatus = "on\n" <||> "off\n"
@@ -175,5 +176,5 @@ watchLeds mVars opts keyCodes dpy rootWnd = f $ \leds prevState -> do
         f :: (State.LedModes -> State.State -> IO State.State) -> IO ()
         f m = do
           leds <- getLeds dpy
-          modifyMVar_ (State.stateMVar mVars) (m leds)
+          modifyMVar_ (State.stateMVar ctVars) (m leds)
           threadDelay $ 100 * 1000
