@@ -41,7 +41,7 @@ import Utils ( (&), (.>), (<||>)
              )
 import Bindings.Xkb (xkbSetGroup)
 import Bindings.XTest (fakeKeyEvent, fakeKeyCodeEvent)
-import Bindings.MoreXlib (getLeds)
+import Bindings.MoreXlib (getLeds, lockDisplay, unlockDisplay)
 import qualified Options as O
 import qualified Actions
 import qualified State
@@ -50,7 +50,10 @@ import qualified Keys
 
 resetKbdLayout :: Display -> IO ()
 resetKbdLayout dpy =
-  xkbSetGroup dpy 0 >>= flip unless (dieWith "xkbSetGroup error")
+  lockDisplay dpy
+    >> xkbSetGroup dpy 0
+    >>= flip unless (dieWith "xkbSetGroup error")
+    >> unlockDisplay dpy
 
 
 initReset :: O.Options -> Keys.RealKeyCodes -> Display -> Window -> IO ()
@@ -126,7 +129,6 @@ processXEvents ctVars opts keyCodes dpy rootWnd = process $ \wnd -> do
 
           where f :: (State.State -> IO State.State) -> IO ()
                 f = modifyMVar_ $ State.stateMVar ctVars
-
 
 
 -- FIXME waiting in blocking-mode for new leds event

@@ -153,7 +153,7 @@ main = do
         m (Actions.NotifyXmobar msg) =
           let pipeFd = opts ^. O.xmobarPipeFd'
               log :: String -> String
-              log (reverse -> '\n':msg) = reverse msg
+              log (reverse -> '\n':(reverse -> msg)) = msg
               log msg = msg
               in when (isJust pipeFd) $ do
                 noise $ "Notifying xmobar with message '" ++ log msg ++ "'..."

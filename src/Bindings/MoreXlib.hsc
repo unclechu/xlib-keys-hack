@@ -7,6 +7,8 @@
 module Bindings.MoreXlib
   ( getLeds
   , initThreads
+  , lockDisplay
+  , unlockDisplay
   ) where
 
 
@@ -113,3 +115,12 @@ initThreads =
   xInitThreads
     >>= return . (/= 0)
     >>= flip unless (dieWith "Xlib: init concurrent threads error")
+
+
+-- native
+foreign import ccall unsafe "X11/Xlib.h XLockDisplay"
+  lockDisplay :: Display -> IO ()
+
+-- native
+foreign import ccall unsafe "X11/Xlib.h XUnlockDisplay"
+  unlockDisplay :: Display -> IO ()
