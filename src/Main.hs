@@ -46,7 +46,10 @@ import Bindings.Xkb ( xkbGetDescPtr
                     , xkbGetDisplay
                     )
 import Bindings.MoreXlib (initThreads)
-import Process (initReset, processXEvents, watchLeds)
+import Process ( initReset
+               , processXEvents
+               , watchLeds
+               )
 import qualified Options as O
 import qualified XInput
 import qualified State
@@ -134,7 +137,7 @@ main = do
 
   noise "Making cross-thread variables..."
   ctVars <- do
-    ctState <- newMVar $ State.initState { State.lastWindow = rootWnd }
+    ctState <- newMVar $ State.initState rootWnd
     (ctActions :: Chan Actions.ActionType) <- newChan
     return State.CrossThreadVars { State.stateMVar   = ctState
                                  , State.actionsChan = ctActions

@@ -18,6 +18,7 @@ module Keys
 import Graphics.X11.Types (KeyCode)
 
 import Utils (makeApoClassy)
+import Keys.Map ()
 
 
 getRealKeyCodes :: RealKeyCodes

@@ -8,6 +8,7 @@ module Process
   ( initReset
   , processXEvents
   , watchLeds
+  , handleKeyboard
   ) where
 
 import System.Exit (exitFailure)
@@ -174,3 +175,13 @@ watchLeds ctVars opts keyCodes dpy rootWnd = f $ \leds prevState -> do
           leds <- getLeds dpy
           modifyMVar_ (State.stateMVar ctVars) (m leds)
           threadDelay $ 100 * 1000
+
+
+-- Wait for key events and simulate them in X.
+handleKeyboard :: State.CrossThreadVars
+               -> O.Options
+               -> Keys.KeyCodes
+               -> Display
+               -> Window
+               -> IO ()
+handleKeyboard = undefined

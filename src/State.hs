@@ -22,14 +22,6 @@ import Utils (makeApoClassy)
 import Actions.Types (ActionType)
 
 
-initState :: State
-initState =
-  State { lastWindow  = undefined
-        , pressedKeys = defaultPressedKeys
-        , leds        = defaultLedModes
-        }
-
-
 data State =
   State { lastWindow  :: Window
         , pressedKeys :: PressedKeys
@@ -51,6 +43,21 @@ data PressedKeys =
               }
   deriving (Show, Eq)
 
+
+data LedModes =
+  LedModes { capsLockLed :: Bool
+           , numLockLed  :: Bool
+           }
+  deriving (Show, Eq)
+
+
+initState :: Window -> State
+initState wnd =
+  State { lastWindow  = wnd
+        , pressedKeys = defaultPressedKeys
+        , leds        = defaultLedModes
+        }
+
 defaultPressedKeys :: PressedKeys
 defaultPressedKeys =
   PressedKeys { caps   = False
@@ -62,13 +69,6 @@ defaultPressedKeys =
               , lShift = False
               , rShift = False
               }
-
-
-data LedModes =
-  LedModes { capsLockLed :: Bool
-           , numLockLed  :: Bool
-           }
-  deriving (Show, Eq)
 
 defaultLedModes :: LedModes
 defaultLedModes = LedModes { capsLockLed = False
