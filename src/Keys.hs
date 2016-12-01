@@ -10,6 +10,7 @@ module Keys
   , HasRealKeyCodes(..)
   , VirtualKeyCodes(..)
   , HasVirtualKeyCodes(..)
+
   , getKeyCodes
   , getRealKeyCodes
   ) where

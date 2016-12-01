@@ -113,8 +113,17 @@ main = do
   noise "Enabling threads support for Xlib..."
   initThreads
 
+
   noise "Initialization of Xkb..."
-  dpy <- xkbInit
+  dpy <- xkbInit -- for main thread
+
+  noise "Getting additional X Display for window focus handler thread..."
+  dpyForXWindowFocusHandler <- xkbInit
+
+  noise "Getting additional X Display for leds watcher thread..."
+  dpyForLedsWatcher <- xkbInit
+
+
   let rootWnd = defaultRootWindow dpy
 
   -- prevent errors with closed windows
@@ -131,14 +140,24 @@ main = do
                                  , State.actionsChan = ctActions
                                  }
 
-  let keyCodes = Keys.getKeyCodes Keys.VirtualKeyCodes
-  let withData m = m ctVars opts keyCodes dpy rootWnd
+  let keyCodes :: Keys.KeyCodes
+      keyCodes = Keys.getKeyCodes Keys.VirtualKeyCodes
+
+      withData :: Display
+               -> ( State.CrossThreadVars
+                    -> O.Options
+                    -> Keys.KeyCodes
+                    -> Display
+                    -> Window
+                    -> IO () )
+               -> IO ()
+      withData tDpy m = m ctVars opts keyCodes tDpy rootWnd
 
   noise "Starting window focus handler thread..."
-  forkIO $ forever $ withData processXEvents
+  forkIO $ forever $ withData dpyForXWindowFocusHandler processXEvents
 
   noise "Starting leds watcher thread..."
-  forkIO $ forever $ withData watchLeds
+  forkIO $ forever $ withData dpyForLedsWatcher watchLeds
 
   noise "Starting listening for debug data in main thread..."
   forever $ do

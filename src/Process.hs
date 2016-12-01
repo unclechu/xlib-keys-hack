@@ -68,6 +68,7 @@ initReset opts realKeyCodes dpy rootWnd = do
     let fd = fromJust xmobarFd
     writeToFd fd "capslock:off\n"
     writeToFd fd "numlock:off\n"
+    writeToFd fd "alternative:off\n"
 
   where noise = O.noise opts
 
