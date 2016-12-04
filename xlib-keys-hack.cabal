@@ -30,7 +30,6 @@ executable xlib-keys-hack
                      , XInput
                      , Utils
                      , Keys
-                     , Keys.Map
   -- other-extensions:
   build-depends:       base >=4.7 && <4.8
                      , X11 >=1.6 && <1.7
@@ -43,6 +42,8 @@ executable xlib-keys-hack
                      , process >=1.4 && <1.5
                      , mtl >=2.2 && <2.3
                      , containers ==0.5.5.1
+                     , deepseq >=1.3 && <1.4
+                     , text-format-simple >=1.0 && <1.1
   build-tools:         hsc2hs
   extra-libraries:     "Xtst"
   hs-source-dirs:      src

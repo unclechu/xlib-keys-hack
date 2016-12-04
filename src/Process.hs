@@ -3,6 +3,8 @@
 
 {-# LANGUAGE DoAndIfThenElse #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Process
   ( initReset
@@ -13,6 +15,7 @@ module Process
 
 import System.Exit (exitFailure)
 import qualified GHC.IO.Handle as IOHandle
+import qualified System.Linux.Input.Event as EvdevEvent
 
 import Control.Monad (when, unless)
 import qualified Control.Monad.State as St
@@ -24,6 +27,8 @@ import Control.Concurrent.Chan (Chan, writeChan)
 
 import Data.Maybe (Maybe(Just, Nothing), fromJust, isJust)
 import Data.Bits ((.|.))
+import qualified Data.Set as Set
+import Text.Format (format)
 
 import qualified Graphics.X11.Types       as XTypes
 import qualified Graphics.X11.ExtraTypes  as XTypes
@@ -57,8 +62,8 @@ resetKbdLayout dpy =
     >> unlockDisplay dpy
 
 
-initReset :: O.Options -> Keys.RealKeyCodes -> Display -> Window -> IO ()
-initReset opts realKeyCodes dpy rootWnd = do
+initReset :: O.Options -> Keys.KeyMap -> Display -> Window -> IO ()
+initReset opts keyMap dpy rootWnd = do
 
   noise "Initial resetting of keyboard layout..."
   resetKbdLayout dpy
@@ -76,11 +81,11 @@ initReset opts realKeyCodes dpy rootWnd = do
 
 processXEvents :: State.CrossThreadVars
                -> O.Options
-               -> Keys.KeyCodes
+               -> Keys.KeyMap
                -> Display
                -> Window
                -> IO ()
-processXEvents ctVars opts keyCodes dpy rootWnd = process $ \wnd -> do
+processXEvents ctVars opts keyMap dpy rootWnd = process $ \wnd -> do
 
   XEvent.sync dpy False
   XEvent.selectInput dpy wnd XTypes.focusChangeMask
@@ -124,9 +129,8 @@ processXEvents ctVars opts keyCodes dpy rootWnd = process $ \wnd -> do
           if curWnd == lastWnd
              then return prevState
              else do
-               noise $ "Window focus moved from "
-                         ++ show lastWnd
-                         ++ " to " ++ show curWnd
+               noise $ format "Window focus moved from {0} to {1}"
+                              [show lastWnd, show curWnd]
                return $ prevState { State.lastWindow = curWnd }
 
           where f :: (State.State -> IO State.State) -> IO ()
@@ -138,11 +142,11 @@ processXEvents ctVars opts keyCodes dpy rootWnd = process $ \wnd -> do
 -- store it in State, notify xmobar pipe and log.
 watchLeds :: State.CrossThreadVars
           -> O.Options
-          -> Keys.KeyCodes
+          -> Keys.KeyMap
           -> Display
           -> Window
           -> IO ()
-watchLeds ctVars opts keyCodes dpy rootWnd = f $ \leds prevState -> do
+watchLeds ctVars opts keyMap dpy rootWnd = f $ \leds prevState -> do
 
   let prevCapsLock = prevState ^. State.leds' . State.capsLockLed'
       newCapsLock  = leds ^. State.capsLockLed'
@@ -180,8 +184,63 @@ watchLeds ctVars opts keyCodes dpy rootWnd = f $ \leds prevState -> do
 -- Wait for key events and simulate them in X.
 handleKeyboard :: State.CrossThreadVars
                -> O.Options
-               -> Keys.KeyCodes
+               -> Keys.KeyMap
                -> Display
                -> Window
+               -> IOHandle.Handle
                -> IO ()
-handleKeyboard = undefined
+handleKeyboard ctVars opts !keyMap dpy rootWnd fd = do
+  evMaybe <- EvdevEvent.hReadEvent fd
+  case evMaybe of
+    Just EvdevEvent.KeyEvent
+           { EvdevEvent.evKeyCode      = (alias -> Just (name, _, xKeyCode))
+           , EvdevEvent.evKeyEventType = (checkPress -> Just isPressed)
+           }
+      -> handle name xKeyCode isPressed
+    _ -> return ()
+
+  where noise :: String -> IO ()
+        noise = Actions.noise opts ctVars
+
+        alias :: EvdevEvent.Key -> Maybe Keys.KeyAlias
+        alias = Keys.getAliasByKey keyMap
+
+        checkPress :: EvdevEvent.KeyEventType -> Maybe Bool
+        checkPress x = case x of
+                            EvdevEvent.Depressed -> Just True
+                            EvdevEvent.Released  -> Just False
+                            _ -> Nothing
+
+        handle :: Keys.KeyName -> XTypes.KeyCode -> Bool -> IO ()
+        handle keyName keyCode isPressed = chain $ \state -> do
+          -- let pressed = prevState ^. State.pressedKeys'
+          let status = "pressing" <||> "releasing"
+              in noise $ format "Triggering {0} of {1} key (key X code: {2})"
+                                [status isPressed, show keyName, show keyCode]
+          fakeKeyCodeEvent dpy keyCode isPressed
+          return state
+
+          where throughState :: (State.State -> IO State.State) -> IO ()
+                throughState m = log >> modifyMVar_ (State.stateMVar ctVars) m
+
+                ignoreDuplicates :: (State.State -> IO State.State) -> IO ()
+                ignoreDuplicates m = throughState $ \prevState ->
+                  let pressed     = prevState ^. State.pressedKeys'
+                      isMember    = keyName `Set.member` pressed
+                      isDuplicate = isPressed == isMember
+                      in if isDuplicate
+                            then return prevState
+                            else m prevState
+
+                storeKey :: (State.State -> IO State.State) -> IO ()
+                storeKey m = ignoreDuplicates $ \prevState ->
+                  let action = if isPressed then Set.insert else Set.delete
+                      in prevState & State.pressedKeys' %~ action keyName & m
+
+                chain :: (State.State -> IO State.State) -> IO ()
+                chain = storeKey
+
+                log :: IO ()
+                log = let status = "is pressed" <||> "is released"
+                      in noise $ format "Key '{0}' {1}"
+                                        [show keyName, status isPressed]

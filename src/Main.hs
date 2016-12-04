@@ -10,6 +10,7 @@ import System.Exit (exitFailure, exitSuccess)
 import System.Environment (getArgs)
 import System.Directory (doesFileExist)
 
+import Control.DeepSeq (deepseq)
 import qualified Control.Monad.State as St
 import Control.Monad (when, unless, filterM, forever, forM_)
 import Control.Lens ((.~), (%~), (^.), set, over, view)
@@ -29,9 +30,7 @@ import Graphics.X11.Xlib.Display (defaultRootWindow)
 import Graphics.X11.Xlib.Misc (keysymToKeycode)
 
 import qualified System.IO as SysIO
-import qualified GHC.IO.Handle as IOHandle
 import qualified GHC.IO.Handle.FD as IOHandleFD
-import qualified System.Linux.Input.Event as EvdevEvent
 
 import Utils ( (&), (.>)
              , errPutStrLn
@@ -49,6 +48,7 @@ import Bindings.MoreXlib (initThreads)
 import Process ( initReset
                , processXEvents
                , watchLeds
+               , handleKeyboard
                )
 import qualified Options as O
 import qualified XInput
@@ -81,32 +81,6 @@ xkbInit = do
   return dpy
 
 
--- mainX :: IO ()
--- mainX = do
---   putStrLn "~~~ begin ~~~"
---   -- LI.doStuff
-
---   let evfilepath = "/dev/input/by-id/usb-1d57_2.4G_Receiver-event-kbd"
---   handle <- IOHandleFD.openFile evfilepath SysIO.ReadMode
---   mainloop handle
---   SysIO.hClose handle
-
---   putStrLn "~~~ end ~~~"
-
---   where mainloop :: IOHandle.Handle -> IO ()
---         mainloop handle = do
---           evMaybe <- EvdevEvent.hReadEvent handle
---           case evMaybe of
---             Just EvdevEvent.KeyEvent
---                    { EvdevEvent.evKeyCode = keyCode
---                    , EvdevEvent.evKeyEventType = pressStatus
---                    }
---               -> putStrLn $ show pressStatus ++ ": " ++ show keyCode
---             _ -> return ()
-
---           mainloop handle
-
-
 main :: IO ()
 main = do
 
@@ -128,12 +102,13 @@ main = do
 
 
   let rootWnd = defaultRootWindow dpy
+      keyMap  = Keys.getKeyMap []
 
   -- prevent errors with closed windows
   XExtras.xSetErrorHandler
 
   noise "Initial resetting..."
-  initReset opts Keys.getRealKeyCodes dpy rootWnd
+  initReset opts keyMap dpy rootWnd
 
   noise "Making cross-thread variables..."
   ctVars <- do
@@ -143,18 +118,15 @@ main = do
                                  , State.actionsChan = ctActions
                                  }
 
-  let keyCodes :: Keys.KeyCodes
-      keyCodes = Keys.getKeyCodes Keys.VirtualKeyCodes
-
-      withData :: Display
+  let withData :: Display
                -> ( State.CrossThreadVars
                     -> O.Options
-                    -> Keys.KeyCodes
+                    -> Keys.KeyMap
                     -> Display
                     -> Window
                     -> IO () )
                -> IO ()
-      withData tDpy m = m ctVars opts keyCodes tDpy rootWnd
+      withData tDpy m = m ctVars opts keyMap tDpy rootWnd
 
   noise "Starting window focus handler thread..."
   forkIO $ forever $ withData dpyForXWindowFocusHandler processXEvents
@@ -162,7 +134,16 @@ main = do
   noise "Starting leds watcher thread..."
   forkIO $ forever $ withData dpyForLedsWatcher watchLeds
 
-  noise "Starting listening for debug data in main thread..."
+  noise "Starting device handle threads (one thread per device)..."
+  let m fd = do noise $ "Getting own X Display for thread of device: "
+                      ++ show fd
+                dpy <- xkbInit
+                noise $ "Starting handle thread for device: " ++ show fd
+                forkIO $ forever $
+                  handleKeyboard ctVars opts keyMap dpy rootWnd fd
+      in forM_ (opts ^. O.handleDeviceFd') m
+
+  noise "Listening for actions in main thread..."
   forever $ do
     (action :: Actions.ActionType) <- readChan $ State.actionsChan ctVars
     let f :: Actions.ActionType -> IO ()
@@ -271,5 +252,5 @@ main = do
 
           where logDisabled :: O.Options -> IO O.Options
                 logDisabled opts = opts ^. O.availableXInputDevices'
-                  & show .> ("XInput devices ids that was disabled : " ++)
+                  & show .> ("XInput devices ids that was disabled: " ++)
                   & (\x -> O.noise opts x >> return opts)

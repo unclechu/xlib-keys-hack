@@ -4,43 +4,31 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module State
-  ( State(..),       HasState(..)
-  , PressedKeys(..), HasPressedKeys(..)
-  , LedModes(..),    HasLedModes(..)
+  ( State(..),    HasState(..)
+  , LedModes(..), HasLedModes(..)
 
   , CrossThreadVars(..), HasCrossThreadVars(..)
 
   , initState
   ) where
 
+import Graphics.X11.Types (Window)
+
 import Control.Concurrent.MVar (MVar)
 import Control.Concurrent.Chan (Chan)
-
-import Graphics.X11.Types (Window)
+import qualified Data.Set as Set
 
 import Utils (makeApoClassy)
 import Actions.Types (ActionType)
+import Keys (KeyName)
 
 
 data State =
   State { lastWindow  :: Window
-        , pressedKeys :: PressedKeys
+        , pressedKeys :: Set.Set KeyName
         , leds        :: LedModes
+        , alternative :: Bool
         }
-  deriving (Show, Eq)
-
-
--- Real keys on keyboard even if some of them rebound to another key.
-data PressedKeys =
-  PressedKeys { caps   :: Bool
-              , enter  :: Bool
-              , lCtrl  :: Bool
-              , rCtrl  :: Bool
-              , lAlt   :: Bool
-              , rAlt   :: Bool
-              , lShift :: Bool
-              , rShift :: Bool
-              }
   deriving (Show, Eq)
 
 
@@ -54,21 +42,10 @@ data LedModes =
 initState :: Window -> State
 initState wnd =
   State { lastWindow  = wnd
-        , pressedKeys = defaultPressedKeys
+        , pressedKeys = Set.empty
         , leds        = defaultLedModes
+        , alternative = False
         }
-
-defaultPressedKeys :: PressedKeys
-defaultPressedKeys =
-  PressedKeys { caps   = False
-              , enter  = False
-              , lCtrl  = False
-              , rCtrl  = False
-              , lAlt   = False
-              , rAlt   = False
-              , lShift = False
-              , rShift = False
-              }
 
 defaultLedModes :: LedModes
 defaultLedModes = LedModes { capsLockLed = False
@@ -86,6 +63,5 @@ instance Show CrossThreadVars where
 
 
 makeApoClassy ''State
-makeApoClassy ''PressedKeys
 makeApoClassy ''LedModes
 makeApoClassy ''CrossThreadVars
