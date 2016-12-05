@@ -76,7 +76,7 @@ data KeyName = EscapeKey
 
              -- Real original pseudo-keys
 
-             | RealMenuKey
+             | RealMenuKey | RealCapsLockKey
 
              -- Media keys
 
@@ -171,7 +171,7 @@ defaultKeyAliases =
 
   -- ASDF line
 
-  , (CapsLockKey,     58,  66)
+  , (CapsLockKey,     58,  9) -- 66 but remapped as Escape
 
   , (AKey,            30,  38)
   , (SKey,            31,  39)
@@ -274,7 +274,8 @@ defaultKeyAliases =
 
 realKeys :: [(KeyName, KeyCode)]
 realKeys =
-  [ (RealMenuKey, 135)
+  [ (RealMenuKey,     135)
+  , (RealCapsLockKey, 66)
   ]
 
 
