@@ -157,18 +157,17 @@ watchLeds ctVars opts keyMap dpy rootWnd = f $ \leds prevState -> do
 
     when (prevCapsLock /= newCapsLock) $ do
       notify $ "capslock:" ++ notifyStatus newCapsLock
-      noise $ "Caps Lock is " ++ status newCapsLock
+      noise $ "Caps Lock is " ++ onOff newCapsLock
 
     when (prevNumLock /= newNumLock) $ do
       notify $ "numlock:" ++ notifyStatus newNumLock
-      noise $ "Num Lock is " ++ status newNumLock
+      noise $ "Num Lock is " ++ onOff newNumLock
 
   return (prevState & State.leds' .~ leds)
 
   where noise :: String -> IO ()
         noise = Actions.noise opts ctVars
 
-        status = "On" <||> "Off"
         notifyStatus = "on\n" <||> "off\n"
 
         notify :: String -> IO ()
@@ -193,7 +192,7 @@ handleKeyboard ctVars opts !keyMap dpy rootWnd fd = do
   evMaybe <- EvdevEvent.hReadEvent fd
   case evMaybe of
     Just EvdevEvent.KeyEvent
-           { EvdevEvent.evKeyCode      = (alias -> Just (name, _, xKeyCode))
+           { EvdevEvent.evKeyCode      = (getAlias -> Just (name, _, xKeyCode))
            , EvdevEvent.evKeyEventType = (checkPress -> Just isPressed)
            }
       -> handle name xKeyCode isPressed
@@ -202,8 +201,11 @@ handleKeyboard ctVars opts !keyMap dpy rootWnd fd = do
   where noise :: String -> IO ()
         noise = Actions.noise opts ctVars
 
-        alias :: EvdevEvent.Key -> Maybe Keys.KeyAlias
-        alias = Keys.getAliasByKey keyMap
+        getAlias :: EvdevEvent.Key -> Maybe Keys.KeyAlias
+        getAlias = Keys.getAliasByKey keyMap
+
+        getAlternative :: Keys.KeyName -> Maybe (Keys.KeyName, XTypes.KeyCode)
+        getAlternative = Keys.getAlternative keyMap
 
         checkPress :: EvdevEvent.KeyEventType -> Maybe Bool
         checkPress x = case x of
@@ -212,35 +214,96 @@ handleKeyboard ctVars opts !keyMap dpy rootWnd fd = do
                             _ -> Nothing
 
         handle :: Keys.KeyName -> XTypes.KeyCode -> Bool -> IO ()
-        handle keyName keyCode isPressed = chain $ \state -> do
-          -- let pressed = prevState ^. State.pressedKeys'
-          let status = "pressing" <||> "releasing"
-              in noise $ format "Triggering {0} of {1} key (key X code: {2})"
-                                [status isPressed, show keyName, show keyCode]
-          fakeKeyCodeEvent dpy keyCode isPressed
-          return state
+        handle keyName keyCode isPressed = chain select
 
           where throughState :: (State.State -> IO State.State) -> IO ()
                 throughState m = log >> modifyMVar_ (State.stateMVar ctVars) m
 
+                -- Prevent doing anything when key state is the same
                 ignoreDuplicates :: (State.State -> IO State.State) -> IO ()
-                ignoreDuplicates m = throughState $ \prevState ->
-                  let pressed     = prevState ^. State.pressedKeys'
+                ignoreDuplicates m = throughState $ \state ->
+                  let pressed     = state ^. State.pressedKeys'
                       isMember    = keyName `Set.member` pressed
                       isDuplicate = isPressed == isMember
                       in if isDuplicate
-                            then return prevState
-                            else m prevState
+                            then return state
+                            else m state
 
+                -- Store key user pressed in state
                 storeKey :: (State.State -> IO State.State) -> IO ()
-                storeKey m = ignoreDuplicates $ \prevState ->
+                storeKey m = ignoreDuplicates $ \state ->
                   let action = if isPressed then Set.insert else Set.delete
-                      in prevState & State.pressedKeys' %~ action keyName & m
+                      in state & State.pressedKeys' %~ action keyName & m
 
+                -- Composed all of previous actions
                 chain :: (State.State -> IO State.State) -> IO ()
                 chain = storeKey
 
+                -- Log key user pressed (even if it's ignored)
                 log :: IO ()
                 log = let status = "is pressed" <||> "is released"
-                      in noise $ format "Key '{0}' {1}"
+                      in noise $ format "Key {0} {1}"
                                         [show keyName, status isPressed]
+
+                notify :: String -> IO ()
+                notify = Actions.notifyXmobar opts ctVars
+
+                onOnlyBothAltsPressed :: Set.Set Keys.KeyName -> Bool
+                onOnlyBothAltsPressed pressed =
+                  (keyName == Keys.AltLeftKey &&
+                   pressed == Set.singleton Keys.AltRightKey) ||
+                  (keyName == Keys.AltRightKey &&
+                   pressed == Set.singleton Keys.AltLeftKey)
+
+                altModeNotify :: Bool -> String
+                altModeNotify = "alternative:on\n" <||> "alternative:off\n"
+
+                select :: State.State -> IO State.State
+                select state
+                  -- Alternative mode on/off by Alts handling
+                  | onOnlyBothAltsPressed pressed = do
+                    justTrigger
+                    let newState = state & State.alternative' %~ not
+                    noise $ "Notifying xmobar about alternative mode is "
+                         ++ onOff (State.alternative newState)
+                         ++ "..."
+                    notify $ altModeNotify $ State.alternative newState
+                    return newState
+                  -- Alternative mode keys handling
+                  | state ^. State.alternative' && isJust alternative = do
+                    let Just (keyNameTo, keyCodeTo) = alternative
+                    let status = "pressing" <||> "releasing"
+                        msg = "Triggering {0} of alternative {1}\
+                              \ (X key code: {2}) by {3}..."
+                        in noise $ format msg [ status isPressed
+                                              , show keyNameTo
+                                              , show keyCodeTo
+                                              , show keyName
+                                              ]
+                    fakeKeyCodeEvent dpy keyCodeTo isPressed
+                    return state
+                  -- Usual key handling
+                  | otherwise = justTrigger >> return state
+
+                  where pressed     = state ^. State.pressedKeys'
+                        alternative = getAlternative keyName
+
+                -- Triggering specified key to X server
+                trigger :: Keys.KeyName -> XTypes.KeyCode -> Bool -> IO ()
+                trigger keyName keyCode isPressed = do
+                  let status = "pressing" <||> "releasing"
+                      msg = "Triggering {0} of {1} (X key code: {2})..."
+                      in noise $ format msg [ status isPressed
+                                            , show keyName
+                                            , show keyCode
+                                            ]
+                  fakeKeyCodeEvent dpy keyCode isPressed
+
+                -- Simple triggering key user pressed to X server
+                justTrigger :: IO ()
+                justTrigger = trigger keyName keyCode isPressed
+
+
+
+onOff :: Bool -> String
+onOff = "On" <||> "Off"

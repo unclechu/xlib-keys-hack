@@ -8,8 +8,9 @@ module Keys
   , KeyAlias
   , KeyMap(..)
 
-  , getKeyMap
+  , keyMap
   , getAliasByKey
+  , getAlternative
   ) where
 
 import Prelude hiding (lookup)
@@ -17,7 +18,7 @@ import Prelude hiding (lookup)
 import Graphics.X11.Types (KeyCode)
 import System.Linux.Input.Event (Key(Key))
 
-import Data.Map.Strict (Map, fromList, lookup)
+import Data.Map.Strict (Map, fromList, lookup, empty, member, (!), insert)
 import Data.Maybe (Maybe(Nothing, Just))
 import Data.Word (Word16)
 
@@ -39,7 +40,7 @@ data KeyName = EscapeKey
              | GraveKey
              | Number1Key | Number2Key | Number3Key | Number4Key | Number5Key
              | Number6Key | Number7Key | Number8Key | Number9Key | Number0Key
-             | MinusKey   | EqualKey   | BackspaceKey
+             | MinusKey   | EqualKey   | BackSpaceKey
 
              | TabKey
              | QKey | WKey | EKey | RKey | TKey
@@ -71,6 +72,10 @@ data KeyName = EscapeKey
              | KPNumber4Key | KPNumber5Key | KPNumber6Key | KPAddKey
              | KPNumber1Key | KPNumber2Key | KPNumber3Key | KPEnterKey
              | KPNumber0Key | KPDecimalKey
+
+             -- Real original pseudo-keys
+
+             | RealMenuKey
 
              -- Media keys
 
@@ -139,7 +144,7 @@ defaultKeyAliases =
 
   , (MinusKey,        12,  20)
   , (EqualKey,        13,  21)
-  , (BackspaceKey,    14,  22)
+  , (BackSpaceKey,    14,  22)
 
 
   -- QWER line
@@ -265,6 +270,34 @@ defaultKeyAliases =
   , (KPDecimalKey,    83,  91)
   ]
 
+
+realKeys :: [(KeyName, KeyCode)]
+realKeys =
+  [ (RealMenuKey, 135)
+  ]
+
+
+alternativeModeRemaps :: [(KeyName, KeyName)]
+alternativeModeRemaps =
+  [ (HKey,            ArrowLeftKey)
+  , (JKey,            ArrowDownKey)
+  , (KKey,            ArrowUpKey)
+  , (LKey,            ArrowRightKey)
+
+  , (UKey,            PageUpKey)
+  , (DKey,            PageDownKey)
+
+  , (FKey,            EndKey)
+  , (BKey,            HomeKey)
+
+  , (BracketLeftKey,  BackSpaceKey)
+  , (BracketRightKey, DeleteKey)
+
+  , (MKey,            RealMenuKey)
+  , (IKey,            InsertKey)
+  ]
+
+
 getByNameMap :: [KeyAlias] -> Map KeyName KeyAlias
 getByNameMap keyMap = fromList $ map f keyMap
   where f (name, devNum, xNum) = (name, (name, devNum, xNum))
@@ -275,21 +308,39 @@ getByDevNumMap keyMap = fromList $ map f keyMap
 
 
 data KeyMap =
-  KeyMap { aliases     :: [KeyAlias]
-         , byNameMap   :: Map KeyName KeyAlias
-         , byDevNumMap :: Map Word16  KeyAlias
+  KeyMap { aliases              :: [KeyAlias]
+         , byNameMap            :: Map KeyName KeyAlias
+         , byDevNumMap          :: Map Word16  KeyAlias
+         , byNameAlternativeMap :: Map KeyName (KeyName, KeyCode)
          }
   deriving (Show, Eq)
 
 
 -- `moreAliases` supposed to contain media keys.
-getKeyMap :: [KeyAlias] -> KeyMap
-getKeyMap moreAliases =
-  KeyMap { aliases     = defaultKeyAliases
-         , byNameMap   = getByNameMap   defaultKeyAliases
-         , byDevNumMap = getByDevNumMap defaultKeyAliases
+keyMap :: KeyMap
+keyMap =
+  KeyMap { aliases              = defaultKeyAliases
+         , byNameMap            = nameMap
+         , byDevNumMap          = getByDevNumMap defaultKeyAliases
+         , byNameAlternativeMap = getAltMap alternativeModeRemaps empty
          }
-  where mergedAliases = defaultKeyAliases ++ moreAliases
+
+  where nameMap :: Map KeyName KeyAlias
+        nameMap = getByNameMap defaultKeyAliases
+
+        realMap :: Map KeyName KeyCode
+        realMap = fromList realKeys
+
+        getAltMap :: [(KeyName, KeyName)]
+                  -> Map KeyName (KeyName, KeyCode)
+                  -> Map KeyName (KeyName, KeyCode)
+        getAltMap [] altMap = altMap
+        getAltMap ((nameFrom, nameTo):xs) altMap
+          | nameTo `member` nameMap =
+            let (_, _, keyCode) = nameMap ! nameTo
+                in getAltMap xs $ insert nameFrom (nameTo, keyCode) altMap
+          | otherwise = getAltMap xs
+                      $ insert nameFrom (nameTo, realMap ! nameTo) altMap
 
 
 getAliasByKey :: KeyMap -> Key -> Maybe KeyAlias
@@ -297,6 +348,12 @@ getAliasByKey keyMap devKey =
   fromKey devKey `lookup` byDevNumMap keyMap
   where fromKey :: Key -> Word16
         fromKey (Key x) = x
+
+getAlternative :: KeyMap -> KeyName -> Maybe (KeyName, KeyCode)
+getAlternative keyMap keyName =
+  case keyName `lookup` byNameAlternativeMap keyMap of
+       Just x  -> Just x
+       Nothing -> Nothing
 
 
 makeApoClassy ''KeyMap

@@ -27,7 +27,7 @@ data State =
   State { lastWindow  :: Window
         , pressedKeys :: Set.Set KeyName
         , leds        :: LedModes
-        , alternative :: Bool
+        , alternative :: Bool -- Alternative mode on/off
         }
   deriving (Show, Eq)
 
@@ -36,6 +36,12 @@ data LedModes =
   LedModes { capsLockLed :: Bool
            , numLockLed  :: Bool
            }
+  deriving (Show, Eq)
+
+
+data ComboState =
+  ComboState {
+             }
   deriving (Show, Eq)
 
 

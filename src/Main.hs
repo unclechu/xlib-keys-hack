@@ -3,6 +3,7 @@
 
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Main (main) where
 
@@ -55,6 +56,7 @@ import qualified XInput
 import qualified State
 import qualified Actions
 import qualified Keys
+import Keys (keyMap)
 
 
 xmobarPipeFile = ".xmonad/xmobar.fifo"
@@ -84,7 +86,7 @@ xkbInit = do
 main :: IO ()
 main = do
 
-  opts <- getArgs >>= parseOpts
+  !opts <- getArgs >>= parseOpts
   let noise = O.noise opts
 
   noise "Enabling threads support for Xlib..."
@@ -102,7 +104,6 @@ main = do
 
 
   let rootWnd = defaultRootWindow dpy
-      keyMap  = Keys.getKeyMap []
 
   -- prevent errors with closed windows
   XExtras.xSetErrorHandler
