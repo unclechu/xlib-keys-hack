@@ -11,6 +11,7 @@ module Keys
   , keyMap
   , getAliasByKey
   , getAlternative
+  , isAlternative
   ) where
 
 import Prelude hiding (lookup)
@@ -354,6 +355,10 @@ getAlternative keyMap keyName =
   case keyName `lookup` byNameAlternativeMap keyMap of
        Just x  -> Just x
        Nothing -> Nothing
+
+-- Check if key could be alternatively remapped
+isAlternative :: KeyMap -> KeyName -> Bool
+isAlternative keyMap keyName = keyName `member` byNameAlternativeMap keyMap
 
 
 makeApoClassy ''KeyMap

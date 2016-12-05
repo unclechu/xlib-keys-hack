@@ -17,7 +17,7 @@ import System.Exit (exitFailure)
 import qualified GHC.IO.Handle as IOHandle
 import qualified System.Linux.Input.Event as EvdevEvent
 
-import Control.Monad (when, unless)
+import Control.Monad (when, unless, forM_)
 import qualified Control.Monad.State as St
 import Control.Monad.State.Class (MonadState)
 import Control.Lens ((.~), (%~), (^.), set, over, view)
@@ -207,6 +207,9 @@ handleKeyboard ctVars opts !keyMap dpy rootWnd fd = do
         getAlternative :: Keys.KeyName -> Maybe (Keys.KeyName, XTypes.KeyCode)
         getAlternative = Keys.getAlternative keyMap
 
+        isAlternative :: Keys.KeyName -> Bool
+        isAlternative = Keys.isAlternative keyMap
+
         checkPress :: EvdevEvent.KeyEventType -> Maybe Bool
         checkPress x = case x of
                             EvdevEvent.Depressed -> Just True
@@ -257,6 +260,24 @@ handleKeyboard ctVars opts !keyMap dpy rootWnd fd = do
 
                 altModeNotify :: Bool -> String
                 altModeNotify = "alternative:on\n" <||> "alternative:off\n"
+
+                -- Release alternative keys.
+                -- Useful when alternative mode turns off not by both alts
+                -- and key could be still pressed.
+                releaseAlternative :: Set.Set Keys.KeyName
+                                   -> IO (Set.Set Keys.KeyName)
+                releaseAlternative pressed = do
+                  let (alt, normal) = Set.partition isAlternative pressed
+                  when (Set.size alt > 0) $ do
+                    noise "Releasing alternative keys during turning\
+                          \ alternative mode off..."
+                    forM_ (Set.toList alt) $ \keyName -> do
+                      noise $ format "Releasing alternative {0} during turning\
+                                     \ alternative mode off..."
+                                     [show keyName]
+                      let Just (_, keyCode) = getAlternative keyName
+                      fakeKeyCodeEvent dpy keyCode False
+                  return normal
 
                 select :: State.State -> IO State.State
                 select state
