@@ -11,7 +11,7 @@ import System.Exit (exitFailure, exitSuccess)
 import System.Environment (getArgs)
 import System.Directory (doesFileExist)
 
-import Control.DeepSeq (deepseq)
+import Control.DeepSeq (deepseq, force)
 import qualified Control.Monad.State as St
 import Control.Monad (when, unless, filterM, forever, forM_)
 import Control.Lens ((.~), (%~), (^.), set, over, view)
@@ -56,10 +56,6 @@ import qualified XInput
 import qualified State
 import qualified Actions
 import qualified Keys
-import Keys (keyMap)
-
-
-xmobarPipeFile = ".xmonad/xmobar.fifo"
 
 
 -- Initializes Xlib and Xkb and checks if everything is okay
@@ -86,7 +82,8 @@ xkbInit = do
 main :: IO ()
 main = do
 
-  !opts <- getArgs >>= parseOpts
+  opts <- getArgs >>= parseOpts
+  opts `deepseq` return ()
   let noise = O.noise opts
 
   noise "Enabling threads support for Xlib..."
@@ -105,6 +102,9 @@ main = do
 
   let rootWnd = defaultRootWindow dpy
 
+  let keyMap = Keys.getKeyMap []
+  keyMap `deepseq` return ()
+
   -- prevent errors with closed windows
   XExtras.xSetErrorHandler
 
@@ -113,11 +113,13 @@ main = do
 
   noise "Making cross-thread variables..."
   ctVars <- do
-    ctState <- newMVar $ State.initState rootWnd
+    let state = State.initState rootWnd
+    ctState <- newMVar $ force state
     (ctActions :: Chan Actions.ActionType) <- newChan
     return State.CrossThreadVars { State.stateMVar   = ctState
                                  , State.actionsChan = ctActions
                                  }
+  ctVars `deepseq` return ()
 
   let withData :: Display
                -> ( State.CrossThreadVars

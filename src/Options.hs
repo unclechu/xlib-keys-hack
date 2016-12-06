@@ -4,6 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Options
   ( Options(..)
@@ -13,10 +14,12 @@ module Options
   , noise
   ) where
 
+import GHC.Generics (Generic)
 import qualified GHC.IO.Handle as IOHandle
 import qualified System.Console.GetOpt as GetOpt
 
 import Control.Lens ((.~), (%~), (^.), set, over, view)
+import Control.DeepSeq (NFData, rnf)
 
 import Data.Either (Either(Left, Right))
 import Data.Maybe (Maybe(Just, Nothing), fromJust, fromMaybe)
@@ -37,7 +40,22 @@ data Options =
           , availableXInputDevices  :: [Int]
           , xmobarPipeFd            :: Maybe IOHandle.Handle
           }
-  deriving (Show, Eq)
+  deriving (Show, Eq, Generic)
+
+instance NFData Options where
+  rnf opts =
+    showHelp                opts `seq`
+    verboseMode             opts `seq`
+    disableXInputDeviceName opts `seq`
+    disableXInputDeviceId   opts `seq`
+    handleDevicePath        opts `seq`
+    xmobarPipeFile          opts `seq`
+
+    handleDeviceFd          opts `seq`
+    availableDevices        opts `seq`
+    availableXInputDevices  opts `seq`
+    xmobarPipeFd            opts `seq`
+      ()
 
 makeApoClassy ''Options
 

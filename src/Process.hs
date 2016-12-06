@@ -3,7 +3,6 @@
 
 {-# LANGUAGE DoAndIfThenElse #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Process
@@ -180,7 +179,7 @@ watchLeds ctVars opts keyMap dpy rootWnd = f $ \leds prevState -> do
           threadDelay $ 100 * 1000
 
 
--- Wait for key events and simulate them in X.
+-- Wait for key events and simulate them in X server.
 handleKeyboard :: State.CrossThreadVars
                -> O.Options
                -> Keys.KeyMap
@@ -188,7 +187,7 @@ handleKeyboard :: State.CrossThreadVars
                -> Window
                -> IOHandle.Handle
                -> IO ()
-handleKeyboard ctVars opts !keyMap dpy rootWnd fd = do
+handleKeyboard ctVars opts keyMap dpy rootWnd fd = do
   evMaybe <- EvdevEvent.hReadEvent fd
   case evMaybe of
     Just EvdevEvent.KeyEvent
@@ -245,8 +244,8 @@ handleKeyboard ctVars opts !keyMap dpy rootWnd fd = do
                 -- Log key user pressed (even if it's ignored)
                 log :: IO ()
                 log = let status = "is pressed" <||> "is released"
-                      in noise $ format "Key {0} {1}"
-                                        [show keyName, status isPressed]
+                       in noise $ format "Key {0} {1}"
+                                         [show keyName, status isPressed]
 
                 notify :: String -> IO ()
                 notify = Actions.notifyXmobar opts ctVars
@@ -323,7 +322,6 @@ handleKeyboard ctVars opts !keyMap dpy rootWnd fd = do
                 -- Simple triggering key user pressed to X server
                 justTrigger :: IO ()
                 justTrigger = trigger keyName keyCode isPressed
-
 
 
 onOff :: Bool -> String

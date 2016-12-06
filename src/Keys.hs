@@ -2,22 +2,26 @@
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Keys
   ( KeyName(..)
   , KeyAlias
   , KeyMap(..)
 
-  , keyMap
+  , getKeyMap
   , getAliasByKey
   , getAlternative
   , isAlternative
   ) where
 
 import Prelude hiding (lookup)
+import GHC.Generics (Generic)
 
 import Graphics.X11.Types (KeyCode)
 import System.Linux.Input.Event (Key(Key))
+
+import Control.DeepSeq (NFData, rnf)
 
 import Data.Map.Strict (Map, fromList, lookup, empty, member, (!), insert)
 import Data.Maybe (Maybe(Nothing, Just))
@@ -80,13 +84,14 @@ data KeyName = EscapeKey
 
              -- Media keys
 
-             | MCalculatorKey
-             | MEjectKey -- Can't get this key from evdev
+             | MCalculatorKey | MEjectKey
              | MAudioMuteKey | MAudioLowerVolumeKey | MAudioRaiseVolumeKey
              | MAudioPlayKey | MAudioStopKey | MAudioPrevKey | MAudioNextKey
              | MMonBrightnessDownKey | MMonBrightnessUpKey
 
-               deriving (Eq, Show, Ord)
+               deriving (Eq, Show, Ord, Generic)
+
+instance NFData KeyName
 
 
 type KeyAlias  = (KeyName, Word16, KeyCode)
@@ -300,6 +305,26 @@ alternativeModeRemaps =
   ]
 
 
+mediaDevNums :: [(KeyName, Word16)]
+mediaDevNums =
+  [ (MCalculatorKey,        140)
+  , (MEjectKey,             161)
+
+  , (MAudioMuteKey,         113)
+  , (MAudioLowerVolumeKey,  114)
+  , (MAudioRaiseVolumeKey,  115)
+
+  , (MAudioPlayKey,         164)
+  , (MAudioStopKey,         166)
+  , (MAudioPrevKey,         165)
+  , (MAudioNextKey,         163)
+
+  -- I have no keyboard with this keys yet to get and test it
+  -- , (MMonBrightnessDownKey, 0)
+  -- , (MMonBrightnessUpKey,   0)
+  ]
+
+
 getByNameMap :: [KeyAlias] -> Map KeyName KeyAlias
 getByNameMap keyMap = fromList $ map f keyMap
   where f (name, devNum, xNum) = (name, (name, devNum, xNum))
@@ -315,20 +340,36 @@ data KeyMap =
          , byDevNumMap          :: Map Word16  KeyAlias
          , byNameAlternativeMap :: Map KeyName (KeyName, KeyCode)
          }
-  deriving (Show, Eq)
+  deriving (Show, Eq, Generic)
+
+instance NFData KeyMap where
+  rnf keyMap =
+    aliases              keyMap `seq`
+    byNameMap            keyMap `seq`
+    byDevNumMap          keyMap `seq`
+    byNameAlternativeMap keyMap `seq`
+      ()
 
 
 -- `moreAliases` supposed to contain media keys.
-keyMap :: KeyMap
-keyMap =
-  KeyMap { aliases              = defaultKeyAliases
+getKeyMap :: [(KeyName, KeyCode)] -> KeyMap
+getKeyMap mediaKeyAliases =
+  KeyMap { aliases              = keyAliases
          , byNameMap            = nameMap
-         , byDevNumMap          = getByDevNumMap defaultKeyAliases
+         , byDevNumMap          = getByDevNumMap keyAliases
          , byNameAlternativeMap = getAltMap alternativeModeRemaps empty
          }
 
-  where nameMap :: Map KeyName KeyAlias
-        nameMap = getByNameMap defaultKeyAliases
+  where keyAliases :: [KeyAlias]
+        keyAliases = defaultKeyAliases ++
+          let f (keyName, keyCode) = (keyName, mediaMap ! keyName, keyCode)
+           in map f mediaKeyAliases
+
+        mediaMap :: Map KeyName Word16
+        mediaMap = fromList mediaDevNums
+
+        nameMap :: Map KeyName KeyAlias
+        nameMap = getByNameMap keyAliases
 
         realMap :: Map KeyName KeyCode
         realMap = fromList realKeys
@@ -340,7 +381,7 @@ keyMap =
         getAltMap ((nameFrom, nameTo):xs) altMap
           | nameTo `member` nameMap =
             let (_, _, keyCode) = nameMap ! nameTo
-                in getAltMap xs $ insert nameFrom (nameTo, keyCode) altMap
+             in getAltMap xs $ insert nameFrom (nameTo, keyCode) altMap
           | otherwise = getAltMap xs
                       $ insert nameFrom (nameTo, realMap ! nameTo) altMap
 
