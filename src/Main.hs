@@ -99,11 +99,36 @@ main = do
   noise "Getting additional X Display for leds watcher thread..."
   dpyForLedsWatcher <- xkbInit
 
-
   let rootWnd = defaultRootWindow dpy
 
-  let keyMap = Keys.getKeyMap []
+
+  noise "Dynamically getting media keys X key codes..."
+  (mediaKeysAliases :: [(Keys.KeyName, XTypes.KeyCode)]) <- mapM
+    (\(keySym, keyName) -> do
+      keyCode <- keysymToKeycode dpy keySym
+      return (keyName, keyCode)
+      )
+    [ (XTypes.xF86XK_Calculator,       Keys.MCalculatorKey)
+    , (XTypes.xF86XK_Eject,            Keys.MEjectKey)
+
+    , (XTypes.xF86XK_AudioMute,        Keys.MAudioMuteKey)
+    , (XTypes.xF86XK_AudioLowerVolume, Keys.MAudioLowerVolumeKey)
+    , (XTypes.xF86XK_AudioRaiseVolume, Keys.MAudioRaiseVolumeKey)
+
+    , (XTypes.xF86XK_AudioPlay,        Keys.MAudioPlayKey)
+    , (XTypes.xF86XK_AudioStop,        Keys.MAudioStopKey)
+    , (XTypes.xF86XK_AudioPrev,        Keys.MAudioPrevKey)
+    , (XTypes.xF86XK_AudioNext,        Keys.MAudioNextKey)
+    ]
+  noise $ "Media keys aliases:" ++
+          foldr (\(a, b) -> (("\n  " ++ show a ++ ": " ++ show b) ++)) ""
+                mediaKeysAliases
+
+  let keyMap = Keys.getKeyMap mediaKeysAliases
+
+  -- Making it fail at start app time if media keys described incorrectly
   keyMap `deepseq` return ()
+
 
   -- prevent errors with closed windows
   XExtras.xSetErrorHandler
