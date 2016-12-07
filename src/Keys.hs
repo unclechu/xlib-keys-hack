@@ -7,12 +7,18 @@
 module Keys
   ( KeyName(..)
   , KeyAlias
-  , KeyMap(..)
+  , KeyMap
 
   , getKeyMap
   , getAliasByKey
+
   , getAlternative
   , isAlternative
+
+  , getMedia
+  , isMedia
+
+  , getAsName
   ) where
 
 import Prelude hiding (lookup)
@@ -21,7 +27,7 @@ import GHC.Generics (Generic)
 import Graphics.X11.Types (KeyCode)
 import System.Linux.Input.Event (Key(Key))
 
-import Control.DeepSeq (NFData, rnf)
+import Control.DeepSeq (NFData, rnf, deepseq)
 
 import Data.Map.Strict (Map, fromList, lookup, empty, member, (!), insert)
 import Data.Maybe (Maybe(Nothing, Just))
@@ -233,7 +239,7 @@ defaultKeyAliases =
   -- Right block
 
   -- On apple keyboard (no X num, remap as Insert).
-  -- Also it will be handled as Fn when is used with combo.
+  -- Also it will be handled as Fn when is used with media keys.
   , (FNKey,           464, 118)
 
   , (InsertKey,       110, 118)
@@ -319,9 +325,15 @@ mediaDevNums =
   , (MAudioPrevKey,         165)
   , (MAudioNextKey,         163)
 
-  -- I have no keyboard with this keys yet to get and test it
-  -- , (MMonBrightnessDownKey, 0)
-  -- , (MMonBrightnessUpKey,   0)
+  , (MMonBrightnessDownKey, 224)
+  , (MMonBrightnessUpKey,   225)
+  ]
+
+
+asNames :: [(KeyName, KeyName)]
+asNames =
+  [ (FNKey,       InsertKey)
+  , (CapsLockKey, EscapeKey)
   ]
 
 
@@ -339,31 +351,44 @@ data KeyMap =
          , byNameMap            :: Map KeyName KeyAlias
          , byDevNumMap          :: Map Word16  KeyAlias
          , byNameAlternativeMap :: Map KeyName (KeyName, KeyCode)
+         , byNameMediaMap       :: Map KeyName KeyCode
+         , asNamesMap           :: Map KeyName KeyName
          }
   deriving (Show, Eq, Generic)
 
 instance NFData KeyMap where
-  rnf keyMap =
-    aliases              keyMap `seq`
-    byNameMap            keyMap `seq`
-    byDevNumMap          keyMap `seq`
-    byNameAlternativeMap keyMap `seq`
+  rnf x =
+    aliases              x `deepseq`
+    byNameMap            x `deepseq`
+    byDevNumMap          x `deepseq`
+    byNameAlternativeMap x `deepseq`
+    byNameMediaMap       x `deepseq`
+    asNamesMap           x `deepseq`
       ()
 
 
--- `moreAliases` supposed to contain media keys.
+-- `moreAliases` supposed to contain media keys
 getKeyMap :: [(KeyName, KeyCode)] -> KeyMap
 getKeyMap mediaKeyAliases =
   KeyMap { aliases              = keyAliases
          , byNameMap            = nameMap
          , byDevNumMap          = getByDevNumMap keyAliases
          , byNameAlternativeMap = getAltMap alternativeModeRemaps empty
+         , byNameMediaMap       = byNameMediaAliasesMap
+         , asNamesMap           = fromList asNames
          }
 
   where keyAliases :: [KeyAlias]
         keyAliases = defaultKeyAliases ++
-          let f (keyName, keyCode) = (keyName, mediaMap ! keyName, keyCode)
+          let f (keyName, keyCode) =
+                case keyName `lookup` mediaMap of
+                     Just devNum -> (keyName, devNum, keyCode)
+                     Nothing -> error $ "Unexpected media key: " ++ show keyName
            in map f mediaKeyAliases
+
+        byNameMediaAliasesMap :: Map KeyName KeyCode
+        byNameMediaAliasesMap =
+          fromList [(a, b) | (a, _, b) <- keyAliases, a `member` mediaMap]
 
         mediaMap :: Map KeyName Word16
         mediaMap = fromList mediaDevNums
@@ -393,14 +418,21 @@ getAliasByKey keyMap devKey =
         fromKey (Key x) = x
 
 getAlternative :: KeyMap -> KeyName -> Maybe (KeyName, KeyCode)
-getAlternative keyMap keyName =
-  case keyName `lookup` byNameAlternativeMap keyMap of
-       Just x  -> Just x
-       Nothing -> Nothing
+getAlternative keyMap keyName = keyName `lookup` byNameAlternativeMap keyMap
 
 -- Check if key could be alternatively remapped
 isAlternative :: KeyMap -> KeyName -> Bool
 isAlternative keyMap keyName = keyName `member` byNameAlternativeMap keyMap
+
+getAsName :: KeyMap -> KeyName -> KeyName
+getAsName keyMap keyName = asNamesMap keyMap ! keyName
+
+-- Check if key is media key
+isMedia :: KeyMap -> KeyName -> Bool
+isMedia keyMap keyName = keyName `member` byNameMediaMap keyMap
+
+getMedia :: KeyMap -> KeyName -> Maybe KeyCode
+getMedia keyMap keyName = keyName `lookup` byNameMediaMap keyMap
 
 
 makeApoClassy ''KeyMap

@@ -3,7 +3,6 @@
 
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE BangPatterns #-}
 
 module Main (main) where
 
@@ -104,21 +103,23 @@ main = do
 
   noise "Dynamically getting media keys X key codes..."
   (mediaKeysAliases :: [(Keys.KeyName, XTypes.KeyCode)]) <- mapM
-    (\(keySym, keyName) -> do
-      keyCode <- keysymToKeycode dpy keySym
-      return (keyName, keyCode)
-      )
-    [ (XTypes.xF86XK_Calculator,       Keys.MCalculatorKey)
-    , (XTypes.xF86XK_Eject,            Keys.MEjectKey)
+    (\(keyName, keySym) ->
+      keysymToKeycode dpy keySym
+        >>= \keyCode -> return (keyName, keyCode))
+    [ (Keys.MCalculatorKey,        XTypes.xF86XK_Calculator)
+    , (Keys.MEjectKey,             XTypes.xF86XK_Eject)
 
-    , (XTypes.xF86XK_AudioMute,        Keys.MAudioMuteKey)
-    , (XTypes.xF86XK_AudioLowerVolume, Keys.MAudioLowerVolumeKey)
-    , (XTypes.xF86XK_AudioRaiseVolume, Keys.MAudioRaiseVolumeKey)
+    , (Keys.MAudioMuteKey,         XTypes.xF86XK_AudioMute)
+    , (Keys.MAudioLowerVolumeKey,  XTypes.xF86XK_AudioLowerVolume)
+    , (Keys.MAudioRaiseVolumeKey,  XTypes.xF86XK_AudioRaiseVolume)
 
-    , (XTypes.xF86XK_AudioPlay,        Keys.MAudioPlayKey)
-    , (XTypes.xF86XK_AudioStop,        Keys.MAudioStopKey)
-    , (XTypes.xF86XK_AudioPrev,        Keys.MAudioPrevKey)
-    , (XTypes.xF86XK_AudioNext,        Keys.MAudioNextKey)
+    , (Keys.MAudioPlayKey,         XTypes.xF86XK_AudioPlay)
+    , (Keys.MAudioStopKey,         XTypes.xF86XK_AudioStop)
+    , (Keys.MAudioPrevKey,         XTypes.xF86XK_AudioPrev)
+    , (Keys.MAudioNextKey,         XTypes.xF86XK_AudioNext)
+
+    , (Keys.MMonBrightnessDownKey, XTypes.xF86XK_MonBrightnessDown)
+    , (Keys.MMonBrightnessUpKey,   XTypes.xF86XK_MonBrightnessUp)
     ]
   noise $ "Media keys aliases:" ++
           foldr (\(a, b) -> (("\n  " ++ show a ++ ": " ++ show b) ++)) ""
@@ -234,8 +235,9 @@ main = do
                 logAndStoreAvailable :: O.HasOptions s
                                      => s -> [FilePath] -> St.StateT s IO s
                 logAndStoreAvailable state files = do
-                  St.lift $ noise
-                          $ "Devices that will be handled: " ++ show files
+                  let devicesList = foldr (("\n  " ++) .> (++)) "" files
+                      title = "Devices that will be handled:"
+                   in St.lift $ noise $ title ++ devicesList
                   return (state & O.availableDevices' .~ files)
 
                 -- Checks if we have at least one available device

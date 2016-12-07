@@ -6,6 +6,7 @@
 module Utils
   ( (&), (.>) -- pipes
   , (<||>)
+  , (?)
 
   , nextEvent'
 
@@ -60,6 +61,12 @@ infixl 9 .>
 (<||>) :: a -> a -> (Bool -> a)
 a <||> b = \x -> if x then a else b
 infixl 2 <||>
+
+
+(?) :: Bool -> a -> a -> a
+(?) True  x _ = x
+(?) False _ y = y
+infixl 1 ?
 
 
 -- https://wiki.haskell.org/X_window_programming_in_Haskell

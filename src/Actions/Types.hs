@@ -11,7 +11,7 @@ module Actions.Types
 import Utils (makeApoClassy)
 
 
-data Action = Noise String
+data Action = Noise        String
             | NotifyXmobar String
               deriving (Show, Eq)
 

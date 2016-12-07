@@ -5,8 +5,9 @@
 {-# LANGUAGE DeriveGeneric #-}
 
 module State
-  ( State(..),    HasState(..)
-  , LedModes(..), HasLedModes(..)
+  ( State(..),      HasState(..)
+  , LedModes(..),   HasLedModes(..)
+  , ComboState(..), HasComboState(..)
 
   , CrossThreadVars(..), HasCrossThreadVars(..)
 
@@ -31,6 +32,7 @@ data State =
         , pressedKeys :: Set.Set KeyName
         , leds        :: LedModes
         , alternative :: Bool -- Alternative mode on/off
+        , comboState  :: ComboState
         }
   deriving (Show, Eq, Generic)
 
@@ -40,6 +42,7 @@ instance NFData State where
     pressedKeys x `deepseq`
     leds        x `deepseq`
     alternative x `seq`
+    comboState  x `deepseq`
       ()
 
 
@@ -57,11 +60,14 @@ instance NFData LedModes where
 
 
 data ComboState =
-  ComboState {
+  ComboState { appleMediaPressed :: Bool
              }
   deriving (Show, Eq, Generic)
 
-instance NFData ComboState
+instance NFData ComboState where
+  rnf x =
+    appleMediaPressed x `seq`
+      ()
 
 
 initState :: Window -> State
@@ -70,12 +76,18 @@ initState wnd =
         , pressedKeys = Set.empty
         , leds        = defaultLedModes
         , alternative = False
+        , comboState  = defaultComboState
         }
 
 defaultLedModes :: LedModes
 defaultLedModes = LedModes { capsLockLed = False
                            , numLockLed  = False
                            }
+
+defaultComboState :: ComboState
+defaultComboState =
+  ComboState { appleMediaPressed = False
+             }
 
 
 data CrossThreadVars =
@@ -96,4 +108,5 @@ instance NFData CrossThreadVars where
 
 makeApoClassy ''State
 makeApoClassy ''LedModes
+makeApoClassy ''ComboState
 makeApoClassy ''CrossThreadVars
