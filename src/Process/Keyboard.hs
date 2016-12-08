@@ -76,8 +76,8 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
         )
         :: Bool
 
-      onComboEnter :: Bool
-      onComboEnter =
+      onEnterOnlyWithMods :: Bool
+      onEnterOnlyWithMods =
         O.additionalControls opts &&
         keyName == Keys.EnterKey &&
         let mods = [ Keys.ControlLeftKey, Keys.ControlRightKey
@@ -155,7 +155,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
     return (state & State.comboState' . State.appleMediaPressed' .~ True)
 
   -- Ability to press combos like Shift+Enter, Alt+Enter, etc.
-  | onComboEnter -> do
+  | onEnterOnlyWithMods -> do
     when isPressed $ noise $ show keyName ++ " pressed only with modifiers"
     justTrigger
     let lens = State.comboState' . State.isEnterPressedWithMods'
