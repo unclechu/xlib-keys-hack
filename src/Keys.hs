@@ -12,6 +12,7 @@ module Keys
   , getKeyMap
   , getAliasByKey
   , getKeyCodeByName
+  , getRealKeyCodeByName
 
   , getAlternative
   , isAlternative
@@ -35,6 +36,7 @@ import Data.Map.Strict ( Map, (!), fromList, toList, lookup, empty, member
                        , insert
                        )
 import qualified Data.Map.Strict as Map
+import qualified Data.Set as Set
 import Data.Maybe (Maybe(Nothing, Just))
 import Data.Word (Word16)
 
@@ -359,6 +361,7 @@ data KeyMap =
          , byDevNumMap          :: Map Word16  KeyAlias
          , byNameAlternativeMap :: Map KeyName (KeyName, KeyCode)
          , byNameMediaMap       :: Map KeyName KeyCode
+         , byNameRealMap        :: Map KeyName KeyCode
          , asNamesMap           :: Map KeyName KeyName
          }
   deriving (Show, Eq, Generic)
@@ -369,6 +372,7 @@ instance NFData KeyMap where
     byDevNumMap          x `deepseq`
     byNameAlternativeMap x `deepseq`
     byNameMediaMap       x `deepseq`
+    byNameRealMap        x `deepseq`
     asNamesMap           x `deepseq`
       ()
 
@@ -380,6 +384,7 @@ getKeyMap opts mediaKeyAliases =
          , byDevNumMap          = getByDevNumMap keyAliases
          , byNameAlternativeMap = getAltMap alternativeModeRemaps empty
          , byNameMediaMap       = byNameMediaAliasesMap
+         , byNameRealMap        = realMap
          , asNamesMap           = _asNamesMap
          }
 
@@ -390,8 +395,9 @@ getKeyMap opts mediaKeyAliases =
                      Just devNum -> (keyName, devNum, keyCode)
                      Nothing -> error $ "Unexpected media key: " ++ show keyName
               realCapsLockF alias@(keyName, devNum, _)
-                | keyName == CapsLockKey = (keyName, devNum, 66)
+                | keyName == CapsLockKey = (keyName, devNum, capsCode)
                 | otherwise = alias
+                where capsCode = realMap ! RealCapsLockKey
            in defaultKeyAliases ++ map f mediaKeyAliases
             & if isCapsLockReal then map realCapsLockF else id
 
@@ -441,9 +447,10 @@ isAlternative keyMap keyName = keyName `member` byNameAlternativeMap keyMap
 getAsName :: KeyMap -> KeyName -> KeyName
 getAsName keyMap keyName = asNamesMap keyMap ! keyName
 
-getRemappedByName :: KeyMap -> KeyName -> [KeyName]
+getRemappedByName :: KeyMap -> KeyName -> Set.Set KeyName
 getRemappedByName keyMap keyName =
-  Map.filter (== keyName) (asNamesMap keyMap) & toList & map fst
+  Map.filter (== keyName) (asNamesMap keyMap)
+    & toList & map fst & Set.fromList
 
 
 -- Check if key is media key
@@ -458,6 +465,10 @@ getMedia keyMap keyName = keyName `lookup` byNameMediaMap keyMap
 getKeyCodeByName :: KeyMap -> KeyName -> Maybe KeyCode
 getKeyCodeByName keyMap keyName =
   keyName `lookup` byNameMap keyMap <&> \(_, _, x) -> x
+
+
+getRealKeyCodeByName :: KeyMap -> KeyName -> Maybe KeyCode
+getRealKeyCodeByName keyMap keyName = keyName `lookup` byNameRealMap keyMap
 
 
 makeApoClassy ''KeyMap

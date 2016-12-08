@@ -57,6 +57,13 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
         Keys.FNKey `Set.member` pressed && isMedia keyName
         :: Bool
 
+      onOnlyTwoControlsPressed :: Bool
+      onOnlyTwoControlsPressed =
+        let ctrls = Set.fromList [Keys.ControlLeftKey, Keys.ControlRightKey]
+            additionalControls = Set.fromList [Keys.CapsLockKey, Keys.EnterKey]
+         in pressed == ctrls
+         || (O.additionalControls opts && pressed == additionalControls)
+
       onAdditionalControlKey =
         O.additionalControls opts &&
         keyName `elem` [Keys.CapsLockKey, Keys.EnterKey] &&
@@ -80,21 +87,25 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
       onEnterOnlyWithMods =
         O.additionalControls opts &&
         keyName == Keys.EnterKey &&
-        let mods = [ Keys.ControlLeftKey, Keys.ControlRightKey
-                   , Keys.ShiftLeftKey,   Keys.ShiftRightKey
-                   , Keys.AltLeftKey,     Keys.AltRightKey
-                   , Keys.SuperLeftKey,   Keys.SuperRightKey
-                   , Keys.CapsLockKey
-                   ]
-            remappedMods = foldr ((++) . getRemappedByName) [] mods
-            allMods = mods ++ remappedMods
+        let mods :: Set.Set Keys.KeyName
+            mods = Set.fromList
+              [ Keys.ControlLeftKey, Keys.ControlRightKey
+              , Keys.ShiftLeftKey,   Keys.ShiftRightKey
+              , Keys.AltLeftKey,     Keys.AltRightKey
+              , Keys.SuperLeftKey,   Keys.SuperRightKey
+              , Keys.CapsLockKey
+              ]
+            remappedMods :: Set.Set Keys.KeyName
+            remappedMods =
+              Set.foldr (Set.union . getRemappedByName) Set.empty mods
 
+            allMods = mods `Set.union` remappedMods
             otherPressed = Set.delete Keys.EnterKey pressed
 
             pressedCase =
               isPressed &&
               not (Set.null otherPressed) &&
-              Set.null (foldr Set.delete otherPressed allMods)
+              Set.null (Set.foldr Set.delete otherPressed allMods)
             releasedCase =
               not isPressed &&
               state ^. State.comboState' . State.isEnterPressedWithMods'
@@ -153,6 +164,30 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
      in noise $ format msg [show Keys.FNKey, show Keys.InsertKey]
     justTrigger
     return (state & State.comboState' . State.appleMediaPressed' .~ True)
+
+  | onOnlyTwoControlsPressed -> do
+
+    let isCapsLockModeOn = state ^. State.leds' . State.capsLockLed'
+        msg = "Two controls pressed, turning {0} Caps Lock mode..."
+     in noise $ format msg [("on" <||> "off") (not isCapsLockModeOn)]
+
+    let off keyName =
+          when (keyName `Set.member` pressed) $
+            trigger keyName (fromJust $ getKeyCodeByName keyName) False
+     in off Keys.ControlLeftKey
+     >> off Keys.ControlRightKey
+
+    let keyName = Keys.RealCapsLockKey
+        keyCode = fromJust $ getRealKeyCodeByName keyName
+     in pressRelease keyName keyCode
+
+    let toDelete = [Keys.ControlLeftKey, Keys.ControlRightKey]
+                     ++ if O.additionalControls opts
+                           then [Keys.CapsLockKey, Keys.EnterKey]
+                           else []
+     in state
+          & State.pressedKeys' .~ foldr Set.delete pressed toDelete
+          & return
 
   -- Ability to press combos like Shift+Enter, Alt+Enter, etc.
   | onEnterOnlyWithMods -> do
@@ -247,6 +282,9 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
   getKeyCodeByName :: Keys.KeyName -> Maybe XTypes.KeyCode
   getKeyCodeByName = Keys.getKeyCodeByName keyMap
 
+  getRealKeyCodeByName :: Keys.KeyName -> Maybe XTypes.KeyCode
+  getRealKeyCodeByName = Keys.getRealKeyCodeByName keyMap
+
   getAlternative :: Keys.KeyName -> Maybe (Keys.KeyName, XTypes.KeyCode)
   getAlternative = Keys.getAlternative keyMap
 
@@ -257,7 +295,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
   isMedia  = Keys.isMedia keyMap  :: Keys.KeyName -> Bool
 
   getAsName = Keys.getAsName keyMap :: Keys.KeyName -> Keys.KeyName
-  getRemappedByName :: Keys.KeyName -> [Keys.KeyName]
+  getRemappedByName :: Keys.KeyName -> Set.Set Keys.KeyName
   getRemappedByName = Keys.getRemappedByName keyMap
 
   -- Wait and extract event, make preparations and call handler
