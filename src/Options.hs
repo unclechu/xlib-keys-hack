@@ -31,6 +31,7 @@ data Options =
   Options { showHelp                :: Bool
           , verboseMode             :: Bool
           , realCapsLock            :: Bool
+          , additionalControls      :: Bool
           , disableXInputDeviceName :: [String]
           , disableXInputDeviceId   :: [Int]
           , handleDevicePath        :: [FilePath]
@@ -48,6 +49,7 @@ instance NFData Options where
     showHelp                opts `seq`
     verboseMode             opts `seq`
     realCapsLock            opts `seq`
+    additionalControls      opts `seq`
     disableXInputDeviceName opts `deepseq`
     disableXInputDeviceId   opts `deepseq`
     handleDevicePath        opts `deepseq`
@@ -69,6 +71,7 @@ defaultOptions =
             showHelp                = False
           , verboseMode             = False
           , realCapsLock            = False
+          , additionalControls      = True
           , disableXInputDeviceName = []
           , disableXInputDeviceId   = []
           , handleDevicePath        = []
@@ -109,6 +112,10 @@ options =
   , GetOpt.Option  [ ]  ["real-capslock"]
       (GetOpt.NoArg $ realCapsLock' .~ True)
       "Use real Caps Lock instead of remapping it to Escape"
+  , GetOpt.Option  [ ]  ["no-additional-controls"]
+      (GetOpt.NoArg $ additionalControls' .~ False)
+      "Disable additional controls behavior for Caps Lock and Enter keys\
+      \ (could be comfortable for playing some video games)"
   , GetOpt.Option  [ ]  ["disable-xinput-device-name"]
       (GetOpt.OptArg
         (\x -> disableXInputDeviceName' %~ (++ [fromJust x]))

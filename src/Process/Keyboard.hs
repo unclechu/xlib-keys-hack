@@ -57,6 +57,16 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
         Keys.FNKey `Set.member` pressed && isMedia keyName
         :: Bool
 
+      onAdditionalControlKey =
+        O.additionalControls opts &&
+        keyName `elem` [Keys.CapsLockKey, Keys.EnterKey]
+        :: Bool
+
+      onWithAdditionalControlKey =
+        O.additionalControls opts &&
+        any (`Set.member` pressed) [Keys.CapsLockKey, Keys.EnterKey]
+        :: Bool
+
       justTrigger = trigger keyName keyCode isPressed :: IO ()
 
   in if
@@ -111,7 +121,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
     return (state & State.comboState' . State.appleMediaPressed' .~ True)
 
   -- Handling of additional controls by `CapsLockKey` and `EnterKey`
-  | keyName `elem` [Keys.CapsLockKey, Keys.EnterKey] ->
+  | onAdditionalControlKey ->
 
     let (flagLens, controlKeyName) = case keyName of
           Keys.CapsLockKey ->
@@ -150,7 +160,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
       return state
 
   -- When `CapsLockKey` or `EnterKey` pressed with combo
-  | any (`Set.member` pressed) [Keys.CapsLockKey, Keys.EnterKey] ->
+  | onWithAdditionalControlKey ->
 
     let (mainKeyName, flagLens, controlKeyName) = x
           where x :: (Keys.KeyName, Lens' State.State Bool, Keys.KeyName)
@@ -168,8 +178,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
     in if
 
     -- When pressing of Control already triggered
-    | state ^. flagLens ->
-      justTrigger >> return state
+    | state ^. flagLens -> justTrigger >> return state
 
     -- `CapsLockKey` or `EnterKey` pressed with combo,
     -- it means it should be interpreted as Control key.
