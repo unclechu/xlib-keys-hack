@@ -48,10 +48,10 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
   let pressed     = state ^. State.pressedKeys'
       alternative = getAlternative keyName
 
+      onOnlyBothAltsPressed :: Bool
       onOnlyBothAltsPressed =
         let set = Set.fromList [Keys.AltLeftKey, Keys.AltRightKey]
          in keyName `Set.member` set && pressed == set
-        :: Bool
 
       onAppleMediaPressed =
         Keys.FNKey `Set.member` pressed && isMedia keyName
@@ -59,13 +59,47 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
 
       onAdditionalControlKey =
         O.additionalControls opts &&
-        keyName `elem` [Keys.CapsLockKey, Keys.EnterKey]
+        keyName `elem` [Keys.CapsLockKey, Keys.EnterKey] &&
+        not (
+          keyName == Keys.EnterKey &&
+          state ^. State.comboState' . State.isEnterPressedWithMods'
+        )
         :: Bool
 
       onWithAdditionalControlKey =
         O.additionalControls opts &&
-        any (`Set.member` pressed) [Keys.CapsLockKey, Keys.EnterKey]
+        any (`Set.member` pressed) [Keys.CapsLockKey, Keys.EnterKey] &&
+        not (
+          Keys.EnterKey `Set.member` pressed &&
+          Keys.CapsLockKey `Set.notMember` pressed &&
+          state ^. State.comboState' . State.isEnterPressedWithMods'
+        )
         :: Bool
+
+      onComboEnter :: Bool
+      onComboEnter =
+        O.additionalControls opts &&
+        keyName == Keys.EnterKey &&
+        let mods = [ Keys.ControlLeftKey, Keys.ControlRightKey
+                   , Keys.ShiftLeftKey,   Keys.ShiftRightKey
+                   , Keys.AltLeftKey,     Keys.AltRightKey
+                   , Keys.SuperLeftKey,   Keys.SuperRightKey
+                   , Keys.CapsLockKey
+                   ]
+            remappedMods = foldr ((++) . getRemappedByName) [] mods
+            allMods = mods ++ remappedMods
+
+            otherPressed = Set.delete Keys.EnterKey pressed
+
+            pressedCase =
+              isPressed &&
+              not (Set.null otherPressed) &&
+              Set.null (foldr Set.delete otherPressed allMods)
+            releasedCase =
+              not isPressed &&
+              state ^. State.comboState' . State.isEnterPressedWithMods'
+
+         in pressedCase || releasedCase
 
       justTrigger = trigger keyName keyCode isPressed :: IO ()
 
@@ -119,6 +153,13 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
      in noise $ format msg [show Keys.FNKey, show Keys.InsertKey]
     justTrigger
     return (state & State.comboState' . State.appleMediaPressed' .~ True)
+
+  -- Ability to press combos like Shift+Enter, Alt+Enter, etc.
+  | onComboEnter -> do
+    when isPressed $ noise $ show keyName ++ " pressed only with modifiers"
+    justTrigger
+    let lens = State.comboState' . State.isEnterPressedWithMods'
+     in return (state & lens .~ isPressed)
 
   -- Handling of additional controls by `CapsLockKey` and `EnterKey`
   | onAdditionalControlKey ->
@@ -216,6 +257,8 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
   isMedia  = Keys.isMedia keyMap  :: Keys.KeyName -> Bool
 
   getAsName = Keys.getAsName keyMap :: Keys.KeyName -> Keys.KeyName
+  getRemappedByName :: Keys.KeyName -> [Keys.KeyName]
+  getRemappedByName = Keys.getRemappedByName keyMap
 
   -- Wait and extract event, make preparations and call handler
   onEv :: (Keys.KeyName
@@ -249,8 +292,8 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
     where throughState :: (State.State -> IO State.State) -> IO ()
           throughState m = do
             -- Log key user pressed (even if it's ignored or replaced)
-            let status = "is pressed" <||> "is released"
-             in noise $ format "Key {0} {1}" [show keyName, status isPressed]
+            let status = "pressed" <||> "released"
+             in noise $ format "{0} is {1}" [show keyName, status isPressed]
             modifyMVar_ (State.stateMVar ctVars) m
 
           -- Prevent doing anything when key state is the same

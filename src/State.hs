@@ -67,6 +67,11 @@ data ComboState =
 
              -- When Enter works as additional Control
              , isEnterUsedWithCombos :: Bool
+
+             -- When Enter wors as additional Control
+             -- and pressed with modifiers like for example
+             -- Shift+Enter or Alt+Enter.
+             , isEnterPressedWithMods :: Bool
              }
   deriving (Show, Eq, Generic)
 
@@ -75,6 +80,7 @@ instance NFData ComboState where
     appleMediaPressed        x `seq`
     isCapsLockUsedWithCombos x `seq`
     isEnterUsedWithCombos    x `seq`
+    isEnterPressedWithMods   x `seq`
       ()
 
 
@@ -97,6 +103,7 @@ defaultComboState =
   ComboState { appleMediaPressed        = False
              , isCapsLockUsedWithCombos = False
              , isEnterUsedWithCombos    = False
+             , isEnterPressedWithMods   = False
              }
 
 

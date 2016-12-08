@@ -20,6 +20,7 @@ module Keys
   , isMedia
 
   , getAsName
+  , getRemappedByName
   ) where
 
 import Prelude hiding (lookup)
@@ -30,7 +31,10 @@ import System.Linux.Input.Event (Key(Key))
 
 import Control.DeepSeq (NFData, rnf, deepseq)
 
-import Data.Map.Strict (Map, fromList, lookup, empty, member, (!), insert)
+import Data.Map.Strict ( Map, (!), fromList, toList, lookup, empty, member
+                       , insert
+                       )
+import qualified Data.Map.Strict as Map
 import Data.Maybe (Maybe(Nothing, Just))
 import Data.Word (Word16)
 
@@ -336,6 +340,8 @@ asNames :: [(KeyName, KeyName)]
 asNames =
   [ (FNKey,       InsertKey)
   , (CapsLockKey, EscapeKey)
+  , (LessKey,     ShiftLeftKey)
+  , (MenuKey,     SuperRightKey)
   ]
 
 
@@ -434,6 +440,10 @@ isAlternative keyMap keyName = keyName `member` byNameAlternativeMap keyMap
 
 getAsName :: KeyMap -> KeyName -> KeyName
 getAsName keyMap keyName = asNamesMap keyMap ! keyName
+
+getRemappedByName :: KeyMap -> KeyName -> [KeyName]
+getRemappedByName keyMap keyName =
+  Map.filter (== keyName) (asNamesMap keyMap) & toList & map fst
 
 
 -- Check if key is media key
