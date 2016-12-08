@@ -24,7 +24,6 @@ import Control.Lens ((.~), (%~), (^.), set, over, view)
 import Control.Concurrent (forkIO, ThreadId, threadDelay)
 import Control.Concurrent.MVar (MVar, modifyMVar_)
 import Control.Concurrent.Chan (Chan, writeChan)
-import Control.Applicative ((<$>))
 
 import Data.Maybe (Maybe(Just, Nothing), fromJust, isJust)
 import Data.Bits ((.|.))
@@ -196,10 +195,8 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
       alternative = getAlternative keyName
 
       onOnlyBothAltsPressed =
-        (keyName == Keys.AltLeftKey &&
-         pressed == Set.singleton Keys.AltRightKey) ||
-        (keyName == Keys.AltRightKey &&
-         pressed == Set.singleton Keys.AltLeftKey)
+        let set = Set.fromList [Keys.AltLeftKey, Keys.AltRightKey]
+         in keyName `Set.member` set && pressed == set
         :: Bool
 
       onAppleMediaPressed =
@@ -378,12 +375,12 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
             let pressed     = state ^. State.pressedKeys'
                 isMember    = keyName `Set.member` pressed
                 isDuplicate = isPressed == isMember
-             in if isDuplicate then return state else m state
+             in isDuplicate ? return state $ m state
 
           -- Store key user pressed in state
           storeKey :: (State.State -> IO State.State) -> IO ()
           storeKey m = ignoreDuplicates $ \state ->
-            let action = if isPressed then Set.insert else Set.delete
+            let action = isPressed ? Set.insert $ Set.delete
              in state & State.pressedKeys' %~ action keyName & m
 
   altModeNotifyMsg :: Bool -> String
