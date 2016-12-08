@@ -23,6 +23,7 @@ executable xlib-keys-hack
                      , Bindings.XTest
                      , Bindings.MoreXlib
                      , Process
+                     , Process.Keyboard
                      , Options
                      , Actions
                      , Actions.Types
