@@ -6,7 +6,7 @@ module Actions
   , Action(..),     HasAction(..)
 
   , seqHead
-  , noise
+  , noise,        noise'
   , notifyXmobar, notifyXmobar'
   ) where
 
@@ -29,10 +29,17 @@ import Actions.Types ( ActionType(..), HasActionType(..)
 seqHead :: ActionType -> (Action, ActionType)
 seqHead (Sequence (x:xs)) = (x, Sequence xs)
 
+
 -- Checks if verbose mode is enabled and only then adds actions to queue.
 noise :: O.Options -> State.CrossThreadVars -> String -> IO ()
 noise opts ctVars msg = when (O.verboseMode opts) $
   writeChan (State.actionsChan ctVars) $ Single $ Noise msg
+
+-- Multiple version of `noise`.
+noise' :: O.Options -> State.CrossThreadVars -> [String] -> IO ()
+noise' opts ctVars msgs = when (O.verboseMode opts) $
+  writeChan (State.actionsChan ctVars) $ Sequence $ map Noise msgs
+
 
 -- Checks if we have xmobar pipe file descriptor
 -- and only then adds actions to queue.

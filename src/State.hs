@@ -61,12 +61,20 @@ instance NFData LedModes where
 
 data ComboState =
   ComboState { appleMediaPressed :: Bool
+
+             -- When Caps Lock works as additional Control
+             , isCapsLockUsedWithCombos :: Bool
+
+             -- When Enter works as additional Control
+             , isEnterUsedWithCombos :: Bool
              }
   deriving (Show, Eq, Generic)
 
 instance NFData ComboState where
   rnf x =
-    appleMediaPressed x `seq`
+    appleMediaPressed        x `seq`
+    isCapsLockUsedWithCombos x `seq`
+    isEnterUsedWithCombos    x `seq`
       ()
 
 
@@ -86,7 +94,9 @@ defaultLedModes = LedModes { capsLockLed = False
 
 defaultComboState :: ComboState
 defaultComboState =
-  ComboState { appleMediaPressed = False
+  ComboState { appleMediaPressed        = False
+             , isCapsLockUsedWithCombos = False
+             , isEnterUsedWithCombos    = False
              }
 
 

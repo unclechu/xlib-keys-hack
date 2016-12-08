@@ -11,6 +11,7 @@ module Keys
 
   , getKeyMap
   , getAliasByKey
+  , getKeyCodeByName
 
   , getAlternative
   , isAlternative
@@ -33,7 +34,7 @@ import Data.Map.Strict (Map, fromList, lookup, empty, member, (!), insert)
 import Data.Maybe (Maybe(Nothing, Just))
 import Data.Word (Word16)
 
-import Utils ((&), makeApoClassy)
+import Utils ((&), (<&>), makeApoClassy)
 
 
 data KeyName = EscapeKey
@@ -417,6 +418,7 @@ getAliasByKey keyMap devKey =
   where fromKey :: Key -> Word16
         fromKey (Key x) = x
 
+
 getAlternative :: KeyMap -> KeyName -> Maybe (KeyName, KeyCode)
 getAlternative keyMap keyName = keyName `lookup` byNameAlternativeMap keyMap
 
@@ -424,8 +426,10 @@ getAlternative keyMap keyName = keyName `lookup` byNameAlternativeMap keyMap
 isAlternative :: KeyMap -> KeyName -> Bool
 isAlternative keyMap keyName = keyName `member` byNameAlternativeMap keyMap
 
+
 getAsName :: KeyMap -> KeyName -> KeyName
 getAsName keyMap keyName = asNamesMap keyMap ! keyName
+
 
 -- Check if key is media key
 isMedia :: KeyMap -> KeyName -> Bool
@@ -433,6 +437,12 @@ isMedia keyMap keyName = keyName `member` byNameMediaMap keyMap
 
 getMedia :: KeyMap -> KeyName -> Maybe KeyCode
 getMedia keyMap keyName = keyName `lookup` byNameMediaMap keyMap
+
+
+-- Get mapped `KeyCode` to `KeyName`
+getKeyCodeByName :: KeyMap -> KeyName -> Maybe KeyCode
+getKeyCodeByName keyMap keyName =
+  keyName `lookup` byNameMap keyMap <&> \(_, _, x) -> x
 
 
 makeApoClassy ''KeyMap

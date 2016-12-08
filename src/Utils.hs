@@ -4,7 +4,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 module Utils
-  ( (&), (.>) -- pipes
+  ( (&), (.>), (<&>) -- pipes
   , (<||>)
   , (?)
 
@@ -42,27 +42,51 @@ import qualified Language.Haskell.TH as TH
 
 import Control.Lens ((.~))
 import qualified Control.Lens.TH as LTH
+import Control.Applicative ((<$>))
 
 import Data.Maybe (Maybe(Nothing, Just))
 import Data.Char (toLower)
 
 
 -- Pipe operator.
+-- Left-to-right call instead of right-to-left.
+-- Actually it's part of `Data.Function` from `base` package
+-- but only since 4.8 version.
+-- http://hackage.haskell.org/package/base-4.9.0.0/docs/Data-Function.html#v:-38-
 (&) :: a -> (a -> b) -> b
 (&) = flip ($)
 infixl 0 &
 
+
 -- Pipe composition operator.
+-- Left-to-right composition instead of right-to-left.
+-- Just like bind operator (>>=) for monads but for simple functions.
 (.>) :: (a -> b) -> (b -> c) -> a -> c
 (.>) = flip (.)
 infixl 9 .>
 
 
+-- Pipe version of `fmap` operator.
+(<&>) :: Functor f => f a -> (a -> b) -> f b
+(<&>) = flip (<$>)
+infixr 4 <&>
+
+
+-- Makes function from then-else values that takes an expression.
+-- Example:
+--   let foo = "Yes" <||> "No"
+--    in [foo (2+2 == 4), foo (2+2 == 5)] -- returns: ["Yes", "No"]
 (<||>) :: a -> a -> (Bool -> a)
 a <||> b = \x -> if x then a else b
 infixl 2 <||>
 
 
+-- If-then-else chain operator.
+-- See more: https://wiki.haskell.org/Case
+-- Example:
+--   isFoo ? "foo" $
+--   isBar ? "bar" $
+--    "default"
 (?) :: Bool -> a -> a -> a
 (?) True  x _ = x
 (?) False _ y = y
