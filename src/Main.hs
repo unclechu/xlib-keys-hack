@@ -125,7 +125,7 @@ main = do
           foldr (\(a, b) -> (("\n  " ++ show a ++ ": " ++ show b) ++)) ""
                 mediaKeysAliases
 
-  let keyMap = Keys.getKeyMap mediaKeysAliases
+  let keyMap = Keys.getKeyMap opts mediaKeysAliases
 
   -- Making it fail at start app time if media keys described incorrectly
   keyMap `deepseq` return ()

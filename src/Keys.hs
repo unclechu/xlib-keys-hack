@@ -34,7 +34,8 @@ import Data.Map.Strict (Map, fromList, lookup, empty, member, (!), insert)
 import Data.Maybe (Maybe(Nothing, Just))
 import Data.Word (Word16)
 
-import Utils ((&), (<&>), makeApoClassy)
+import Utils ((&), (<&>), (?), makeApoClassy)
+import qualified Options as O
 
 
 data KeyName = EscapeKey
@@ -101,7 +102,7 @@ data KeyName = EscapeKey
 instance NFData KeyName
 
 
-type KeyAlias  = (KeyName, Word16, KeyCode)
+type KeyAlias = (KeyName, Word16, KeyCode)
 
 defaultKeyAliases :: [KeyAlias]
 defaultKeyAliases =
@@ -348,8 +349,7 @@ getByDevNumMap keyMap = fromList $ map f keyMap
 
 
 data KeyMap =
-  KeyMap { aliases              :: [KeyAlias]
-         , byNameMap            :: Map KeyName KeyAlias
+  KeyMap { byNameMap            :: Map KeyName KeyAlias
          , byDevNumMap          :: Map Word16  KeyAlias
          , byNameAlternativeMap :: Map KeyName (KeyName, KeyCode)
          , byNameMediaMap       :: Map KeyName KeyCode
@@ -359,7 +359,6 @@ data KeyMap =
 
 instance NFData KeyMap where
   rnf x =
-    aliases              x `deepseq`
     byNameMap            x `deepseq`
     byDevNumMap          x `deepseq`
     byNameAlternativeMap x `deepseq`
@@ -369,36 +368,42 @@ instance NFData KeyMap where
 
 
 -- `moreAliases` supposed to contain media keys
-getKeyMap :: [(KeyName, KeyCode)] -> KeyMap
-getKeyMap mediaKeyAliases =
-  KeyMap { aliases              = keyAliases
-         , byNameMap            = nameMap
+getKeyMap :: O.Options -> [(KeyName, KeyCode)] -> KeyMap
+getKeyMap opts mediaKeyAliases =
+  KeyMap { byNameMap            = nameMap
          , byDevNumMap          = getByDevNumMap keyAliases
          , byNameAlternativeMap = getAltMap alternativeModeRemaps empty
          , byNameMediaMap       = byNameMediaAliasesMap
-         , asNamesMap           = fromList asNames
+         , asNamesMap           = _asNamesMap
          }
 
   where keyAliases :: [KeyAlias]
-        keyAliases = defaultKeyAliases ++
+        keyAliases =
           let f (keyName, keyCode) =
                 case keyName `lookup` mediaMap of
                      Just devNum -> (keyName, devNum, keyCode)
                      Nothing -> error $ "Unexpected media key: " ++ show keyName
-           in map f mediaKeyAliases
+              realCapsLockF alias@(keyName, devNum, _)
+                | keyName == CapsLockKey = (keyName, devNum, 66)
+                | otherwise = alias
+           in defaultKeyAliases ++ map f mediaKeyAliases
+            & if isCapsLockReal then map realCapsLockF else id
+
+        isCapsLockReal = O.realCapsLock opts :: Bool
+
+        _asNamesMap :: Map KeyName KeyName
+        _asNamesMap = fromList asNames
+                    & if isCapsLockReal
+                         then insert CapsLockKey CapsLockKey
+                         else id
 
         byNameMediaAliasesMap :: Map KeyName KeyCode
         byNameMediaAliasesMap =
           fromList [(a, b) | (a, _, b) <- keyAliases, a `member` mediaMap]
 
-        mediaMap :: Map KeyName Word16
-        mediaMap = fromList mediaDevNums
-
-        nameMap :: Map KeyName KeyAlias
-        nameMap = getByNameMap keyAliases
-
-        realMap :: Map KeyName KeyCode
-        realMap = fromList realKeys
+        mediaMap = fromList mediaDevNums   :: Map KeyName Word16
+        nameMap  = getByNameMap keyAliases :: Map KeyName KeyAlias
+        realMap  = fromList realKeys       :: Map KeyName KeyCode
 
         getAltMap :: [(KeyName, KeyName)]
                   -> Map KeyName (KeyName, KeyCode)

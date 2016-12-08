@@ -19,7 +19,7 @@ import qualified GHC.IO.Handle as IOHandle
 import qualified System.Console.GetOpt as GetOpt
 
 import Control.Lens ((.~), (%~), (^.), set, over, view)
-import Control.DeepSeq (NFData, rnf)
+import Control.DeepSeq (NFData, rnf, deepseq)
 
 import Data.Either (Either(Left, Right))
 import Data.Maybe (Maybe(Just, Nothing), fromJust, fromMaybe)
@@ -30,6 +30,7 @@ import Utils ((&), (.>), makeApoClassy)
 data Options =
   Options { showHelp                :: Bool
           , verboseMode             :: Bool
+          , realCapsLock            :: Bool
           , disableXInputDeviceName :: [String]
           , disableXInputDeviceId   :: [Int]
           , handleDevicePath        :: [FilePath]
@@ -46,14 +47,15 @@ instance NFData Options where
   rnf opts =
     showHelp                opts `seq`
     verboseMode             opts `seq`
-    disableXInputDeviceName opts `seq`
-    disableXInputDeviceId   opts `seq`
-    handleDevicePath        opts `seq`
-    xmobarPipeFile          opts `seq`
+    realCapsLock            opts `seq`
+    disableXInputDeviceName opts `deepseq`
+    disableXInputDeviceId   opts `deepseq`
+    handleDevicePath        opts `deepseq`
+    xmobarPipeFile          opts `deepseq`
 
     handleDeviceFd          opts `seq`
-    availableDevices        opts `seq`
-    availableXInputDevices  opts `seq`
+    availableDevices        opts `deepseq`
+    availableXInputDevices  opts `deepseq`
     xmobarPipeFd            opts `seq`
       ()
 
@@ -66,6 +68,7 @@ defaultOptions =
           -- from arguments
             showHelp                = False
           , verboseMode             = False
+          , realCapsLock            = False
           , disableXInputDeviceName = []
           , disableXInputDeviceId   = []
           , handleDevicePath        = []
@@ -103,6 +106,9 @@ options =
   , GetOpt.Option ['v'] ["verbose"]
       (GetOpt.NoArg $ verboseMode' .~ True)
       "Start in verbose-mode"
+  , GetOpt.Option  [ ]  ["real-capslock"]
+      (GetOpt.NoArg $ realCapsLock' .~ True)
+      "Use real Caps Lock instead of remapping it to Escape"
   , GetOpt.Option  [ ]  ["disable-xinput-device-name"]
       (GetOpt.OptArg
         (\x -> disableXInputDeviceName' %~ (++ [fromJust x]))
