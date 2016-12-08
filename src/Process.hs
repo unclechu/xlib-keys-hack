@@ -5,6 +5,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE ImpredicativeTypes #-}
 
 module Process
   ( initReset
@@ -20,7 +21,7 @@ import qualified System.Linux.Input.Event as EvdevEvent
 import Control.Monad (when, unless, forM_)
 import qualified Control.Monad.State as St
 import Control.Monad.State.Class (MonadState)
-import Control.Lens ((.~), (%~), (^.), set, over, view)
+import Control.Lens ((.~), (%~), (^.), set, over, view, Lens')
 import Control.Concurrent (forkIO, ThreadId, threadDelay)
 import Control.Concurrent.MVar (MVar, modifyMVar_)
 import Control.Concurrent.Chan (Chan, writeChan)
@@ -257,55 +258,77 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
     justTrigger
     return (state & State.comboState' . State.appleMediaPressed' .~ True)
 
-  -- Handling of `CapsLockKey` key (Escape/Caps Lock or Left Control)
-  | keyName == Keys.CapsLockKey -> if
+  -- Handling of additional controls by `CapsLockKey` and `EnterKey`
+  | keyName `elem` [Keys.CapsLockKey, Keys.EnterKey] ->
+
+    let (flagLens, controlKeyName) = case keyName of
+          Keys.CapsLockKey ->
+            ( State.comboState' . State.isCapsLockUsedWithCombos'
+            , Keys.ControlLeftKey
+            )
+          Keys.EnterKey ->
+            ( State.comboState' . State.isEnterUsedWithCombos'
+            , Keys.ControlRightKey
+            )
+          :: (Lens' State.State Bool, Keys.KeyName)
+    in if
 
     -- Prevent triggering when just pressed
     | isPressed -> return state
 
-    -- Trigger `ControlLeftKey` releasing because when you press
-    -- `CapsLockKey` with another key
-    -- it triggers `ControlLeftKey` pressing.
-    | state ^. State.comboState' . State.isCapsLockUsedWithCombos' -> do
-      let keyCode = fromJust $ getKeyCodeByName Keys.ControlLeftKey
+    -- Trigger Control releasing because when you press
+    -- `CapsLockKey` or `EnterKey` with combo (see below)
+    -- it triggers Control pressing.
+    | state ^. flagLens -> do
+      let keyCode = fromJust $ getKeyCodeByName controlKeyName
       let msg1 = "{0} released after pressed with combos,\
                  \ it means it was interpreted as {1}"
           msg2 = "Triggering releasing of {0} (X key code: {1})..."
-          params1 = [show Keys.CapsLockKey, show Keys.ControlLeftKey]
-          params2 = [show Keys.ControlLeftKey, show keyCode]
+          params1 = [show keyName, show controlKeyName]
+          params2 = [show controlKeyName, show keyCode]
        in noise' [format msg1 params1, format msg2 params2]
       fakeKeyCodeEvent dpy keyCode False
-      state
-        & State.comboState' . State.isCapsLockUsedWithCombos' .~ False
-        & return
+      return (state & flagLens .~ False)
 
-    -- Just triggering default key code (Escape/Caps Lock)
+    -- Just triggering default aliased key code to `CapsLockKey` or `EnterKey`
     | otherwise -> do
-      asPressRelease keyName keyCode
+      case keyName of
+           Keys.CapsLockKey -> asPressRelease keyName keyCode
+           Keys.EnterKey    -> pressRelease   keyName keyCode
       return state
 
-  -- When `CapsLockKey` pressed with combo
-  | Keys.CapsLockKey `Set.member` pressed -> if
+  -- When `CapsLockKey` or `EnterKey` pressed with combo
+  | any (`Set.member` pressed) [Keys.CapsLockKey, Keys.EnterKey] ->
 
-    -- When press of `ControlLeftKey` already triggered
-    | state ^. State.comboState' . State.isCapsLockUsedWithCombos' ->
+    let (mainKeyName, flagLens, controlKeyName) = x
+          where x :: (Keys.KeyName, Lens' State.State Bool, Keys.KeyName)
+                x = if
+                  | Keys.CapsLockKey `Set.member` pressed ->
+                    ( Keys.CapsLockKey
+                    , State.comboState' . State.isCapsLockUsedWithCombos'
+                    , Keys.ControlLeftKey
+                    )
+                  | Keys.EnterKey `Set.member` pressed ->
+                    ( Keys.EnterKey
+                    , State.comboState' . State.isEnterUsedWithCombos'
+                    , Keys.ControlRightKey
+                    )
+    in if
+
+    -- When pressing of Control already triggered
+    | state ^. flagLens ->
       justTrigger >> return state
 
-    -- `CapsLockKey` pressed with combo,
-    -- it means it should be interpreted as `ControlLeftKey`.
+    -- `CapsLockKey` or `EnterKey` pressed with combo,
+    -- it means it should be interpreted as Control key.
     | otherwise -> do
-      let keyCode = fromJust $ getKeyCodeByName Keys.ControlLeftKey
+      let keyCode = fromJust $ getKeyCodeByName controlKeyName
       let msg = "{0} pressed with combo, triggering {1} (X key code: {2})..."
-          params = [ show Keys.CapsLockKey
-                   , show Keys.ControlLeftKey
-                   , show keyCode
-                   ]
+          params = [show mainKeyName, show controlKeyName, show keyCode]
        in noise $ format msg params
       fakeKeyCodeEvent dpy keyCode True
       justTrigger
-      state
-        & State.comboState' . State.isCapsLockUsedWithCombos' .~ True
-        & return
+      return (state & flagLens .~ True)
 
   -- Usual key handling
   | otherwise -> justTrigger >> return state
