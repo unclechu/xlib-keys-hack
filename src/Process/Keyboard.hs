@@ -121,8 +121,8 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
     justTrigger
     let newState = state & State.alternative' %~ not
     noise $ "Notifying xmobar about alternative mode is "
-         ++ onOff (State.alternative newState)
-         ++ "..."
+             ++ onOff (State.alternative newState)
+             ++ "..."
     notify $ altModeNotifyMsg $ State.alternative newState
     return newState
 
@@ -136,7 +136,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
                            , show keyCodeTo
                            , show keyName
                            ]
-    -- fakeKeyCodeEvent dpy keyCodeTo isPressed
+    fakeKeyCodeEvent dpy keyCodeTo isPressed
     return state
 
   -- Hadling `FNKey` pressing on apple keyboard
@@ -285,14 +285,12 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
   getRealKeyCodeByName :: Keys.KeyName -> Maybe XTypes.KeyCode
   getRealKeyCodeByName = Keys.getRealKeyCodeByName keyMap
 
+  isAlternative = Keys.isAlternative keyMap :: Keys.KeyName -> Bool
   getAlternative :: Keys.KeyName -> Maybe (Keys.KeyName, XTypes.KeyCode)
   getAlternative = Keys.getAlternative keyMap
 
-  isAlternative :: Keys.KeyName -> Bool
-  isAlternative = Keys.isAlternative keyMap
-
-  getMedia = Keys.getMedia keyMap :: Keys.KeyName -> Maybe XTypes.KeyCode
   isMedia  = Keys.isMedia keyMap  :: Keys.KeyName -> Bool
+  getMedia = Keys.getMedia keyMap :: Keys.KeyName -> Maybe XTypes.KeyCode
 
   getAsName = Keys.getAsName keyMap :: Keys.KeyName -> Keys.KeyName
   getRemappedByName :: Keys.KeyName -> Set.Set Keys.KeyName
