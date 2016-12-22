@@ -23,6 +23,7 @@ import Control.DeepSeq (NFData, rnf, deepseq)
 
 import Data.Either (Either(Left, Right))
 import Data.Maybe (Maybe(Just, Nothing), fromJust, fromMaybe)
+import Data.Default (Default, def)
 
 import Utils ((&), (.>), makeApoClassy)
 
@@ -61,44 +62,42 @@ instance NFData Options where
     xmobarPipeFd            opts `seq`
       ()
 
+instance Default Options where
+  def = Options
+
+    -- From arguments
+    { showHelp                = False
+    , verboseMode             = False
+    , realCapsLock            = False
+    , additionalControls      = True
+    , disableXInputDeviceName = []
+    , disableXInputDeviceId   = []
+    , handleDevicePath        = []
+    , xmobarPipeFile          = Nothing
+
+
+    -- Will be extracted from `handleDevicePath`
+    -- and will be reduced with only available
+    -- devices (that connected to pc).
+    , handleDeviceFd          = []
+
+    -- Same as `handleDevicePath` but contains only
+    -- available devies (that exist in file system).
+    -- Will be extracted at initialization step
+    -- (as `handleDeviceFd`).
+    , availableDevices        = []
+
+    -- Will be extracted from `disableXInputDeviceName`
+    -- and from `disableXInputDeviceId` and filtered
+    -- with only available devices.
+    , availableXInputDevices  = []
+
+    -- Pipe file handler.
+    -- Will be extracted at initialization step.
+    , xmobarPipeFd            = Nothing
+    }
+
 makeApoClassy ''Options
-
-
-defaultOptions =
-  Options {
-
-          -- from arguments
-            showHelp                = False
-          , verboseMode             = False
-          , realCapsLock            = False
-          , additionalControls      = True
-          , disableXInputDeviceName = []
-          , disableXInputDeviceId   = []
-          , handleDevicePath        = []
-          , xmobarPipeFile          = Nothing
-
-
-          -- Will be extracted from `handleDevicePath`
-          -- and will be reduced with only available
-          -- devices (that connected to pc).
-          , handleDeviceFd          = []
-
-          -- Same as `handleDevicePath` but contains only
-          -- available devies (that exist in file system).
-          -- Will be extracted at initialization step
-          -- (as `handleDeviceFd`).
-          , availableDevices        = []
-
-          -- Will be extracted from `disableXInputDeviceName`
-          -- and from `disableXInputDeviceId` and filtered
-          -- with only available devices.
-          , availableXInputDevices  = []
-
-          -- Pipe file handler.
-          -- Will be extracted at initialization step.
-          , xmobarPipeFd            = Nothing
-
-          }
 
 
 options :: [GetOpt.OptDescr (Options -> Options)]
@@ -142,7 +141,7 @@ extractOptions :: [String] -> Either ErrorMessage Options
 extractOptions argv =
   case GetOpt.getOpt GetOpt.Permute options argv of
     (o, n, []) ->
-      Right (foldl (flip id) defaultOptions o & handleDevicePath' %~ (++ n))
+      Right (foldl (flip id) def o & handleDevicePath' %~ (++ n))
     (_, _, errs) ->
       Left $ case concat errs of
                   (reverse -> '\n':xs) -> reverse xs

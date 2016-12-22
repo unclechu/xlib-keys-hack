@@ -12,6 +12,7 @@ module Process.Keyboard
 import qualified GHC.IO.Handle as IOHandle
 import qualified System.Linux.Input.Event as EvdevEvent
 
+import Control.Monad.Trans.Class (lift)
 import Control.Monad (when, unless, forM_)
 import Control.Lens ((.~), (%~), (^.), set, over, view, Lens')
 import Control.Concurrent.MVar (MVar, modifyMVar_)
@@ -26,21 +27,37 @@ import qualified Graphics.X11.ExtraTypes  as XTypes
 import Graphics.X11.Xlib.Types (Display)
 import Graphics.X11.Types (Window)
 
-import Utils ((&), (.>), (<||>), (?))
+import Utils ( (&), (.>), (<||>), (?)
+             , BreakableT, runFromBreakableT, breakTWith, continueTWith
+             )
 import Bindings.XTest (fakeKeyCodeEvent)
 import qualified Options as O
 import qualified Actions
 import qualified State
 import qualified Keys
 
+import qualified Process.CrossThread as CrossThread
+  (toggleCapsLock, handleCapsLockModeChange)
+
+type KeyCode         = XTypes.KeyCode
+type Handle          = IOHandle.Handle
+type Set             = Set.Set
+
+type Options         = O.Options
+type KeyMap          = Keys.KeyMap
+type KeyName         = Keys.KeyName
+type KeyAlias        = Keys.KeyAlias
+type State           = State.State
+type CrossThreadVars = State.CrossThreadVars
+
 
 -- Wait for key events and simulate them in X server.
-handleKeyboard :: State.CrossThreadVars
-               -> O.Options
-               -> Keys.KeyMap
+handleKeyboard :: CrossThreadVars
+               -> Options
+               -> KeyMap
                -> Display
                -> Window
-               -> IOHandle.Handle
+               -> Handle
                -> IO ()
 handleKeyboard ctVars opts keyMap dpy rootWnd fd =
   onEv $ \keyName keyCode isPressed state ->
@@ -53,9 +70,8 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
         let set = Set.fromList [Keys.AltLeftKey, Keys.AltRightKey]
          in keyName `Set.member` set && pressed == set
 
-      onAppleMediaPressed =
-        Keys.FNKey `Set.member` pressed && isMedia keyName
-        :: Bool
+      onAppleMediaPressed :: Bool
+      onAppleMediaPressed = Keys.FNKey `Set.member` pressed && isMedia keyName
 
       onOnlyTwoControlsPressed :: Bool
       onOnlyTwoControlsPressed =
@@ -64,6 +80,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
          in pressed == ctrls
          || (O.additionalControls opts && pressed == additionalControls)
 
+      onAdditionalControlKey :: Bool
       onAdditionalControlKey =
         O.additionalControls opts &&
         keyName `elem` [Keys.CapsLockKey, Keys.EnterKey] &&
@@ -71,8 +88,8 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
           keyName == Keys.EnterKey &&
           state ^. State.comboState' . State.isEnterPressedWithMods'
         )
-        :: Bool
 
+      onWithAdditionalControlKey :: Bool
       onWithAdditionalControlKey =
         O.additionalControls opts &&
         any (`Set.member` pressed) [Keys.CapsLockKey, Keys.EnterKey] &&
@@ -81,13 +98,12 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
           Keys.CapsLockKey `Set.notMember` pressed &&
           state ^. State.comboState' . State.isEnterPressedWithMods'
         )
-        :: Bool
 
       onEnterOnlyWithMods :: Bool
       onEnterOnlyWithMods =
         O.additionalControls opts &&
         keyName == Keys.EnterKey &&
-        let mods :: Set.Set Keys.KeyName
+        let mods :: Set KeyName
             mods = Set.fromList
               [ Keys.ControlLeftKey, Keys.ControlRightKey
               , Keys.ShiftLeftKey,   Keys.ShiftRightKey
@@ -95,9 +111,9 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
               , Keys.SuperLeftKey,   Keys.SuperRightKey
               , Keys.CapsLockKey
               ]
-            remappedMods :: Set.Set Keys.KeyName
             remappedMods =
               Set.foldr (Set.union . getRemappedByName) Set.empty mods
+              :: Set KeyName
 
             allMods = mods `Set.union` remappedMods
             otherPressed = Set.delete Keys.EnterKey pressed
@@ -167,9 +183,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
 
   | onOnlyTwoControlsPressed -> do
 
-    let isCapsLockModeOn = state ^. State.leds' . State.capsLockLed'
-        msg = "Two controls pressed, turning {0} Caps Lock mode..."
-     in noise $ format msg [("on" <||> "off") (not isCapsLockModeOn)]
+    noise "Two controls pressed, it means Caps Lock mode toggling"
 
     let off keyName =
           when (keyName `Set.member` pressed) $
@@ -177,17 +191,13 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
      in off Keys.ControlLeftKey
      >> off Keys.ControlRightKey
 
-    let keyName = Keys.RealCapsLockKey
-        keyCode = fromJust $ getRealKeyCodeByName keyName
-     in pressRelease keyName keyCode
-
     let toDelete = [Keys.ControlLeftKey, Keys.ControlRightKey]
                      ++ if O.additionalControls opts
                            then [Keys.CapsLockKey, Keys.EnterKey]
                            else []
      in state
-          & State.pressedKeys' .~ foldr Set.delete pressed toDelete
-          & return
+      & State.pressedKeys' .~ foldr Set.delete pressed toDelete
+      & toggleCapsLock
 
   -- Ability to press combos like Shift+Enter, Alt+Enter, etc.
   | onEnterOnlyWithMods -> do
@@ -208,7 +218,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
             ( State.comboState' . State.isEnterUsedWithCombos'
             , Keys.ControlRightKey
             )
-          :: (Lens' State.State Bool, Keys.KeyName)
+          :: (Lens' State Bool, KeyName)
     in if
 
     -- Prevent triggering when just pressed
@@ -239,7 +249,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
   | onWithAdditionalControlKey ->
 
     let (mainKeyName, flagLens, controlKeyName) = x
-          where x :: (Keys.KeyName, Lens' State.State Bool, Keys.KeyName)
+          where x :: (KeyName, Lens' State Bool, KeyName)
                 x = if
                   | Keys.CapsLockKey `Set.member` pressed ->
                     ( Keys.CapsLockKey
@@ -276,33 +286,35 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
   noise' = Actions.noise'       opts ctVars :: [String] -> IO ()
   notify = Actions.notifyXmobar opts ctVars ::  String  -> IO ()
 
-  getAlias :: EvdevEvent.Key -> Maybe Keys.KeyAlias
+  getAlias :: EvdevEvent.Key -> Maybe KeyAlias
   getAlias = Keys.getAliasByKey keyMap
 
-  getKeyCodeByName :: Keys.KeyName -> Maybe XTypes.KeyCode
+  getKeyCodeByName :: KeyName -> Maybe KeyCode
   getKeyCodeByName = Keys.getKeyCodeByName keyMap
 
-  getRealKeyCodeByName :: Keys.KeyName -> Maybe XTypes.KeyCode
+  getRealKeyCodeByName :: KeyName -> Maybe KeyCode
   getRealKeyCodeByName = Keys.getRealKeyCodeByName keyMap
 
-  isAlternative = Keys.isAlternative keyMap :: Keys.KeyName -> Bool
-  getAlternative :: Keys.KeyName -> Maybe (Keys.KeyName, XTypes.KeyCode)
+  isAlternative = Keys.isAlternative keyMap :: KeyName -> Bool
+  getAlternative :: KeyName -> Maybe (KeyName, KeyCode)
   getAlternative = Keys.getAlternative keyMap
 
-  isMedia  = Keys.isMedia keyMap  :: Keys.KeyName -> Bool
-  getMedia = Keys.getMedia keyMap :: Keys.KeyName -> Maybe XTypes.KeyCode
+  isMedia  = Keys.isMedia keyMap  :: KeyName -> Bool
+  getMedia = Keys.getMedia keyMap :: KeyName -> Maybe KeyCode
 
-  getAsName = Keys.getAsName keyMap :: Keys.KeyName -> Keys.KeyName
-  getRemappedByName :: Keys.KeyName -> Set.Set Keys.KeyName
+  getAsName = Keys.getAsName keyMap :: KeyName -> KeyName
+  getRemappedByName :: KeyName -> Set KeyName
   getRemappedByName = Keys.getRemappedByName keyMap
 
+  toggleCapsLock :: State -> IO State
+  toggleCapsLock = CrossThread.toggleCapsLock dpy noise' keyMap
+
+  handleCapsLockModeChange :: State -> IO State
+  handleCapsLockModeChange =
+    CrossThread.handleCapsLockModeChange dpy noise' keyMap
+
   -- Wait and extract event, make preparations and call handler
-  onEv :: (Keys.KeyName
-           -> XTypes.KeyCode
-           -> Bool
-           -> State.State
-           -> IO State.State)
-       -> IO ()
+  onEv :: (KeyName -> KeyCode -> Bool -> State -> IO State) -> IO ()
   onEv m = do
     evMaybe <- EvdevEvent.hReadEvent fd
     case evMaybe of
@@ -320,38 +332,41 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
                               _ -> Nothing
 
   -- Composed prepare actions
-  chain :: (Keys.KeyName, Bool)
-        -> (State.State -> IO State.State)
-        -> IO ()
-  chain (keyName, isPressed) = storeKey
+  chain :: (KeyName, Bool) -> (State -> IO State) -> IO ()
+  chain (keyName, isPressed) handleM = do
 
-    where throughState :: (State.State -> IO State.State) -> IO ()
-          throughState m = do
-            -- Log key user pressed (even if it's ignored or replaced)
-            let status = "pressed" <||> "released"
-             in noise $ format "{0} is {1}" [show keyName, status isPressed]
-            modifyMVar_ (State.stateMVar ctVars) m
+    -- Log key user pressed (even if it's ignored or replaced)
+    let status = "pressed" <||> "released"
+     in noise $ format "{0} is {1}" [show keyName, status isPressed]
 
-          -- Prevent doing anything when key state is the same
-          ignoreDuplicates :: (State.State -> IO State.State) -> IO ()
-          ignoreDuplicates m = throughState $ \state ->
+    let f :: State -> IO State
+        f = ignoreDuplicates
+         .> (>>= storeKey)
+         .> (>>= lift . handleM)
+         .> (>>= lift . handleCapsLockModeChange)
+         .> runFromBreakableT
+     in modifyMVar_ (State.stateMVar ctVars) f
+
+    where -- Prevent doing anything when key state is the same
+          ignoreDuplicates :: State -> BreakableT IO State
+          ignoreDuplicates state =
             let pressed     = state ^. State.pressedKeys'
                 isMember    = keyName `Set.member` pressed
                 isDuplicate = isPressed == isMember
-             in isDuplicate ? return state $ m state
+             in (isDuplicate ? breakTWith $ return) state
 
           -- Store key user pressed in state
-          storeKey :: (State.State -> IO State.State) -> IO ()
-          storeKey m = ignoreDuplicates $ \state ->
+          storeKey :: State -> BreakableT IO State
+          storeKey state =
             let action = isPressed ? Set.insert $ Set.delete
-             in state & State.pressedKeys' %~ action keyName & m
+             in return (state & State.pressedKeys' %~ action keyName)
 
   abstractRelease :: String -- `releaseMsg`
                   -> String -- `releaseItemMsgMask`
-                  -> (Keys.KeyName -> Bool) -- `splitter`
-                  -> (Keys.KeyName -> Maybe XTypes.KeyCode) -- `getter`
-                  -> Set.Set Keys.KeyName -- `pressed`
-                  -> IO (Set.Set Keys.KeyName) -- returns rest of `pressed`
+                  -> (KeyName -> Bool) -- `splitter`
+                  -> (KeyName -> Maybe KeyCode) -- `getter`
+                  -> Set KeyName -- `pressed`
+                  -> IO (Set KeyName) -- returns rest of `pressed`
   abstractRelease releaseMsg releaseItemMsgMask splitter getter pressed = do
     let (toRelease, rest) = Set.partition splitter pressed
     when (Set.size toRelease > 0) $ do
@@ -365,7 +380,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
   -- Release alternative keys.
   -- Useful when alternative mode turns off not by both alts
   -- and key could be still pressed.
-  releaseAlternative :: Set.Set Keys.KeyName -> IO (Set.Set Keys.KeyName)
+  releaseAlternative :: Set KeyName -> IO (Set KeyName)
   releaseAlternative = abstractRelease
     "Releasing alternative keys during turning alternative mode off..."
     "Releasing alternative {0} during turning alternative mode off..."
@@ -374,7 +389,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
 
   -- Release apple media keys.
   -- Useful when user released `FNKey` erlier than media key.
-  releaseAppleMedia :: Set.Set Keys.KeyName -> IO (Set.Set Keys.KeyName)
+  releaseAppleMedia :: Set KeyName -> IO (Set KeyName)
   releaseAppleMedia = abstractRelease
     ("Releasing held media keys of apple keyboard after "
       ++ show Keys.FNKey ++ " released...")
@@ -384,7 +399,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
     getMedia
 
   -- Simple triggering key user pressed to X server
-  trigger :: Keys.KeyName -> XTypes.KeyCode -> Bool -> IO ()
+  trigger :: KeyName -> KeyCode -> Bool -> IO ()
   trigger keyName keyCode isPressed = do
     let status = "pressing" <||> "releasing"
         msg = "Triggering {0} of {1} (X key code: {2})..."
@@ -392,7 +407,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
     fakeKeyCodeEvent dpy keyCode isPressed
 
   -- Triggering both press and release events to X server
-  pressRelease :: Keys.KeyName -> XTypes.KeyCode -> IO ()
+  pressRelease :: KeyName -> KeyCode -> IO ()
   pressRelease keyName keyCode = do
     let msg = "Triggering pressing and releasing of {0} (X key code: {1})..."
      in noise $ format msg [show keyName, show keyCode]
@@ -400,7 +415,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
 
   -- Triggering both press and release events to X server.
   -- Also write to log about to which key this key remapped.
-  asPressRelease :: Keys.KeyName -> XTypes.KeyCode -> IO ()
+  asPressRelease :: KeyName -> KeyCode -> IO ()
   asPressRelease keyName keyCode = do
     let msg = "Triggering pressing and releasing\
               \ of {0} as {1} (X key code: {2})..."

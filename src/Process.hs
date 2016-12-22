@@ -3,6 +3,7 @@
 
 {-# LANGUAGE DoAndIfThenElse #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE MultiWayIf #-}
 
 module Process
   ( initReset
@@ -14,6 +15,7 @@ module Process
 
 import Control.Monad (when, unless)
 import Control.Monad.State.Class (MonadState)
+import Control.Monad.Trans.Class (lift)
 import Control.Lens ((.~), (%~), (^.), set, over, view)
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.MVar (MVar, modifyMVar_)
@@ -34,6 +36,10 @@ import Utils ( (&), (.>), (<||>), (?)
              , nextEvent'
              , dieWith
              , writeToFd
+
+             , BreakableT
+             , runFromBreakableT
+             , breakT, breakTOn, breakTOnWith, continueT
              )
 import Bindings.Xkb (xkbSetGroup)
 import Bindings.MoreXlib (getLeds, lockDisplay, unlockDisplay)
@@ -43,6 +49,14 @@ import qualified State
 import qualified Keys
 
 import Process.Keyboard (handleKeyboard)
+import qualified Process.CrossThread as CrossThread
+  (turnCapsLockMode, justTurnCapsLockMode)
+
+type Options         = O.Options
+type KeyMap          = Keys.KeyMap
+type State           = State.State
+type LedModes        = State.LedModes
+type CrossThreadVars = State.CrossThreadVars
 
 
 resetKbdLayout :: Display -> IO ()
@@ -53,11 +67,14 @@ resetKbdLayout dpy =
     >> unlockDisplay dpy
 
 
-initReset :: O.Options -> Keys.KeyMap -> Display -> Window -> IO ()
+initReset :: Options -> KeyMap -> Display -> Window -> IO ()
 initReset opts keyMap dpy rootWnd = do
 
   noise "Initial resetting of keyboard layout..."
   resetKbdLayout dpy
+
+  noise "Initial resetting Caps Lock mode..."
+  justTurnCapsLockMode False
 
   let xmobarFd = opts ^. O.xmobarPipeFd'
   when (isJust xmobarFd) $ do
@@ -68,75 +85,69 @@ initReset opts keyMap dpy rootWnd = do
     writeToFd fd "alternative:off\n"
 
   where noise = O.noise opts
+        justTurnCapsLockMode =
+          CrossThread.justTurnCapsLockMode dpy noise keyMap
 
 
-processXEvents :: State.CrossThreadVars
-               -> O.Options
-               -> Keys.KeyMap
+processXEvents :: CrossThreadVars
+               -> Options
+               -> KeyMap
                -> Display
                -> Window
                -> IO ()
-processXEvents ctVars opts keyMap dpy rootWnd = process $ \wnd -> do
+processXEvents ctVars opts keyMap dpy rootWnd = runFromBreakableT $ do
 
-  XEvent.sync dpy False
-  XEvent.selectInput dpy wnd XTypes.focusChangeMask
+  (wnd, _) <- lift $ getInputFocus dpy
+  breakTOn $ wnd == rootWnd
 
-  evPtr <- XEvent.allocaXEvent return
-  noise "Waiting for next X event..."
+  lift $ XEvent.sync dpy False
+  lift $ XEvent.selectInput dpy wnd XTypes.focusChangeMask
 
-  nextEvent dpy evPtr
-  ev <- XExtras.getEvent evPtr
+  evPtr <- lift $ XEvent.allocaXEvent return
+  lift $ noise "Waiting for next X event..."
 
-  dealMap (XExtras.eventName ev) evPtr
+  lift $ nextEvent dpy evPtr
+  ev <- lift $ XExtras.getEvent evPtr
+  let evName = XExtras.eventName ev
+
+  if
+   | evName `elem` ["FocusIn", "FocusOut"] -> do
+     let m f = modifyMVar_ (State.stateMVar ctVars) (runFromBreakableT . f)
+     lift $ m $ \state -> do
+
+       lift $ noise $ "Handling focus event: " ++ evName ++ "..."
+
+       let lastWnd = State.lastWindow state
+       curWnd <- lift $ XEvent.get_Window evPtr
+
+       breakTOnWith (curWnd == lastWnd || evName /= "FocusOut") state
+
+       lift $ noise "Resetting keyboard layout..."
+       lift $ resetKbdLayout dpy
+
+       state <- do
+         lift $ noise "Resetting Caps Lock mode..."
+         lift $ turnCapsLockMode state False
+
+       lift $ noise $ format "Window focus moved from {0} to {1}"
+                             [show lastWnd, show curWnd]
+       return $ state { State.lastWindow = curWnd }
+
+   | otherwise -> return ()
 
   where nextEvent = nextEvent'
 
-        noise :: String -> IO ()
-        noise = Actions.noise opts ctVars
+        noise  = Actions.noise  opts ctVars ::  String  -> IO ()
+        noise' = Actions.noise' opts ctVars :: [String] -> IO ()
 
-        process :: (Window -> IO ()) -> IO ()
-        process m =
-          fmap fst (getInputFocus dpy)
-            >>= (\wnd -> when (wnd /= rootWnd) $ m wnd)
-
-        dealMap :: String -> XEvent.XEventPtr -> IO ()
-        dealMap evName evPtr
-          | evName `elem` ["FocusIn", "FocusOut"] =
-              processXFocusEvent evName evPtr
-          | otherwise = return ()
-
-        processXFocusEvent :: String -> XEvent.XEventPtr -> IO ()
-        processXFocusEvent evName evPtr = f $ \prevState -> do
-
-          noise $ "Handling focus event: " ++ evName ++ "..."
-
-          let lastWnd = State.lastWindow prevState
-          curWnd <- XEvent.get_Window evPtr
-
-          when (evName == "FocusOut") $ do
-            noise "Resetting keyboard layout..."
-            resetKbdLayout dpy
-
-          if curWnd == lastWnd
-             then return prevState
-             else do
-               noise $ format "Window focus moved from {0} to {1}"
-                              [show lastWnd, show curWnd]
-               return $ prevState { State.lastWindow = curWnd }
-
-          where f :: (State.State -> IO State.State) -> IO ()
-                f = modifyMVar_ $ State.stateMVar ctVars
+        turnCapsLockMode :: State -> Bool -> IO State
+        turnCapsLockMode = CrossThread.turnCapsLockMode dpy noise' keyMap
 
 
 -- FIXME waiting in blocking-mode for new leds event
 -- Watch for new leds state and when new leds state is coming
 -- store it in State, notify xmobar pipe and log.
-watchLeds :: State.CrossThreadVars
-          -> O.Options
-          -> Keys.KeyMap
-          -> Display
-          -> Window
-          -> IO ()
+watchLeds :: CrossThreadVars -> Options -> KeyMap -> Display -> Window -> IO ()
 watchLeds ctVars opts keyMap dpy rootWnd = f $ \leds prevState -> do
 
   let prevCapsLock = prevState ^. State.leds' . State.capsLockLed'
@@ -156,15 +167,11 @@ watchLeds ctVars opts keyMap dpy rootWnd = f $ \leds prevState -> do
 
   return (prevState & State.leds' .~ leds)
 
-  where noise :: String -> IO ()
-        noise = Actions.noise opts ctVars
+  where noise = Actions.noise opts ctVars         :: String -> IO ()
+        notify = Actions.notifyXmobar opts ctVars :: String -> IO ()
+        notifyStatus = "on\n" <||> "off\n"        :: Bool -> String
 
-        notifyStatus = "on\n" <||> "off\n"
-
-        notify :: String -> IO ()
-        notify = Actions.notifyXmobar opts ctVars
-
-        f :: (State.LedModes -> State.State -> IO State.State) -> IO ()
+        f :: (LedModes -> State -> IO State) -> IO ()
         f m = do
           leds <- getLeds dpy
           modifyMVar_ (State.stateMVar ctVars) (m leds)

@@ -20,6 +20,9 @@ import Graphics.X11.Types (Window)
 import Control.DeepSeq (NFData, rnf, deepseq)
 import Control.Concurrent.MVar (MVar)
 import Control.Concurrent.Chan (Chan)
+
+import Data.Maybe (Maybe(Just, Nothing))
+import Data.Default (Default, def)
 import qualified Data.Set as Set
 
 import Utils (makeApoClassy)
@@ -45,6 +48,15 @@ instance NFData State where
     comboState  x `deepseq`
       ()
 
+instance Default State where
+  def = State
+    { lastWindow  = undefined -- Must be overwritten
+    , pressedKeys = Set.empty
+    , leds        = def
+    , alternative = False
+    , comboState  = def
+    }
+
 
 data LedModes =
   LedModes { capsLockLed :: Bool
@@ -58,6 +70,11 @@ instance NFData LedModes where
     numLockLed  x `seq`
       ()
 
+instance Default LedModes where
+  def = LedModes
+    { capsLockLed = False
+    , numLockLed  = False
+    }
 
 data ComboState =
   ComboState { appleMediaPressed :: Bool
@@ -72,6 +89,10 @@ data ComboState =
              -- and pressed with modifiers like for example
              -- Shift+Enter or Alt+Enter.
              , isEnterPressedWithMods :: Bool
+
+             -- CapsLock will be changed to specified state
+             -- after all currently pressed keys will be released.
+             , capsLockModeChange :: Maybe Bool
              }
   deriving (Show, Eq, Generic)
 
@@ -81,30 +102,21 @@ instance NFData ComboState where
     isCapsLockUsedWithCombos x `seq`
     isEnterUsedWithCombos    x `seq`
     isEnterPressedWithMods   x `seq`
+    capsLockModeChange       x `deepseq`
       ()
+
+instance Default ComboState where
+  def = ComboState
+    { appleMediaPressed        = False
+    , isCapsLockUsedWithCombos = False
+    , isEnterUsedWithCombos    = False
+    , isEnterPressedWithMods   = False
+    , capsLockModeChange       = Nothing
+    }
 
 
 initState :: Window -> State
-initState wnd =
-  State { lastWindow  = wnd
-        , pressedKeys = Set.empty
-        , leds        = defaultLedModes
-        , alternative = False
-        , comboState  = defaultComboState
-        }
-
-defaultLedModes :: LedModes
-defaultLedModes = LedModes { capsLockLed = False
-                           , numLockLed  = False
-                           }
-
-defaultComboState :: ComboState
-defaultComboState =
-  ComboState { appleMediaPressed        = False
-             , isCapsLockUsedWithCombos = False
-             , isEnterUsedWithCombos    = False
-             , isEnterPressedWithMods   = False
-             }
+initState wnd = def { lastWindow = wnd }
 
 
 data CrossThreadVars =

@@ -12,6 +12,7 @@ import System.Directory (doesFileExist)
 
 import Control.DeepSeq (deepseq, force)
 import qualified Control.Monad.State as St
+import Control.Monad.Trans.Class (lift)
 import Control.Monad (when, unless, filterM, forever, forM_)
 import Control.Lens ((.~), (%~), (^.), set, over, view)
 import Control.Concurrent (forkIO, threadDelay)
@@ -222,12 +223,12 @@ main = do
         extractAvailableDevices :: O.Options -> IO O.Options
         extractAvailableDevices opts = flip St.execStateT opts $
           fmap (^. O.handleDevicePath') St.get
-            >>= St.lift . filterM doesFileExist
-            >>= St.lift . checkForCount
+            >>= lift . filterM doesFileExist
+            >>= lift . checkForCount
             >>= updateStateM' logAndStoreAvailable
             >>= liftBetween
                   (noise "Opening devices files descriptors for reading...")
-            >>= St.lift . mapM (flip IOHandleFD.openFile SysIO.ReadMode)
+            >>= lift . mapM (flip IOHandleFD.openFile SysIO.ReadMode)
             >>= updateState' (flip $ set O.handleDeviceFd')
 
           where noise = O.noise opts
@@ -237,7 +238,7 @@ main = do
                 logAndStoreAvailable state files = do
                   let devicesList = foldr (("\n  " ++) .> (++)) "" files
                       title = "Devices that will be handled:"
-                   in St.lift $ noise $ title ++ devicesList
+                   in lift $ noise $ title ++ devicesList
                   return (state & O.availableDevices' .~ files)
 
                 -- Checks if we have at least one available device
@@ -249,7 +250,7 @@ main = do
                             \is unavailable!"
                   return files
 
-        -- Opens xmobar pipe file descriptor for writing.
+        -- Opens xmobar pipe file descriptor for writing
         extractPipeFd :: O.Options -> IO O.Options
         extractPipeFd opts =
           whenHasFile (opts ^. O.xmobarPipeFile') $ \file -> do
@@ -265,9 +266,9 @@ main = do
                 whenHasFile (Just file) m = m file
                 whenHasFile Nothing     _ = return opts
 
-        -- Lift up a monad and return back original state.
+        -- Lift up a monad and return back original value
         liftBetween :: Monad m => m () -> a -> St.StateT s m a
-        liftBetween monad x = St.lift monad >> return x
+        liftBetween monad x = lift monad >> return x
 
         -- Completely parse input arguments and returns options
         -- data structure based on them.
