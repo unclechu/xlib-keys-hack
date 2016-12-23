@@ -4,6 +4,7 @@
 {-# LANGUAGE DoAndIfThenElse #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE PackageImports #-}
 
 module Process
   ( initReset
@@ -13,24 +14,26 @@ module Process
   ) where
 
 
-import Control.Monad (when, unless)
-import Control.Monad.State.Class (MonadState)
-import Control.Monad.Trans.Class (lift)
-import Control.Lens ((.~), (%~), (^.), set, over, view)
-import Control.Concurrent (threadDelay)
-import Control.Concurrent.MVar (MVar, modifyMVar_)
-import Control.Concurrent.Chan (Chan)
+import "base" Control.Monad (when, unless)
+import "mtl" Control.Monad.State.Class (MonadState)
+import "transformers" Control.Monad.Trans.Class (lift)
+import "lens" Control.Lens ((.~), (%~), (^.), set, over, view)
+import "base" Control.Concurrent (threadDelay)
+import "base" Control.Concurrent.MVar (MVar, modifyMVar_)
+import "base" Control.Concurrent.Chan (Chan)
 
-import Data.Maybe (Maybe(Just, Nothing), fromJust, isJust)
-import Text.Format (format)
+import "base" Data.Maybe (Maybe(Just, Nothing), fromJust, isJust)
+import "text-format-simple" Text.Format (format)
 
-import qualified Graphics.X11.Types       as XTypes
-import qualified Graphics.X11.ExtraTypes  as XTypes
-import qualified Graphics.X11.Xlib.Event  as XEvent
-import qualified Graphics.X11.Xlib.Extras as XExtras
-import Graphics.X11.Xlib.Misc (getInputFocus)
-import Graphics.X11.Xlib.Types (Display)
-import Graphics.X11.Types (Window)
+import qualified "X11" Graphics.X11.Types       as XTypes
+import qualified "X11" Graphics.X11.ExtraTypes  as XTypes
+import qualified "X11" Graphics.X11.Xlib.Event  as XEvent
+import qualified "X11" Graphics.X11.Xlib.Extras as XExtras
+import "X11" Graphics.X11.Xlib.Misc (getInputFocus)
+import "X11" Graphics.X11.Xlib.Types (Display)
+import "X11" Graphics.X11.Types (Window)
+
+-- local imports
 
 import Utils ( (&), (.>), (<||>), (?)
              , nextEvent'
@@ -51,6 +54,7 @@ import qualified Keys
 import Process.Keyboard (handleKeyboard)
 import qualified Process.CrossThread as CrossThread
   (turnCapsLockMode, justTurnCapsLockMode)
+
 
 type Options         = O.Options
 type KeyMap          = Keys.KeyMap

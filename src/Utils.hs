@@ -2,6 +2,7 @@
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE PackageImports #-}
 
 module Utils
   ( (&), (.>), (<&>) -- pipes
@@ -32,29 +33,29 @@ module Utils
   , fromBreackableT
   ) where
 
-import Graphics.X11.Xlib (pending)
-import Graphics.X11.Xlib.Types (Display)
-import qualified Graphics.X11.Xlib.Event as XEvent
-import Graphics.X11.Xlib.Display (connectionNumber)
+import "X11" Graphics.X11.Xlib (pending)
+import "X11" Graphics.X11.Xlib.Types (Display)
+import qualified "X11" Graphics.X11.Xlib.Event as XEvent
+import "X11" Graphics.X11.Xlib.Display (connectionNumber)
 
-import Control.Concurrent (threadWaitRead)
-import qualified Control.Monad.State as St (get, put)
-import Control.Monad.State.Class (MonadState)
-import Control.Monad.Trans.Either (EitherT, runEitherT, left)
+import "base" Control.Concurrent (threadWaitRead)
+import qualified "mtl" Control.Monad.State as St (get, put)
+import "mtl" Control.Monad.State.Class (MonadState)
+import "either" Control.Monad.Trans.Either (EitherT, runEitherT, left)
 
-import System.Posix.Types (Fd(Fd))
-import System.IO (hPutStrLn, hPutStr, stderr)
-import qualified GHC.IO.Handle as IOHandle
+import "base" System.Posix.Types (Fd(Fd))
+import "base" System.IO (hPutStrLn, hPutStr, stderr)
+import qualified "base" GHC.IO.Handle as IOHandle
 
-import qualified Language.Haskell.TH as TH
+import qualified "template-haskell" Language.Haskell.TH as TH
 
-import Control.Lens ((.~))
-import qualified Control.Lens.TH as LTH
-import Control.Applicative ((<$>))
+import "lens" Control.Lens ((.~))
+import qualified "lens" Control.Lens.TH as LTH
+import "base" Control.Applicative ((<$>))
 
-import Data.Either (Either(Left, Right), either)
-import Data.Maybe (Maybe(Nothing, Just))
-import Data.Char (toLower)
+import "base" Data.Either (Either(Left, Right), either)
+import "base" Data.Maybe (Maybe(Nothing, Just))
+import "base" Data.Char (toLower)
 
 
 -- Pipe operator.

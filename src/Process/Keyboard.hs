@@ -4,28 +4,31 @@
 {-# LANGUAGE ImpredicativeTypes #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE PackageImports #-}
 
 module Process.Keyboard
   ( handleKeyboard
   ) where
 
-import qualified GHC.IO.Handle as IOHandle
-import qualified System.Linux.Input.Event as EvdevEvent
+import qualified "base" GHC.IO.Handle as IOHandle
+import qualified "linux-evdev" System.Linux.Input.Event as EvdevEvent
 
-import Control.Monad.Trans.Class (lift)
-import Control.Monad (when, unless, forM_)
-import Control.Lens ((.~), (%~), (^.), set, over, view, Lens')
-import Control.Concurrent.MVar (MVar, modifyMVar_)
-import Control.Concurrent.Chan (Chan)
+import "transformers" Control.Monad.Trans.Class (lift)
+import "base" Control.Monad (when, unless, forM_)
+import "lens" Control.Lens ((.~), (%~), (^.), set, over, view, Lens')
+import "base" Control.Concurrent.MVar (MVar, modifyMVar_)
+import "base" Control.Concurrent.Chan (Chan)
 
-import Data.Maybe (Maybe(Just, Nothing), fromJust, isJust)
-import qualified Data.Set as Set
-import Text.Format (format)
+import "base" Data.Maybe (Maybe(Just, Nothing), fromJust, isJust)
+import qualified "containers" Data.Set as Set
+import "text-format-simple" Text.Format (format)
 
-import qualified Graphics.X11.Types       as XTypes
-import qualified Graphics.X11.ExtraTypes  as XTypes
-import Graphics.X11.Xlib.Types (Display)
-import Graphics.X11.Types (Window)
+import qualified "X11" Graphics.X11.Types      as XTypes
+import qualified "X11" Graphics.X11.ExtraTypes as XTypes
+import "X11" Graphics.X11.Xlib.Types (Display)
+import "X11" Graphics.X11.Types (Window)
+
+-- local imports
 
 import Utils ( (&), (.>), (<||>), (?)
              , BreakableT, runFromBreakableT, breakTWith, continueTWith
@@ -38,6 +41,7 @@ import qualified Keys
 
 import qualified Process.CrossThread as CrossThread
   (toggleCapsLock, handleCapsLockModeChange)
+
 
 type KeyCode         = XTypes.KeyCode
 type Handle          = IOHandle.Handle

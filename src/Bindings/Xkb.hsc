@@ -3,6 +3,7 @@
 
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE PackageImports #-}
 
 module Bindings.Xkb
   ( xkbGetDescPtr
@@ -13,14 +14,17 @@ module Bindings.Xkb
   , xkbSetGroup
   ) where
 
-import Foreign
-import Foreign.Ptr (nullPtr)
-import qualified Foreign.Marshal.Alloc as MAlloc
-import qualified Foreign.C.Types as CTypes
-import qualified Data.Either as Either
+import "base" Foreign
+import "base" Foreign.Ptr (nullPtr)
+import qualified "base" Foreign.Marshal.Alloc as MAlloc
+import qualified "base" Foreign.C.Types as CTypes
 
-import Graphics.X11.Xlib.Types (Display(Display))
-import qualified Graphics.X11.Types as XTypes
+import qualified "base" Data.Either as Either
+
+import "X11" Graphics.X11.Xlib.Types (Display(Display))
+import qualified "X11" Graphics.X11.Types as XTypes
+
+-- local imports
 
 import qualified Bindings.Xkb.Types as XkbTypes
 

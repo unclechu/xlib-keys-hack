@@ -2,23 +2,23 @@
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
 {-# LANGUAGE ForeignFunctionInterface #-}
+{-# LANGUAGE PackageImports #-}
 
 module Bindings.XTest
   ( fakeKeyEvent
   , fakeKeyCodeEvent
   ) where
 
-import Control.Monad (when)
-import Foreign.C.Types ( CULong(CULong)
-                       , CInt(CInt)
-                       )
-import Graphics.X11.Xlib ( Display(Display)
-                         , KeyCode
-                         , Status
-                         , KeySym
-                         , sync
-                         )
-import Graphics.X11.Xlib.Misc (keysymToKeycode)
+import "base" Control.Monad (when)
+import "base" Foreign.C.Types (CULong(CULong), CInt(CInt))
+import "X11" Graphics.X11.Xlib ( Display(Display)
+                               , KeyCode
+                               , Status
+                               , KeySym
+                               , sync
+                               )
+import "X11" Graphics.X11.Xlib.Misc (keysymToKeycode)
+
 
 foreign import ccall unsafe "X11/extensions/XTest.h XTestFakeKeyEvent"
   xFakeKeyEvent :: Display -> KeyCode -> Bool -> CULong -> IO Status

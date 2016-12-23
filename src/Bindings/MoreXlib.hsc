@@ -3,6 +3,7 @@
 
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE PackageImports #-}
 
 module Bindings.MoreXlib
   ( getLeds
@@ -11,17 +12,18 @@ module Bindings.MoreXlib
   , unlockDisplay
   ) where
 
+import "base" Foreign
+import "base" Foreign.Storable as Storable
+import qualified "base" Foreign.C.Types as CTypes
+import qualified "base" Foreign.Marshal.Alloc as MAlloc
 
-import Foreign
-import Foreign.Storable as Storable
-import qualified Foreign.C.Types as CTypes
-import qualified Foreign.Marshal.Alloc as MAlloc
+import "X11" Graphics.X11.Xlib.Types (Display(Display))
 
-import Graphics.X11.Xlib.Types (Display(Display))
+import "base" Control.Monad (when, unless)
 
-import Control.Monad (when, unless)
+import "base" Data.Bits ((.&.))
 
-import Data.Bits ((.&.))
+-- local imports
 
 import Utils ((&), (.>), dieWith)
 import State (LedModes(..))

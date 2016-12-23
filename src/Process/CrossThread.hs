@@ -2,6 +2,7 @@
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE PackageImports #-}
 
 module Process.CrossThread
   ( toggleCapsLock
@@ -10,14 +11,16 @@ module Process.CrossThread
   , justTurnCapsLockMode
   ) where
 
-import Graphics.X11.Xlib.Types (Display)
+import "X11" Graphics.X11.Xlib.Types (Display)
 
-import Control.Monad.Trans.Class (lift)
-import Control.Lens ((.~), (%~), (^.), set, over, view, Lens')
+import "transformers" Control.Monad.Trans.Class (lift)
+import "lens" Control.Lens ((.~), (%~), (^.), set, over, view, Lens')
 
-import qualified Data.Set as Set (null)
-import Data.Maybe (Maybe(Just, Nothing), fromJust, isJust, maybe)
-import Text.Format (format)
+import qualified "containers" Data.Set as Set (null)
+import "base" Data.Maybe (Maybe(Just, Nothing), fromJust, isJust, maybe)
+import "text-format-simple" Text.Format (format)
+
+-- local imports
 
 import Utils ( (?), (<||>), (&), (.>)
              , BreakableT
@@ -29,6 +32,7 @@ import Bindings.XTest (fakeKeyCodeEvent)
 import Bindings.MoreXlib (getLeds)
 import qualified State
 import qualified Keys
+
 
 type State  = State.State
 type Noiser = [String] -> IO ()

@@ -3,6 +3,7 @@
 
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE PackageImports #-}
 
 module State
   ( State(..),      HasState(..)
@@ -14,16 +15,18 @@ module State
   , initState
   ) where
 
-import GHC.Generics (Generic)
-import Graphics.X11.Types (Window)
+import "base" GHC.Generics (Generic)
+import "X11" Graphics.X11.Types (Window)
 
-import Control.DeepSeq (NFData, rnf, deepseq)
-import Control.Concurrent.MVar (MVar)
-import Control.Concurrent.Chan (Chan)
+import "deepseq" Control.DeepSeq (NFData, rnf, deepseq)
+import "base" Control.Concurrent.MVar (MVar)
+import "base" Control.Concurrent.Chan (Chan)
 
-import Data.Maybe (Maybe(Just, Nothing))
-import Data.Default (Default, def)
-import qualified Data.Set as Set
+import "base" Data.Maybe (Maybe(Just, Nothing))
+import "data-default" Data.Default (Default, def)
+import qualified "containers" Data.Set as Set
+
+-- local imports
 
 import Utils (makeApoClassy)
 import Actions.Types (ActionType)

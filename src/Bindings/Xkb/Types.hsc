@@ -2,6 +2,7 @@
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
 {-# LANGUAGE ForeignFunctionInterface #-}
+{-# LANGUAGE PackageImports #-}
 
 module Bindings.Xkb.Types
   ( KeyCode
@@ -10,12 +11,11 @@ module Bindings.Xkb.Types
   , XkbControlsRec(..)
   ) where
 
+import "base" Foreign
+import "base" Foreign.Storable as Storable
+import qualified "base" Foreign.C.Types as CTypes
 
-import Foreign
-import Foreign.Storable as Storable
-import qualified Foreign.C.Types as CTypes
-
-import Graphics.X11.Xlib.Types (Display(Display))
+import "X11" Graphics.X11.Xlib.Types (Display(Display))
 
 
 #include <X11/XKBlib.h>

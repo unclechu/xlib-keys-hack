@@ -1,6 +1,8 @@
 -- Author: Viacheslav Lotsmanov
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
+{-# LANGUAGE PackageImports #-}
+
 module Actions
   ( ActionType(..), HasActionType(..)
   , Action(..),     HasAction(..)
@@ -10,11 +12,13 @@ module Actions
   , notifyXmobar, notifyXmobar'
   ) where
 
-import Control.Monad (when, unless)
-import Control.Concurrent.Chan (writeChan)
-import Control.Lens ((.~), (%~), (^.), set, over, view)
+import "base" Control.Monad (when, unless)
+import "base" Control.Concurrent.Chan (writeChan)
+import "lens" Control.Lens ((.~), (%~), (^.), set, over, view)
 
-import Data.Maybe (isJust)
+import "base" Data.Maybe (isJust)
+
+-- local imports
 
 import Utils (makeApoClassy)
 import qualified Options as O

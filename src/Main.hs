@@ -3,35 +3,38 @@
 
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE PackageImports #-}
 
 module Main (main) where
 
-import System.Exit (exitFailure, exitSuccess)
-import System.Environment (getArgs)
-import System.Directory (doesFileExist)
+import "base" System.Exit (exitFailure, exitSuccess)
+import "base" System.Environment (getArgs)
+import "directory" System.Directory (doesFileExist)
 
-import Control.DeepSeq (deepseq, force)
-import qualified Control.Monad.State as St
-import Control.Monad.Trans.Class (lift)
-import Control.Monad (when, unless, filterM, forever, forM_)
-import Control.Lens ((.~), (%~), (^.), set, over, view)
-import Control.Concurrent (forkIO, threadDelay)
-import Control.Concurrent.MVar (newMVar)
-import Control.Concurrent.Chan (Chan, newChan, readChan)
+import "deepseq" Control.DeepSeq (deepseq, force)
+import qualified "mtl" Control.Monad.State as St
+import "transformers" Control.Monad.Trans.Class (lift)
+import "base" Control.Monad (when, unless, filterM, forever, forM_)
+import "lens" Control.Lens ((.~), (%~), (^.), set, over, view)
+import "base" Control.Concurrent (forkIO, threadDelay)
+import "base" Control.Concurrent.MVar (newMVar)
+import "base" Control.Concurrent.Chan (Chan, newChan, readChan)
 
-import Data.Either (Either(Left, Right), either)
-import Data.Maybe (Maybe(Nothing, Just), fromJust, isJust)
+import "base" Data.Either (Either(Left, Right), either)
+import "base" Data.Maybe (Maybe(Nothing, Just), fromJust, isJust)
 
-import qualified Graphics.X11.Types       as XTypes
-import qualified Graphics.X11.ExtraTypes  as XTypes
-import qualified Graphics.X11.Xlib.Extras as XExtras
-import Graphics.X11.Types (Window)
-import Graphics.X11.Xlib.Types (Display)
-import Graphics.X11.Xlib.Display (defaultRootWindow)
-import Graphics.X11.Xlib.Misc (keysymToKeycode)
+import qualified "X11" Graphics.X11.Types       as XTypes
+import qualified "X11" Graphics.X11.ExtraTypes  as XTypes
+import qualified "X11" Graphics.X11.Xlib.Extras as XExtras
+import "X11" Graphics.X11.Types (Window)
+import "X11" Graphics.X11.Xlib.Types (Display)
+import "X11" Graphics.X11.Xlib.Display (defaultRootWindow)
+import "X11" Graphics.X11.Xlib.Misc (keysymToKeycode)
 
-import qualified System.IO as SysIO
-import qualified GHC.IO.Handle.FD as IOHandleFD
+import qualified "base" System.IO as SysIO
+import qualified "base" GHC.IO.Handle.FD as IOHandleFD
+
+-- local imports
 
 import Utils ( (&), (.>)
              , errPutStrLn

@@ -3,6 +3,7 @@
 
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE PackageImports #-}
 
 module Keys
   ( KeyName(..)
@@ -25,20 +26,23 @@ module Keys
   ) where
 
 import Prelude hiding (lookup)
-import GHC.Generics (Generic)
 
-import Graphics.X11.Types (KeyCode)
-import System.Linux.Input.Event (Key(Key))
+import "base" GHC.Generics (Generic)
 
-import Control.DeepSeq (NFData, rnf, deepseq)
+import "X11" Graphics.X11.Types (KeyCode)
+import "linux-evdev" System.Linux.Input.Event (Key(Key))
 
-import Data.Map.Strict ( Map, (!), fromList, toList, lookup, empty, member
-                       , insert
-                       )
-import qualified Data.Map.Strict as Map
-import qualified Data.Set as Set
-import Data.Maybe (Maybe(Nothing, Just))
-import Data.Word (Word16)
+import "deepseq" Control.DeepSeq (NFData, rnf, deepseq)
+
+import "containers" Data.Map.Strict ( Map, (!), fromList, toList
+                                    , lookup, empty, member, insert
+                                    )
+import qualified "containers" Data.Map.Strict as Map
+import qualified "containers" Data.Set as Set
+import "base" Data.Maybe (Maybe(Nothing, Just))
+import "base" Data.Word (Word16)
+
+-- local imports
 
 import Utils ((&), (<&>), (?), makeApoClassy)
 import qualified Options as O

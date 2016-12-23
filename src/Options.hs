@@ -5,6 +5,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE PackageImports #-}
 
 module Options
   ( Options(..)
@@ -14,16 +15,18 @@ module Options
   , noise
   ) where
 
-import GHC.Generics (Generic)
-import qualified GHC.IO.Handle as IOHandle
-import qualified System.Console.GetOpt as GetOpt
+import "base" GHC.Generics (Generic)
+import qualified "base" GHC.IO.Handle as IOHandle
+import qualified "base" System.Console.GetOpt as GetOpt
 
-import Control.Lens ((.~), (%~), (^.), set, over, view)
-import Control.DeepSeq (NFData, rnf, deepseq)
+import "lens" Control.Lens ((.~), (%~), (^.), set, over, view)
+import "deepseq" Control.DeepSeq (NFData, rnf, deepseq)
 
-import Data.Either (Either(Left, Right))
-import Data.Maybe (Maybe(Just, Nothing), fromJust, fromMaybe)
-import Data.Default (Default, def)
+import "base" Data.Either (Either(Left, Right))
+import "base" Data.Maybe (Maybe(Just, Nothing), fromJust, fromMaybe)
+import "data-default" Data.Default (Default, def)
+
+-- local imports
 
 import Utils ((&), (.>), makeApoClassy)
 

@@ -4,24 +4,27 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE PackageImports #-}
 
 module XInput
   ( getAvailable
   , disable
   ) where
 
-import System.Exit (ExitCode(ExitSuccess, ExitFailure))
-import qualified System.Process as P
+import "base" System.Exit (ExitCode(ExitSuccess, ExitFailure))
+import qualified "process" System.Process as P
 
-import qualified Control.Monad.State as St
-import Control.Monad.State.Class (MonadState)
-import Control.Monad (when, unless)
-import Control.Lens ( (.~), (%~), (^.), (.=), (&~)
-                    , set, over, view
-                    )
+import qualified "mtl" Control.Monad.State as St
+import "mtl" Control.Monad.State.Class (MonadState)
+import "base" Control.Monad (when, unless)
+import "lens" Control.Lens ( (.~), (%~), (^.), (.=), (&~)
+                           , set, over, view
+                           )
 
-import Data.Maybe (Maybe(Just, Nothing))
-import Data.Set (toList, fromList, insert, difference)
+import "base" Data.Maybe (Maybe(Just, Nothing))
+import "containers" Data.Set (toList, fromList, insert, difference)
+
+-- local imports
 
 import qualified Options as O
 import Utils (errPutStrLn, errPutStr, dieWith, (&), (.>), updateState')
