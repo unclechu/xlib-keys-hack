@@ -33,20 +33,20 @@ executable xlib-keys-hack
                      , Utils
                      , Keys
   -- other-extensions:
-  build-depends:       base >=4.7 && <4.8
-                     , X11 >=1.6 && <1.7
-                     , lens >=4.15 && <4.16
-                     , template-haskell >=2.9 && <2.10
-                     , linux-evdev ==0.3.2
-                     , directory >=1.2 && <1.3
-                     , process >=1.4 && <1.5
-                     , mtl >=2.2 && <2.3
-                     , containers ==0.5.5.1
-                     , deepseq >=1.3 && <1.4
-                     , text-format-simple >=1.0 && <1.1
-                     , data-default ==0.7.1.1
-                     , either >=4.4.1.1 && <4.5
-                     , transformers ==0.5.2.0
+  build-depends:       base
+                     , X11
+                     , lens
+                     , template-haskell
+                     , linux-evdev
+                     , directory
+                     , process
+                     , mtl
+                     , containers
+                     , deepseq
+                     , text-format-simple
+                     , data-default
+                     , either
+                     , transformers
   build-tools:         hsc2hs
   extra-libraries:     "Xtst"
   hs-source-dirs:      src
