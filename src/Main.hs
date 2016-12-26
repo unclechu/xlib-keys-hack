@@ -4,6 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE PackageImports #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module Main (main) where
 
@@ -13,6 +14,7 @@ import "directory" System.Directory (doesFileExist)
 
 import "deepseq" Control.DeepSeq (deepseq, force)
 import qualified "mtl" Control.Monad.State as St
+import "mtl" Control.Monad.State (StateT, execStateT)
 import "transformers" Control.Monad.Trans.Class (lift)
 import "base" Control.Monad (when, unless, filterM, forever, forM_)
 import "lens" Control.Lens ((.~), (%~), (^.), set, over, view)
@@ -20,8 +22,7 @@ import "base" Control.Concurrent (forkIO, threadDelay)
 import "base" Control.Concurrent.MVar (newMVar)
 import "base" Control.Concurrent.Chan (Chan, newChan, readChan)
 
-import "base" Data.Either (Either(Left, Right), either)
-import "base" Data.Maybe (Maybe(Nothing, Just), fromJust, isJust)
+import "base" Data.Maybe (fromJust, isJust)
 
 import qualified "X11" Graphics.X11.Types       as XTypes
 import qualified "X11" Graphics.X11.ExtraTypes  as XTypes
@@ -43,6 +44,7 @@ import Utils ( (&), (.>)
              , updateStateM'
              , writeToFd
              )
+import Utils.String (qm)
 import Bindings.Xkb ( xkbGetDescPtr
                     , xkbFetchControls
                     , xkbGetGroupsCount
@@ -56,9 +58,17 @@ import Process ( initReset
                )
 import qualified Options as O
 import qualified XInput
-import qualified State
+import State ( CrossThreadVars(CrossThreadVars, stateMVar, actionsChan)
+             , initState
+             )
 import qualified Actions
 import qualified Keys
+
+
+type Options = O.Options
+type KeyMap  = Keys.KeyMap
+type KeyName = Keys.KeyName
+type KeyCode = XTypes.KeyCode
 
 
 -- Initializes Xlib and Xkb and checks if everything is okay
@@ -67,10 +77,10 @@ xkbInit :: IO Display
 xkbInit = do
 
   (dpy :: Display) <- xkbGetDisplay >>= flip either return
-    (\err -> dieWith $ "Xkb open display error: " ++ show err)
+    (\err -> dieWith [qm|Xkb open display error: {err}|])
 
   xkbDescPtr <- xkbGetDescPtr dpy >>= flip either return
-    (\err -> dieWith $ "Xkb error: get keyboard data error" ++ show err)
+    (\err -> dieWith [qm|Xkb error: get keyboard data error: {err}|])
 
   xkbFetchControls dpy xkbDescPtr
     >>= flip unless (dieWith "Xkb error: fetch controls error")
@@ -106,7 +116,7 @@ main = do
 
 
   noise "Dynamically getting media keys X key codes..."
-  (mediaKeysAliases :: [(Keys.KeyName, XTypes.KeyCode)]) <- mapM
+  (mediaKeysAliases :: [(KeyName, KeyCode)]) <- mapM
     (\(keyName, keySym) ->
       keysymToKeycode dpy keySym
         >>= \keyCode -> return (keyName, keyCode))
@@ -126,8 +136,7 @@ main = do
     , (Keys.MMonBrightnessUpKey,   XTypes.xF86XK_MonBrightnessUp)
     ]
   noise $ "Media keys aliases:" ++
-          foldr (\(a, b) -> (("\n  " ++ show a ++ ": " ++ show b) ++)) ""
-                mediaKeysAliases
+          foldr (\(a, b) -> ([qm|\n  {a}: {b}|] ++)) "" mediaKeysAliases
 
   let keyMap = Keys.getKeyMap opts mediaKeysAliases
 
@@ -143,18 +152,18 @@ main = do
 
   noise "Making cross-thread variables..."
   ctVars <- do
-    let state = State.initState rootWnd
+    let state = initState rootWnd
     ctState <- newMVar $ force state
     (ctActions :: Chan Actions.ActionType) <- newChan
-    return State.CrossThreadVars { State.stateMVar   = ctState
-                                 , State.actionsChan = ctActions
-                                 }
+    return CrossThreadVars { stateMVar   = ctState
+                           , actionsChan = ctActions
+                           }
   ctVars `deepseq` return ()
 
   let withData :: Display
-               -> ( State.CrossThreadVars
-                    -> O.Options
-                    -> Keys.KeyMap
+               -> ( CrossThreadVars
+                    -> Options
+                    -> KeyMap
                     -> Display
                     -> Window
                     -> IO () )
@@ -168,17 +177,16 @@ main = do
   forkIO $ forever $ withData dpyForLedsWatcher watchLeds
 
   noise "Starting device handle threads (one thread per device)..."
-  let m fd = do noise $ "Getting own X Display for thread of device: "
-                      ++ show fd
+  let m fd = do noise [qm|Getting own X Display for thread of device: {fd}|]
                 dpy <- xkbInit
-                noise $ "Starting handle thread for device: " ++ show fd
+                noise [qm|Starting handle thread for device: {fd}|]
                 forkIO $ forever $
                   handleKeyboard ctVars opts keyMap dpy rootWnd fd
-      in forM_ (opts ^. O.handleDeviceFd') m
+   in forM_ (opts ^. O.handleDeviceFd') m
 
   noise "Listening for actions in main thread..."
   forever $ do
-    (action :: Actions.ActionType) <- readChan $ State.actionsChan ctVars
+    (action :: Actions.ActionType) <- readChan $ actionsChan ctVars
     let f :: Actions.ActionType -> IO ()
         f (Actions.Single a) = m a
         f (Actions.Sequence []) = return ()
@@ -191,17 +199,16 @@ main = do
               log :: String -> String
               log (reverse -> '\n':(reverse -> msg)) = msg
               log msg = msg
-              in when (isJust pipeFd) $ do
-                noise $ "Notifying xmobar with message '" ++ log msg ++ "'..."
-                let xmobarFd = fromJust pipeFd
-                writeToFd xmobarFd msg
+           in when (isJust pipeFd) $ do
+             noise [qm|Notifying xmobar with message '{log msg}'...|]
+             let xmobarFd = fromJust pipeFd in writeToFd xmobarFd msg
 
-        in f action
+     in f action
 
   where -- Parses arguments and returns options data structure
         -- or shows usage info and exit the application
         -- (by --help flag or because of error).
-        getOptsFromArgs :: [String] -> IO O.Options
+        getOptsFromArgs :: [String] -> IO Options
         getOptsFromArgs argv = case O.extractOptions argv of
           Left err -> errPutStrLn O.usageInfo >> dieWith err
           Right opts -> do
@@ -223,8 +230,8 @@ main = do
         -- open these files to read and puts these descriptors to
         -- 'handleDeviceFd' option or fail the application
         -- if there's no available devices.
-        extractAvailableDevices :: O.Options -> IO O.Options
-        extractAvailableDevices opts = flip St.execStateT opts $
+        extractAvailableDevices :: Options -> IO Options
+        extractAvailableDevices opts = flip execStateT opts $
           fmap (^. O.handleDevicePath') St.get
             >>= lift . filterM doesFileExist
             >>= lift . checkForCount
@@ -237,7 +244,7 @@ main = do
           where noise = O.noise opts
 
                 logAndStoreAvailable :: O.HasOptions s
-                                     => s -> [FilePath] -> St.StateT s IO s
+                                     => s -> [FilePath] -> StateT s IO s
                 logAndStoreAvailable state files = do
                   let devicesList = foldr (("\n  " ++) .> (++)) "" files
                       title = "Devices that will be handled:"
@@ -254,7 +261,7 @@ main = do
                   return files
 
         -- Opens xmobar pipe file descriptor for writing
-        extractPipeFd :: O.Options -> IO O.Options
+        extractPipeFd :: Options -> IO Options
         extractPipeFd opts =
           whenHasFile (opts ^. O.xmobarPipeFile') $ \file -> do
             noise "Opening xmobar pipe file for writing..."
@@ -264,18 +271,18 @@ main = do
           where noise = O.noise opts
 
                 whenHasFile :: Maybe FilePath
-                            -> (FilePath -> IO O.Options)
-                            -> IO O.Options
+                            -> (FilePath -> IO Options)
+                            -> IO Options
                 whenHasFile (Just file) m = m file
                 whenHasFile Nothing     _ = return opts
 
         -- Lift up a monad and return back original value
-        liftBetween :: Monad m => m () -> a -> St.StateT s m a
+        liftBetween :: Monad m => m () -> a -> StateT s m a
         liftBetween monad x = lift monad >> return x
 
         -- Completely parse input arguments and returns options
         -- data structure based on them.
-        parseOpts :: [String] -> IO O.Options
+        parseOpts :: [String] -> IO Options
         parseOpts argv =
           getOptsFromArgs argv
             >>= extractAvailableDevices
@@ -284,7 +291,7 @@ main = do
             >>= logDisabled
             >>= extractPipeFd
 
-          where logDisabled :: O.Options -> IO O.Options
+          where logDisabled :: Options -> IO Options
                 logDisabled opts = opts ^. O.availableXInputDevices'
                   & show .> ("XInput devices ids that was disabled: " ++)
                   & (\x -> O.noise opts x >> return opts)

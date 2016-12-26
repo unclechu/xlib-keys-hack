@@ -22,8 +22,7 @@ import qualified "base" System.Console.GetOpt as GetOpt
 import "lens" Control.Lens ((.~), (%~), (^.), set, over, view)
 import "deepseq" Control.DeepSeq (NFData, rnf, deepseq)
 
-import "base" Data.Either (Either(Left, Right))
-import "base" Data.Maybe (Maybe(Just, Nothing), fromJust, fromMaybe)
+import "base" Data.Maybe (fromJust, fromMaybe)
 import "data-default" Data.Default (Default, def)
 
 -- local imports

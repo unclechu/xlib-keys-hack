@@ -31,8 +31,9 @@ executable xlib-keys-hack
                      , State
                      , XInput
                      , Utils
+                     , Utils.String
                      , Keys
-  -- other-extensions:
+
   build-depends:       base
                      , X11
                      , lens
@@ -47,6 +48,15 @@ executable xlib-keys-hack
                      , data-default
                      , either
                      , transformers
+
+                       -- required by Utils.String
+                     , haskell-src-meta
+                       -- required by Utils.String
+                     , bytestring
+                       -- required by Utils.String
+                     , text
+
+  -- other-extensions:
   build-tools:         hsc2hs
   extra-libraries:     "Xtst"
   hs-source-dirs:      src

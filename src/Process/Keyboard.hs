@@ -5,6 +5,7 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE PackageImports #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module Process.Keyboard
   ( handleKeyboard
@@ -18,8 +19,9 @@ import "base" Control.Monad (when, unless, forM_)
 import "lens" Control.Lens ((.~), (%~), (^.), set, over, view, Lens')
 import "base" Control.Concurrent.MVar (MVar, modifyMVar_)
 import "base" Control.Concurrent.Chan (Chan)
+import "either" Control.Monad.Trans.Either (EitherT, runEitherT, left, right)
 
-import "base" Data.Maybe (Maybe(Just, Nothing), fromJust, isJust)
+import "base" Data.Maybe (fromJust, isJust)
 import qualified "containers" Data.Set as Set
 import "text-format-simple" Text.Format (format)
 
@@ -30,9 +32,8 @@ import "X11" Graphics.X11.Types (Window)
 
 -- local imports
 
-import Utils ( (&), (.>), (<||>), (?)
-             , BreakableT, runFromBreakableT, breakTWith, continueTWith
-             )
+import Utils ((&), (.>), (<||>), (?))
+import Utils.String (qm)
 import Bindings.XTest (fakeKeyCodeEvent)
 import qualified Options as O
 import qualified Actions
@@ -140,22 +141,17 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
   | onOnlyBothAltsPressed -> do
     justTrigger
     let newState = state & State.alternative' %~ not
-    noise $ "Notifying xmobar about alternative mode is "
-             ++ onOff (State.alternative newState)
-             ++ "..."
+    noise [qm| Notifying xmobar about alternative mode is
+             \ {onOff (State.alternative newState)}... |]
     notify $ altModeNotifyMsg $ State.alternative newState
     return newState
 
   -- Alternative mode keys handling
   | state ^. State.alternative' && isJust alternative -> do
     let Just (keyNameTo, keyCodeTo) = alternative
-    let status = "pressing" <||> "releasing"
-        msg = "Triggering {0} of alternative {1} (X key code: {2}) by {3}..."
-     in noise $ format msg [ status isPressed
-                           , show keyNameTo
-                           , show keyCodeTo
-                           , show keyName
-                           ]
+    noise [qm| Triggering {isPressed ? "pressing" $ "releasing"}
+             \ of alternative {keyNameTo}
+             \ (X key code: {keyCodeTo}) by {keyName}... |]
     fakeKeyCodeEvent dpy keyCodeTo isPressed
     return state
 
@@ -180,8 +176,8 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
 
   -- When held `FNKey` on apple keyboard and press some media key
   | onAppleMediaPressed -> do
-    let msg = "Apple media key pressed, preventing triggering {0} as {1}..."
-     in noise $ format msg [show Keys.FNKey, show Keys.InsertKey]
+    noise [qm| Apple media key pressed, preventing triggering
+             \ {Keys.FNKey} as {Keys.InsertKey}... |]
     justTrigger
     return (state & State.comboState' . State.appleMediaPressed' .~ True)
 
@@ -205,7 +201,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
 
   -- Ability to press combos like Shift+Enter, Alt+Enter, etc.
   | onEnterOnlyWithMods -> do
-    when isPressed $ noise $ show keyName ++ " pressed only with modifiers"
+    when isPressed $ noise [qm|{keyName} pressed only with modifiers|]
     justTrigger
     let lens = State.comboState' . State.isEnterPressedWithMods'
      in return (state & lens .~ isPressed)
@@ -233,12 +229,11 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
     -- it triggers Control pressing.
     | state ^. flagLens -> do
       let keyCode = fromJust $ getKeyCodeByName controlKeyName
-      let msg1 = "{0} released after pressed with combos,\
-                 \ it means it was interpreted as {1}"
-          msg2 = "Triggering releasing of {0} (X key code: {1})..."
-          params1 = [show keyName, show controlKeyName]
-          params2 = [show controlKeyName, show keyCode]
-       in noise' [format msg1 params1, format msg2 params2]
+      noise' [ [qm| {keyName} released after pressed with combos,
+                  \ it means it was interpreted as {controlKeyName} |]
+             , [qm| Triggering releasing of {controlKeyName}
+                  \ (X key code: {keyCode})... |]
+             ]
       fakeKeyCodeEvent dpy keyCode False
       return (state & flagLens .~ False)
 
@@ -274,9 +269,8 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
     -- it means it should be interpreted as Control key.
     | otherwise -> do
       let keyCode = fromJust $ getKeyCodeByName controlKeyName
-      let msg = "{0} pressed with combo, triggering {1} (X key code: {2})..."
-          params = [show mainKeyName, show controlKeyName, show keyCode]
-       in noise $ format msg params
+      noise [qm| {mainKeyName} pressed with combo,
+               \ triggering {controlKeyName} (X key code: {keyCode})... |]
       fakeKeyCodeEvent dpy keyCode True
       justTrigger
       return (state & flagLens .~ True)
@@ -340,27 +334,27 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
   chain (keyName, isPressed) handleM = do
 
     -- Log key user pressed (even if it's ignored or replaced)
-    let status = "pressed" <||> "released"
-     in noise $ format "{0} is {1}" [show keyName, status isPressed]
+    noise [qm| {keyName} is {isPressed ? "pressed" $ "released"} |]
 
     let f :: State -> IO State
         f = ignoreDuplicates
          .> (>>= storeKey)
          .> (>>= lift . handleM)
          .> (>>= lift . handleCapsLockModeChange)
-         .> runFromBreakableT
+         .> runEitherT
+         .> fmap (either id id)
      in modifyMVar_ (State.stateMVar ctVars) f
 
     where -- Prevent doing anything when key state is the same
-          ignoreDuplicates :: State -> BreakableT IO State
+          ignoreDuplicates :: State -> EitherT State IO State
           ignoreDuplicates state =
             let pressed     = state ^. State.pressedKeys'
                 isMember    = keyName `Set.member` pressed
                 isDuplicate = isPressed == isMember
-             in (isDuplicate ? breakTWith $ return) state
+             in (isDuplicate ? left $ right) state
 
           -- Store key user pressed in state
-          storeKey :: State -> BreakableT IO State
+          storeKey :: State -> EitherT State IO State
           storeKey state =
             let action = isPressed ? Set.insert $ Set.delete
              in return (state & State.pressedKeys' %~ action keyName)
@@ -395,36 +389,34 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
   -- Useful when user released `FNKey` erlier than media key.
   releaseAppleMedia :: Set KeyName -> IO (Set KeyName)
   releaseAppleMedia = abstractRelease
-    ("Releasing held media keys of apple keyboard after "
-      ++ show Keys.FNKey ++ " released...")
-    ("Releasing held media {0} of apple keyboard after "
-      ++ show Keys.FNKey ++ " released...")
+    [qm| Releasing held media keys of apple keyboard
+       \ after {Keys.FNKey} released... |]
+    [qm| Releasing held media \{0} of apple keyboard
+       \ after {Keys.FNKey} released... |]
     isMedia
     getMedia
 
   -- Simple triggering key user pressed to X server
   trigger :: KeyName -> KeyCode -> Bool -> IO ()
   trigger keyName keyCode isPressed = do
-    let status = "pressing" <||> "releasing"
-        msg = "Triggering {0} of {1} (X key code: {2})..."
-     in noise $ format msg [status isPressed, show keyName, show keyCode]
+    noise [qm| Triggering {isPressed ? "pressing" $ "releasing"}
+             \ of {keyName} (X key code: {keyCode})... |]
     fakeKeyCodeEvent dpy keyCode isPressed
 
   -- Triggering both press and release events to X server
   pressRelease :: KeyName -> KeyCode -> IO ()
   pressRelease keyName keyCode = do
-    let msg = "Triggering pressing and releasing of {0} (X key code: {1})..."
-     in noise $ format msg [show keyName, show keyCode]
+    noise [qm| Triggering pressing and releasing of {keyName}
+             \ (X key code: {keyCode})... |]
     let f = fakeKeyCodeEvent dpy keyCode in f True >> f False
 
   -- Triggering both press and release events to X server.
   -- Also write to log about to which key this key remapped.
   asPressRelease :: KeyName -> KeyCode -> IO ()
   asPressRelease keyName keyCode = do
-    let msg = "Triggering pressing and releasing\
-              \ of {0} as {1} (X key code: {2})..."
-        params = [show keyName, show (getAsName keyName), show keyCode]
-     in noise $ format msg params
+    noise [qm| Triggering pressing and releasing
+             \ of {keyName} as {getAsName keyName}
+             \ (X key code: {keyCode})... |]
     let f = fakeKeyCodeEvent dpy keyCode in f True >> f False
 
 

@@ -22,7 +22,6 @@ import "deepseq" Control.DeepSeq (NFData, rnf, deepseq)
 import "base" Control.Concurrent.MVar (MVar)
 import "base" Control.Concurrent.Chan (Chan)
 
-import "base" Data.Maybe (Maybe(Just, Nothing))
 import "data-default" Data.Default (Default, def)
 import qualified "containers" Data.Set as Set
 

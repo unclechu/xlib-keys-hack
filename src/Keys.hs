@@ -4,6 +4,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE PackageImports #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module Keys
   ( KeyName(..)
@@ -39,12 +40,12 @@ import "containers" Data.Map.Strict ( Map, (!), fromList, toList
                                     )
 import qualified "containers" Data.Map.Strict as Map
 import qualified "containers" Data.Set as Set
-import "base" Data.Maybe (Maybe(Nothing, Just))
 import "base" Data.Word (Word16)
 
 -- local imports
 
 import Utils ((&), (<&>), (?), makeApoClassy)
+import Utils.String (qm)
 import qualified Options as O
 
 
@@ -397,7 +398,7 @@ getKeyMap opts mediaKeyAliases =
           let f (keyName, keyCode) =
                 case keyName `lookup` mediaMap of
                      Just devNum -> (keyName, devNum, keyCode)
-                     Nothing -> error $ "Unexpected media key: " ++ show keyName
+                     Nothing -> error [qm|Unexpected media key: {keyName}|]
               realCapsLockF alias@(keyName, devNum, _)
                 | keyName == CapsLockKey = (keyName, devNum, capsCode)
                 | otherwise = alias

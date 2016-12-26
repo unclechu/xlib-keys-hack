@@ -5,6 +5,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE PackageImports #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module Process
   ( initReset
@@ -21,9 +22,9 @@ import "lens" Control.Lens ((.~), (%~), (^.), set, over, view)
 import "base" Control.Concurrent (threadDelay)
 import "base" Control.Concurrent.MVar (MVar, modifyMVar_)
 import "base" Control.Concurrent.Chan (Chan)
+import "either" Control.Monad.Trans.Either (EitherT, runEitherT, left, right)
 
-import "base" Data.Maybe (Maybe(Just, Nothing), fromJust, isJust)
-import "text-format-simple" Text.Format (format)
+import "base" Data.Maybe (fromJust, isJust)
 
 import qualified "X11" Graphics.X11.Types       as XTypes
 import qualified "X11" Graphics.X11.ExtraTypes  as XTypes
@@ -39,11 +40,8 @@ import Utils ( (&), (.>), (<||>), (?)
              , nextEvent'
              , dieWith
              , writeToFd
-
-             , BreakableT
-             , runFromBreakableT
-             , breakT, breakTOn, breakTOnWith, continueT
              )
+import Utils.String (qm)
 import Bindings.Xkb (xkbSetGroup)
 import Bindings.MoreXlib (getLeds, lockDisplay, unlockDisplay)
 import qualified Options as O
@@ -99,10 +97,11 @@ processXEvents :: CrossThreadVars
                -> Display
                -> Window
                -> IO ()
-processXEvents ctVars opts keyMap dpy rootWnd = runFromBreakableT $ do
+processXEvents ctVars opts keyMap dpy rootWnd =
+  fmap (either id id) $ runEitherT $ do
 
   (wnd, _) <- lift $ getInputFocus dpy
-  breakTOn $ wnd == rootWnd
+  if wnd == rootWnd then left () else right ()
 
   lift $ XEvent.sync dpy False
   lift $ XEvent.selectInput dpy wnd XTypes.focusChangeMask
@@ -116,15 +115,18 @@ processXEvents ctVars opts keyMap dpy rootWnd = runFromBreakableT $ do
 
   if
    | evName `elem` ["FocusIn", "FocusOut"] -> do
-     let m f = modifyMVar_ (State.stateMVar ctVars) (runFromBreakableT . f)
+     let m f = modifyMVar_ (State.stateMVar ctVars)
+                           (fmap (either id id) . runEitherT . f)
      lift $ m $ \state -> do
 
-       lift $ noise $ "Handling focus event: " ++ evName ++ "..."
+       lift $ noise [qm|Handling focus event: {evName}...|]
 
        let lastWnd = State.lastWindow state
        curWnd <- lift $ XEvent.get_Window evPtr
 
-       breakTOnWith (curWnd == lastWnd || evName /= "FocusOut") state
+       if curWnd == lastWnd || evName /= "FocusOut"
+          then left state
+          else right ()
 
        lift $ noise "Resetting keyboard layout..."
        lift $ resetKbdLayout dpy
@@ -133,8 +135,7 @@ processXEvents ctVars opts keyMap dpy rootWnd = runFromBreakableT $ do
          lift $ noise "Resetting Caps Lock mode..."
          lift $ turnCapsLockMode state False
 
-       lift $ noise $ format "Window focus moved from {0} to {1}"
-                             [show lastWnd, show curWnd]
+       lift $ noise [qm|Window focus moved from {lastWnd} to {curWnd}|]
        return $ state { State.lastWindow = curWnd }
 
    | otherwise -> return ()
@@ -162,25 +163,20 @@ watchLeds ctVars opts keyMap dpy rootWnd = f $ \leds prevState -> do
   when (view State.leds' prevState /= leds) $ do
 
     when (prevCapsLock /= newCapsLock) $ do
-      notify $ "capslock:" ++ notifyStatus newCapsLock
-      noise $ "Caps Lock is " ++ onOff newCapsLock
+      notify [qm| capslock:{ newCapsLock ? "on" $ "off" }\n |]
+      noise  [qm| Caps Lock is {newCapsLock ? "On" $ "Off"} |]
 
     when (prevNumLock /= newNumLock) $ do
-      notify $ "numlock:" ++ notifyStatus newNumLock
-      noise $ "Num Lock is " ++ onOff newNumLock
+      notify [qm| numlock:{ newNumLock ? "on" $ "off" }\n |]
+      noise  [qm| Num Lock is {newNumLock ? "On" $ "Off"} |]
 
   return (prevState & State.leds' .~ leds)
 
   where noise = Actions.noise opts ctVars         :: String -> IO ()
         notify = Actions.notifyXmobar opts ctVars :: String -> IO ()
-        notifyStatus = "on\n" <||> "off\n"        :: Bool -> String
 
         f :: (LedModes -> State -> IO State) -> IO ()
         f m = do
           leds <- getLeds dpy
           modifyMVar_ (State.stateMVar ctVars) (m leds)
           threadDelay $ 100 * 1000
-
-
-onOff :: Bool -> String
-onOff = "On" <||> "Off"

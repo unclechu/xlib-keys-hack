@@ -5,6 +5,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE PackageImports #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module XInput
   ( getAvailable
@@ -16,18 +17,18 @@ import qualified "process" System.Process as P
 
 import qualified "mtl" Control.Monad.State as St
 import "mtl" Control.Monad.State.Class (MonadState)
-import "base" Control.Monad (when, unless)
+import "base" Control.Monad (when, unless, forM_)
 import "lens" Control.Lens ( (.~), (%~), (^.), (.=), (&~)
                            , set, over, view
                            )
 
-import "base" Data.Maybe (Maybe(Just, Nothing))
 import "containers" Data.Set (toList, fromList, insert, difference)
 
 -- local imports
 
 import qualified Options as O
-import Utils (errPutStrLn, errPutStr, dieWith, (&), (.>), updateState')
+import Utils (errPutStrLn, errPutStr, dieWith, (&), (.>), (<&>), updateState')
+import Utils.String (qm)
 
 
 -- Gets only available ids of 'xinput' devices
@@ -42,7 +43,7 @@ getAvailable opts = flip St.execStateT opts $
     >>= updateState' (flip $ set O.availableXInputDevices')
 
     -- Extract ids from names.
-    >> St.lift (fromProc "xinput" ["list", "--short"])
+    >>  St.lift (fromProc "xinput" ["list", "--short"])
     >>= return . filter (\(id, name) -> id /= 0 && name /= "")
                . map extractIdNamePair
     >>= getAvailableIdsFromNames
@@ -61,14 +62,12 @@ getAvailable opts = flip St.execStateT opts $
         -- must be available! Check if it's true.
         checkForExplicitAvailable :: [Int] -> St.StateT O.Options IO [Int]
         checkForExplicitAvailable filteredAvailable =
-          fmap f St.get
-            >>= St.lift . check
-            >> return filteredAvailable
+          filteredAvailable <$ (fmap f St.get >>= St.lift . check)
           where f = (fromList . view O.disableXInputDeviceId')
                  .> (\x -> (x, fromList filteredAvailable))
                 check (a, b) = when (a /= b) $ do
-                  errPutStrLn $ "'xinput' error: these ids is unavailable: "
-                             ++ show diff
+                  errPutStrLn [qm| 'xinput' error:
+                                 \ these ids is unavailable: {diff} |]
                   dieWith "'xinput': all explicit ids of devices\
                           \ must be available"
                   where diff = toList $ difference a b
@@ -114,10 +113,9 @@ getAvailable opts = flip St.execStateT opts $
           (names :: [String]) <-
             -- `unwords.words` is removing double spaces
             -- (becaused they are removed in `available`).
-            let f = view O.disableXInputDeviceName'
-                 .> map (map rmTabs)
-                 .> map (unwords . words)
-            in fmap f St.get
+            St.get <&> view O.disableXInputDeviceName'
+                        .> map (map rmTabs)
+                        .> map (unwords . words)
 
           return [ avId
                  | name <- names
@@ -125,18 +123,17 @@ getAvailable opts = flip St.execStateT opts $
                  , name == avName
                  ]
 
-        -- Merge it with previous option value (removes duplicates).
+        -- Merge it with previous option value (removes duplicates)
         mergeAvailableIdsWithPrevious ::
           (MonadState s m, O.HasOptions s, Functor m) => [Int] -> m [Int]
-        mergeAvailableIdsWithPrevious new = fmap f St.get
-          where f = view O.availableXInputDevices'
-                 .> (++ new) .> fromList .> toList
+        mergeAvailableIdsWithPrevious new =
+          St.get <&> view O.availableXInputDevices'
+                      .> (++ new) .> fromList .> toList
 
 
-disable :: O.HasOptions o => o -> IO o
-disable opts = return (opts ^. O.availableXInputDevices')
-           >>= mapM off
-           >>  return opts
+disable :: O.Options -> IO O.Options
+disable opts =
+  opts <$ forM_ (O.availableXInputDevices opts) off
   where off :: Int -> IO [String]
         off id = fromProc "xinput" ["disable", show id]
 
@@ -148,14 +145,14 @@ rmTabs   x  =  x
 -- Run child process and extract its output.
 fromProc :: String -> [String] -> IO [String]
 fromProc proc args = P.readProcessWithExitCode proc args ""
-                 >>= checkExitCode (proc:args)
-                 >>= return . lines . map rmTabs
+                       >>= checkExitCode (proc:args)
+                       >>= return . lines . map rmTabs
 
 -- Check if exit code is okay and then return stdout,
 -- or fail the application and print to stderr error message.
 checkExitCode :: [String] -> (ExitCode, String, String) -> IO String
 checkExitCode  _  (ExitSuccess,   out,  _ ) = return out
 checkExitCode cmd (ExitFailure n,  _ , err) = do
-  unless (null cmd) $ errPutStrLn $ "'xinput' command: " ++ unwords cmd
-  errPutStr $ "'xinput' error: " ++ err
-  dieWith $ "'xinput' failed with exit status: " ++ show n
+  unless (null cmd) $ errPutStrLn [qm|'xinput' command: {unwords cmd}|]
+  errPutStr [qm|'xinput' error: {err}|]
+  dieWith [qm|'xinput' failed with exit status: {n}|]

@@ -3,6 +3,7 @@
 
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE PackageImports #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module Process.CrossThread
   ( toggleCapsLock
@@ -15,19 +16,15 @@ import "X11" Graphics.X11.Xlib.Types (Display)
 
 import "transformers" Control.Monad.Trans.Class (lift)
 import "lens" Control.Lens ((.~), (%~), (^.), set, over, view, Lens')
+import "either" Control.Monad.Trans.Either (EitherT, runEitherT, left, right)
 
 import qualified "containers" Data.Set as Set (null)
-import "base" Data.Maybe (Maybe(Just, Nothing), fromJust, isJust, maybe)
-import "text-format-simple" Text.Format (format)
+import "base" Data.Maybe (fromJust, isJust)
 
 -- local imports
 
-import Utils ( (?), (<||>), (&), (.>)
-             , BreakableT
-             , runFromBreakableT
-             , breakTWith, breakTOnWith
-             , continueT
-             )
+import Utils ((?), (<||>), (&), (.>))
+import Utils.String (qm)
 import Bindings.XTest (fakeKeyCodeEvent)
 import Bindings.MoreXlib (getLeds)
 import qualified State
@@ -41,23 +38,24 @@ type KeyMap = Keys.KeyMap
 
 -- Handle delayed Caps Lock mode change
 handleCapsLockModeChange :: Display -> Noiser -> KeyMap -> State -> IO State
-handleCapsLockModeChange dpy noise' keyMap state = runFromBreakableT $ do
+handleCapsLockModeChange dpy noise' keyMap state =
+  fmap (either id id) $ runEitherT $ do
 
-  let m = lift $ noise $ format msg [onOrOff isToOn]
-      msg = "Delayed Caps Lock mode turning {0} after all other keys\
-            \ release is skipped because it's already done now"
+  let log = lift $ noise [qm| Delayed Caps Lock mode turning {onOrOff isToOn}
+                            \ after all other keys release is skipped
+                            \ because it's already done now |]
    in if hasDelayed && isAlreadyDone
-         then m >> breakTWith (clearDelayed state) -- Nothing to do
-         else continueT
+         then log >> left (clearDelayed state) -- Nothing to do
+         else right ()
 
   -- Do nothing if Caps Lock mode changing is not requested
   -- or if all another keys isn't released yet.
-  (not hasDelayed || not allIsReleased) `breakTOnWith` state
+  (not hasDelayed || not allIsReleased ? left $ right) state
 
-  let msg = "Delayed Caps Lock mode turning {0}\
-            \ after all other keys release (by pressing and releasing {1})..."
-      log = noise $ format msg [onOrOff isToOn, show keyName]
-      f   = fakeKeyCodeEvent dpy keyCode
+  let log = noise [qm| Delayed Caps Lock mode turning {onOrOff isToOn}
+                     \ after all other keys release
+                     \ (by pressing and releasing {show keyName})... |]
+      f = fakeKeyCodeEvent dpy keyCode
    in lift $ log >> f True >> f False
 
   return $ clearDelayed state
@@ -78,9 +76,8 @@ toggleCapsLock :: Display -> Noiser -> KeyMap -> State -> IO State
 toggleCapsLock dpy noise' keyMap state =
 
   do
-    let msg = "Toggling Caps Lock mode\
-              \ (turning it {0} by pressing and releasing {1})..."
-     in noise $ format msg [onOrOff isOn, show keyName]
+    noise [qm| Toggling Caps Lock mode (turning it {onOrOff isOn}
+             \ by pressing and releasing {keyName})... |]
 
     let f = fakeKeyCodeEvent dpy keyCode
      in f True >> f False
@@ -90,14 +87,13 @@ toggleCapsLock dpy noise' keyMap state =
   `or`
 
   do
-    noise' [ format "Attempt to toggle Caps Lock mode\
-                    \ (to turn it {0} by pressing and releasing {1})\
-                    \ while pressed some another keys"
-                    [onOrOff isOn, show keyName]
+    noise' [ [qm| Attempt to toggle Caps Lock mode
+                \ (to turn it {onOrOff isOn}
+                \ by pressing and releasing {keyName})
+                \ while pressed some another keys |]
 
-           , format "Storing in state request to turn Caps Lock mode {0}\
-                    \ after all another keys release..."
-                    [onOrOff isOn]
+           , [qm| Storing in state request to turn Caps Lock mode
+                \ {onOrOff isOn} after all another keys release... |]
            ]
 
     return (state & delayedLens .~ Just isOn)
@@ -114,8 +110,8 @@ turnCapsLockMode :: Display -> Noiser -> KeyMap -> State -> Bool -> IO State
 turnCapsLockMode dpy noise' keyMap state isOn = unlessAlready $
 
   do
-    let msg = "Turning Caps Lock mode {0} (by pressing and releasing {1})..."
-     in noise $ format msg [onOrOff isOn, show keyName]
+    noise [qm| Turning Caps Lock mode {onOrOff isOn}
+             \ (by pressing and releasing {keyName})... |]
 
     let f = fakeKeyCodeEvent dpy keyCode
      in f True >> f False
@@ -125,14 +121,12 @@ turnCapsLockMode dpy noise' keyMap state isOn = unlessAlready $
   `or`
 
   do
-    noise' [ format "Attempt to turn Caps Lock mode {0}\
-                    \ (by pressing and releasing {1})\
-                    \ while pressed some another keys"
-                    [onOrOff isOn, show keyName]
+    noise' [ [qm| Attempt to turn Caps Lock mode {onOrOff isOn}
+                \ (by pressing and releasing {keyName})
+                \ while pressed some another keys |]
 
-           , format "Storing in state request to turn Caps Lock mode {0}\
-                    \ after all another keys release..."
-                    [onOrOff isOn]
+           , [qm| Storing in state request to turn Caps Lock mode
+                \ {onOrOff isOn} after all another keys release... |]
            ]
 
     return (state & delayedLens .~ Just isOn)
@@ -145,9 +139,8 @@ turnCapsLockMode dpy noise' keyMap state isOn = unlessAlready $
 
         attemptNoise :: IO ()
         attemptNoise =
-          let msg = "Attempt to turn Caps Lock mode {0}, it's already done,\
-                    \ skipping..."
-           in noise $ format msg [onOrOff isOn]
+          noise [qm| Attempt to turn Caps Lock mode {onOrOff isOn},
+                   \ it's already done, skipping... |]
 
         keyName = Keys.RealCapsLockKey
         keyCode = fromJust $ Keys.getRealKeyCodeByName keyMap keyName
@@ -161,14 +154,14 @@ turnCapsLockMode dpy noise' keyMap state isOn = unlessAlready $
 justTurnCapsLockMode :: Display -> (String -> IO ()) -> KeyMap -> Bool -> IO ()
 justTurnCapsLockMode dpy noise keyMap isOn =
 
-  let msg    = "Turning Caps Lock mode {0} (by pressing and releasing {1})..."
-      log    = noise $ format msg [onOrOff isOn, show keyName]
-      f      = fakeKeyCodeEvent dpy keyCode
+  let log = noise [qm| Turning Caps Lock mode {onOrOff isOn}
+                     \ (by pressing and releasing {keyName})... |]
+      f = fakeKeyCodeEvent dpy keyCode
       toggle = f True >> f False
       -- Sometimes for some reason Caps Lock mode led returns True
       -- at initialization step even if Caps Lock mode is disabled,
       -- let's bang Caps Lock key until it is really disabled.
-      recur  = do
+      recur = do
         toggle
         (view State.capsLockLed' -> isReallyOn) <- getLeds dpy
         isReallyOn /= isOn ? recur $ return ()
@@ -176,9 +169,8 @@ justTurnCapsLockMode dpy noise keyMap isOn =
 
   `or`
 
-  let msg = "Attempt to turn Caps Lock mode {0}, it's already done,\
-            \ skipping..."
-   in noise $ format msg [onOrOff isOn]
+  noise [qm| Attempt to turn Caps Lock mode {onOrOff isOn},
+           \ it's already done, skipping... |]
 
   where keyName = Keys.RealCapsLockKey
         keyCode = fromJust $ Keys.getRealKeyCodeByName keyMap keyName
