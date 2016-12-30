@@ -15,9 +15,11 @@ module XInput
 import "base" System.Exit (ExitCode(ExitSuccess, ExitFailure))
 import qualified "process" System.Process as P
 
-import qualified "mtl" Control.Monad.State as St
-import "mtl" Control.Monad.State.Class (MonadState)
 import "base" Control.Monad (when, unless, forM_)
+import "mtl" Control.Monad.State (execStateT, StateT)
+import qualified "mtl" Control.Monad.State as St (get, put)
+import "mtl" Control.Monad.State.Class (MonadState)
+import "transformers" Control.Monad.Trans.Class (lift)
 import "lens" Control.Lens ( (.~), (%~), (^.), (.=), (&~)
                            , set, over, view
                            )
@@ -31,19 +33,22 @@ import Utils (errPutStrLn, errPutStr, dieWith, (&), (.>), (<&>), updateState')
 import Utils.String (qm)
 
 
+type Options = O.Options
+
+
 -- Gets only available ids of 'xinput' devices
 -- and store it to 'availableXInputDevices' option.
-getAvailable :: O.Options -> IO O.Options
-getAvailable opts = flip St.execStateT opts $
+getAvailable :: Options -> IO Options
+getAvailable opts = flip execStateT opts $
   -- Deal with bare ids first.
-  St.lift (fromProc "xinput" ["list", "--id-only"])
+  lift (fromProc "xinput" ["list", "--id-only"])
     >>= return . map (\x -> read x :: Int)
     >>= filterAvailableDeviceId
     >>= checkForExplicitAvailable
     >>= updateState' (flip $ set O.availableXInputDevices')
 
     -- Extract ids from names.
-    >>  St.lift (fromProc "xinput" ["list", "--short"])
+    >>  lift (fromProc "xinput" ["list", "--short"])
     >>= return . filter (\(id, name) -> id /= 0 && name /= "")
                . map extractIdNamePair
     >>= getAvailableIdsFromNames
@@ -60,9 +65,9 @@ getAvailable opts = flip St.execStateT opts $
 
         -- All explicit devices ids from arguments
         -- must be available! Check if it's true.
-        checkForExplicitAvailable :: [Int] -> St.StateT O.Options IO [Int]
+        checkForExplicitAvailable :: [Int] -> StateT Options IO [Int]
         checkForExplicitAvailable filteredAvailable =
-          filteredAvailable <$ (fmap f St.get >>= St.lift . check)
+          filteredAvailable <$ (fmap f St.get >>= lift . check)
           where f = (fromList . view O.disableXInputDeviceId')
                  .> (\x -> (x, fromList filteredAvailable))
                 check (a, b) = when (a /= b) $ do
@@ -117,11 +122,10 @@ getAvailable opts = flip St.execStateT opts $
                         .> map (map rmTabs)
                         .> map (unwords . words)
 
-          return [ avId
-                 | name <- names
-                 , (avId, avName) <- available
-                 , name == avName
-                 ]
+          return [ avId | name           <- names
+                        , (avId, avName) <- available
+                        , name == avName
+                        ]
 
         -- Merge it with previous option value (removes duplicates)
         mergeAvailableIdsWithPrevious ::
@@ -131,7 +135,7 @@ getAvailable opts = flip St.execStateT opts $
                       .> (++ new) .> fromList .> toList
 
 
-disable :: O.Options -> IO O.Options
+disable :: Options -> IO Options
 disable opts =
   opts <$ forM_ (O.availableXInputDevices opts) off
   where off :: Int -> IO [String]

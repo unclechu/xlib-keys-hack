@@ -16,7 +16,6 @@ module Process
 
 
 import "base" Control.Monad (when, unless)
-import "mtl" Control.Monad.State.Class (MonadState)
 import "transformers" Control.Monad.Trans.Class (lift)
 import "lens" Control.Lens ((.~), (%~), (^.), set, over, view)
 import "base" Control.Concurrent (threadDelay)
@@ -64,9 +63,9 @@ type CrossThreadVars = State.CrossThreadVars
 resetKbdLayout :: Display -> IO ()
 resetKbdLayout dpy =
   lockDisplay dpy
-    >> xkbSetGroup dpy 0
+    >>  xkbSetGroup dpy 0
     >>= flip unless (dieWith "xkbSetGroup error")
-    >> unlockDisplay dpy
+    >>  unlockDisplay dpy
 
 
 initReset :: Options -> KeyMap -> Display -> Window -> IO ()
