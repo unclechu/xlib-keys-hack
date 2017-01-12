@@ -24,6 +24,9 @@ module Utils
   , updateState'
   , updateStateM
   , updateStateM'
+  , modifyState
+  , modifyStateM
+  , EitherStateT
 
   , writeToFd
   ) where
@@ -34,9 +37,9 @@ import qualified "X11" Graphics.X11.Xlib.Event as XEvent
 import "X11" Graphics.X11.Xlib.Display (connectionNumber)
 
 import "base" Control.Concurrent (threadWaitRead)
-import qualified "mtl" Control.Monad.State as St (get, put)
-import "mtl" Control.Monad.State.Class (MonadState)
-import "either" Control.Monad.Trans.Either (EitherT, runEitherT, left)
+import qualified "mtl" Control.Monad.State.Class as St (MonadState(get, put, state))
+import "either" Control.Monad.Trans.Either (EitherT)
+import "transformers" Control.Monad.Trans.State (StateT)
 
 import "base" System.Posix.Types (Fd(Fd))
 import "base" System.IO (hPutStrLn, hPutStr, stderr)
@@ -95,6 +98,7 @@ infixl 2 <||>
 infixl 1 ?
 
 
+-- Same as 'partial' from 'Control-Monad-Plus'
 ifMaybe :: (a -> Bool) -> a -> Maybe a
 ifMaybe f x = if f x then Just x else Nothing
 
@@ -149,21 +153,32 @@ makeApoClassy = LTH.makeLensesWith rules
 
 
 -- Updates a state and gets value back.
-updateState :: (MonadState s m) => ((s, a) -> s) -> a -> m a
-updateState f x = St.get >>= (\s -> St.put $ f (s, x)) >> return x
+updateState :: (St.MonadState s m) => ((s, a) -> s) -> a -> m a
+updateState f x = St.state $ \s -> (x, f (s, x))
 
 -- Alternative version of `updateState` that call `f` function
 -- with two arguments instead of touple.
-updateState' :: (MonadState s m) => (s -> a -> s) -> a -> m a
-updateState' f x = St.get >>= (\s -> St.put $ f s x) >> return x
+updateState' :: (St.MonadState s m) => (s -> a -> s) -> a -> m a
+updateState' f x = St.state $ \s -> (x, f s x)
 
 -- Monadic version of `updateState`.
-updateStateM :: (MonadState s m) => ((s, a) -> m s) -> a -> m a
+updateStateM :: (St.MonadState s m) => ((s, a) -> m s) -> a -> m a
 updateStateM fm x = St.get >>= (\s -> fm (s, x)) >>= St.put >> return x
 
 -- Monadic version of `updateState'`.
-updateStateM' :: (MonadState s m) => (s -> a -> m s) -> a -> m a
+updateStateM' :: (St.MonadState s m) => (s -> a -> m s) -> a -> m a
 updateStateM' fm x = St.get >>= (\s -> fm s x) >>= St.put >> return x
+
+-- Deal just with State and return void
+modifyState :: (St.MonadState s m) => (s -> s) -> m ()
+modifyState f = St.state $ \s -> ((), f s)
+
+-- Monadic version of `modifyState`
+modifyStateM :: (St.MonadState s m) => (s -> m s) -> m ()
+modifyStateM fm = St.get >>= fm >>= St.put
+
+-- Simplified alias for combined `EitherT` and `StateT`
+type EitherStateT s l m r = EitherT l (StateT s m) r
 
 
 writeToFd :: IOHandle.Handle -> String -> IO ()

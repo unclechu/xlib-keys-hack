@@ -6,6 +6,7 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Process.Keyboard
   ( handleKeyboard
@@ -41,7 +42,11 @@ import qualified State
 import qualified Keys
 
 import qualified Process.CrossThread as CrossThread
-  (toggleCapsLock, handleCapsLockModeChange)
+  ( handleCapsLockModeChange
+  , handleAlternativeModeChange
+  , toggleCapsLock
+  , toggleAlternative
+  )
 
 
 type KeyCode         = XTypes.KeyCode
@@ -135,16 +140,22 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
 
       justTrigger = trigger keyName keyCode isPressed :: IO ()
 
+      off :: KeyName -> IO ()
+      off keyName =
+        when (keyName `Set.member` pressed) $
+          trigger keyName (fromJust $ getKeyCodeByName keyName) False
+
   in if
 
   -- Alternative mode on/off by Alts handling
   | onOnlyBothAltsPressed -> do
-    justTrigger
-    let newState = state & State.alternative' %~ not
-    noise [qm| Notifying xmobar about alternative mode is
-             \ {onOff (State.alternative newState)}... |]
-    notify $ altModeNotifyMsg $ State.alternative newState
-    return newState
+
+    noise "Two alts pressed, it means Alternative mode toggling"
+    let toDelete = [Keys.AltLeftKey, Keys.AltRightKey]
+    forM_ toDelete off
+    state
+      & State.pressedKeys' .~ foldr Set.delete pressed toDelete
+      & toggleAlternative
 
   -- Alternative mode keys handling
   | state ^. State.alternative' && isJust alternative -> do
@@ -185,11 +196,8 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
 
     noise "Two controls pressed, it means Caps Lock mode toggling"
 
-    let off keyName =
-          when (keyName `Set.member` pressed) $
-            trigger keyName (fromJust $ getKeyCodeByName keyName) False
-     in off Keys.ControlLeftKey
-     >> off Keys.ControlRightKey
+    off Keys.ControlLeftKey
+    off Keys.ControlRightKey
 
     let toDelete = [Keys.ControlLeftKey, Keys.ControlRightKey]
                      ++ if O.additionalControls opts
@@ -280,9 +288,9 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
 
   where
 
-  noise  = Actions.noise        opts ctVars ::  String  -> IO ()
-  noise' = Actions.noise'       opts ctVars :: [String] -> IO ()
-  notify = Actions.notifyXmobar opts ctVars ::  String  -> IO ()
+  noise   = Actions.noise         opts ctVars ::  String  -> IO ()
+  noise'  = Actions.noise'        opts ctVars :: [String] -> IO ()
+  notify' = Actions.notifyXmobar' opts ctVars :: [String] -> IO ()
 
   getAlias :: EvdevEvent.Key -> Maybe KeyAlias
   getAlias = Keys.getAliasByKey keyMap
@@ -307,27 +315,33 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
   toggleCapsLock :: State -> IO State
   toggleCapsLock = CrossThread.toggleCapsLock dpy noise' keyMap
 
+  toggleAlternative :: State -> IO State
+  toggleAlternative = CrossThread.toggleAlternative dpy noise' notify' keyMap
+
   handleCapsLockModeChange :: State -> IO State
   handleCapsLockModeChange =
     CrossThread.handleCapsLockModeChange dpy noise' keyMap
 
+  handleAlternativeModeChange :: State -> IO State
+  handleAlternativeModeChange =
+    CrossThread.handleAlternativeModeChange dpy noise' notify' keyMap
+
   -- Wait and extract event, make preparations and call handler
   onEv :: (KeyName -> KeyCode -> Bool -> State -> IO State) -> IO ()
-  onEv m = do
-    evMaybe <- EvdevEvent.hReadEvent fd
-    case evMaybe of
-      Just EvdevEvent.KeyEvent
-             { EvdevEvent.evKeyCode      = (getAlias -> Just (name, _, code))
-             , EvdevEvent.evKeyEventType = (checkPress -> Just isPressed)
-             }
-        -> chain (name, isPressed) $ m name code isPressed
-      _ -> return ()
+  onEv m = EvdevEvent.hReadEvent fd >>= \case
+
+    Just EvdevEvent.KeyEvent
+           { EvdevEvent.evKeyCode      = (getAlias -> Just (name, _, code))
+           , EvdevEvent.evKeyEventType = (checkPress -> Just isPressed)
+           }
+             -> chain (name, isPressed) $ m name code isPressed
+
+    _ -> return ()
 
     where checkPress :: EvdevEvent.KeyEventType -> Maybe Bool
-          checkPress x = case x of
-                              EvdevEvent.Depressed -> Just True
-                              EvdevEvent.Released  -> Just False
-                              _ -> Nothing
+          checkPress = \case EvdevEvent.Depressed -> Just True
+                             EvdevEvent.Released  -> Just False
+                             _ -> Nothing
 
   -- Composed prepare actions
   chain :: (KeyName, Bool) -> (State -> IO State) -> IO ()
@@ -341,6 +355,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
          .> (>>= storeKey)
          .> (>>= lift . handleM)
          .> (>>= lift . handleCapsLockModeChange)
+         .> (>>= lift . handleAlternativeModeChange)
          .> runEitherT
          .> fmap (either id id)
      in modifyMVar_ (State.stateMVar ctVars) f
@@ -419,9 +434,6 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
              \ (X key code: {keyCode})... |]
     let f = fakeKeyCodeEvent dpy keyCode in f True >> f False
 
-
-altModeNotifyMsg :: Bool -> String
-altModeNotifyMsg = "alternative:on\n" <||> "alternative:off\n"
 
 onOff :: Bool -> String
 onOff = "On" <||> "Off"

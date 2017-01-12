@@ -50,7 +50,10 @@ import qualified Keys
 
 import Process.Keyboard (handleKeyboard)
 import qualified Process.CrossThread as CrossThread
-  (turnCapsLockMode, justTurnCapsLockMode)
+  ( turnAlternativeMode
+  , turnCapsLockMode
+  , justTurnCapsLockMode
+  )
 
 
 type Options         = O.Options
@@ -114,6 +117,7 @@ processXEvents ctVars opts keyMap dpy rootWnd =
 
   if
    | evName `elem` ["FocusIn", "FocusOut"] -> do
+     -- TODO refactor it to EitherStateT
      let m f = modifyMVar_ (State.stateMVar ctVars)
                            (fmap (either id id) . runEitherT . f)
      lift $ m $ \state -> do
@@ -123,16 +127,20 @@ processXEvents ctVars opts keyMap dpy rootWnd =
        let lastWnd = State.lastWindow state
        curWnd <- lift $ XEvent.get_Window evPtr
 
-       if curWnd == lastWnd || evName /= "FocusOut"
+       if curWnd == lastWnd
           then left state
           else right ()
 
        lift $ noise "Resetting keyboard layout..."
        lift $ resetKbdLayout dpy
 
-       state <- do
-         lift $ noise "Resetting Caps Lock mode..."
-         lift $ turnCapsLockMode state False
+       state <- lift $ do
+         noise "Resetting Caps Lock mode..."
+         turnCapsLockMode state False
+
+       state <- lift $ do
+         noise "Resetting Alternative mode..."
+         turnAlternativeMode state False
 
        lift $ noise [qm|Window focus moved from {lastWnd} to {curWnd}|]
        return $ state { State.lastWindow = curWnd }
@@ -141,11 +149,16 @@ processXEvents ctVars opts keyMap dpy rootWnd =
 
   where nextEvent = nextEvent'
 
-        noise  = Actions.noise  opts ctVars ::  String  -> IO ()
-        noise' = Actions.noise' opts ctVars :: [String] -> IO ()
+        noise   = Actions.noise  opts ctVars        ::  String  -> IO ()
+        noise'  = Actions.noise' opts ctVars        :: [String] -> IO ()
+        notify' = Actions.notifyXmobar' opts ctVars :: [String] -> IO ()
 
         turnCapsLockMode :: State -> Bool -> IO State
         turnCapsLockMode = CrossThread.turnCapsLockMode dpy noise' keyMap
+
+        turnAlternativeMode :: State -> Bool -> IO State
+        turnAlternativeMode =
+          CrossThread.turnAlternativeMode dpy noise' notify' keyMap
 
 
 -- FIXME waiting in blocking-mode for new leds event
@@ -171,7 +184,7 @@ watchLeds ctVars opts keyMap dpy rootWnd = f $ \leds prevState -> do
 
   return (prevState & State.leds' .~ leds)
 
-  where noise = Actions.noise opts ctVars         :: String -> IO ()
+  where noise  = Actions.noise opts ctVars        :: String -> IO ()
         notify = Actions.notifyXmobar opts ctVars :: String -> IO ()
 
         f :: (LedModes -> State -> IO State) -> IO ()

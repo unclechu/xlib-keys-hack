@@ -92,9 +92,10 @@ data ComboState =
              -- Shift+Enter or Alt+Enter.
              , isEnterPressedWithMods :: Bool
 
-             -- CapsLock will be changed to specified state
+             -- Modes that will be changed to specified state
              -- after all currently pressed keys will be released.
-             , capsLockModeChange :: Maybe Bool
+             , capsLockModeChange    :: Maybe Bool
+             , alternativeModeChange :: Maybe Bool
              }
   deriving (Show, Eq, Generic)
 
@@ -105,6 +106,7 @@ instance NFData ComboState where
     isEnterUsedWithCombos    x `seq`
     isEnterPressedWithMods   x `seq`
     capsLockModeChange       x `deepseq`
+    alternativeModeChange    x `deepseq`
       ()
 
 instance Default ComboState where
@@ -114,6 +116,7 @@ instance Default ComboState where
     , isEnterUsedWithCombos    = False
     , isEnterPressedWithMods   = False
     , capsLockModeChange       = Nothing
+    , alternativeModeChange    = Nothing
     }
 
 
