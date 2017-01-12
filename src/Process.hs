@@ -16,12 +16,15 @@ module Process
 
 
 import "base" Control.Monad (when, unless)
-import "transformers" Control.Monad.Trans.Class (lift)
 import "lens" Control.Lens ((.~), (%~), (^.), set, over, view)
 import "base" Control.Concurrent (threadDelay)
 import "base" Control.Concurrent.MVar (MVar, modifyMVar_)
 import "base" Control.Concurrent.Chan (Chan)
-import "either" Control.Monad.Trans.Either (EitherT, runEitherT, left, right)
+import "transformers" Control.Monad.Trans.Class (lift)
+import "transformers" Control.Monad.IO.Class (liftIO)
+import "either" Control.Monad.Trans.Either (runEitherT, left, right)
+import "transformers" Control.Monad.Trans.State (execStateT)
+import qualified "mtl" Control.Monad.State.Class as St (MonadState(get, put))
 
 import "base" Data.Maybe (fromJust, isJust)
 
@@ -39,6 +42,7 @@ import Utils ( (&), (.>), (<||>), (?)
              , nextEvent'
              , dieWith
              , writeToFd
+             , modifyState, modifyStateM
              )
 import Utils.String (qm)
 import Bindings.Xkb (xkbSetGroup)
@@ -117,33 +121,30 @@ processXEvents ctVars opts keyMap dpy rootWnd =
 
   if
    | evName `elem` ["FocusIn", "FocusOut"] -> do
-     -- TODO refactor it to EitherStateT
      let m f = modifyMVar_ (State.stateMVar ctVars)
-                           (fmap (either id id) . runEitherT . f)
-     lift $ m $ \state -> do
+                           (execStateT $ runEitherT f)
+     lift $ m $ do
 
-       lift $ noise [qm|Handling focus event: {evName}...|]
+       liftIO $ noise [qm|Handling focus event: {evName}...|]
 
-       let lastWnd = State.lastWindow state
-       curWnd <- lift $ XEvent.get_Window evPtr
+       lastWnd <- State.lastWindow <$> St.get
+       curWnd <- liftIO $ XEvent.get_Window evPtr
 
        if curWnd == lastWnd
-          then left state
-          else right ()
+          then left  () -- If it's same window don't do anything
+          else right () -- Go further
 
-       lift $ noise "Resetting keyboard layout..."
-       lift $ resetKbdLayout dpy
+       liftIO $ do noise "Resetting keyboard layout..."
+                   resetKbdLayout dpy
 
-       state <- lift $ do
-         noise "Resetting Caps Lock mode..."
-         turnCapsLockMode state False
+       liftIO $ noise "Resetting Caps Lock mode..."
+       modifyStateM $ liftIO . flip turnCapsLockMode False
 
-       state <- lift $ do
-         noise "Resetting Alternative mode..."
-         turnAlternativeMode state False
+       liftIO $ noise "Resetting Alternative mode..."
+       modifyStateM $ liftIO . flip turnAlternativeMode False
 
-       lift $ noise [qm|Window focus moved from {lastWnd} to {curWnd}|]
-       return $ state { State.lastWindow = curWnd }
+       liftIO $ noise [qm|Window focus moved from {lastWnd} to {curWnd}|]
+       modifyState $ State.lastWindow' .~ curWnd
 
    | otherwise -> return ()
 
