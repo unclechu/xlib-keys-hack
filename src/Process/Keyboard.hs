@@ -315,7 +315,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
   toggleCapsLock = CrossThread.toggleCapsLock dpy noise' keyMap
 
   toggleAlternative :: State -> IO State
-  toggleAlternative = CrossThread.toggleAlternative dpy noise' notify' keyMap
+  toggleAlternative = CrossThread.toggleAlternative noise' notify'
 
   handleCapsLockModeChange :: State -> IO State
   handleCapsLockModeChange =

@@ -158,8 +158,7 @@ processXEvents ctVars opts keyMap dpy rootWnd =
         turnCapsLockMode = CrossThread.turnCapsLockMode dpy noise' keyMap
 
         turnAlternativeMode :: State -> Bool -> IO State
-        turnAlternativeMode =
-          CrossThread.turnAlternativeMode dpy noise' notify' keyMap
+        turnAlternativeMode = CrossThread.turnAlternativeMode noise' notify'
 
 
 -- FIXME waiting in blocking-mode for new leds event

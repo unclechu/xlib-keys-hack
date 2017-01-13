@@ -119,7 +119,7 @@ handleCapsLockModeChange dpy noise' keyMap state =
         isNowOn = (state ^. State.leds' . State.capsLockLed') :: Bool
 
         handler :: State -> IO State
-        handler s = const s <$> changeCapsLockMode dpy keyCode
+        handler s = s <$ changeCapsLockMode dpy keyCode
 
         keyName = Keys.RealCapsLockKey
         keyCode = fromJust $ Keys.getRealKeyCodeByName keyMap keyName
@@ -150,7 +150,7 @@ handleAlternativeModeChange dpy noise' notify' keyMap state =
 
         handler :: State -> IO State
         handler = changeAlternativeMode toOn
-                   .> (\s -> const s <$> notifyAboutAlternative notify' s)
+                   .> (\s -> s <$ notifyAboutAlternative notify' s)
 
 
 
@@ -165,9 +165,9 @@ turnMode :: ModeChangeLens -- Lens for delayed mode change
                                 -- It's possible to change state there
                                 -- and it will be stored.
          -> Bool -- State to turn in ON or OFF
-         -> Display -> Noiser -> KeyMap -> State -> IO State
+         -> Noiser -> State -> IO State
 turnMode mcLens (immediatelyMsgs, laterMsgs) already nowHandle toOn
-         dpy noise' keyMap state =
+         noise' state =
 
   flip execStateT state . runEitherT $ do
 
@@ -200,7 +200,7 @@ toggleCapsLock :: Display -> Noiser -> KeyMap -> State -> IO State
 toggleCapsLock dpy noise' keyMap state =
 
   turnMode mcLens ([immediatelyMsg], laterMsgs) Nothing handler toOn
-           dpy noise' keyMap state
+           noise' state
 
   where immediatelyMsg =
             [qm| Toggling Caps Lock mode (turning it {onOrOff toOn}
@@ -224,15 +224,14 @@ toggleCapsLock dpy noise' keyMap state =
         keyCode = fromJust $ Keys.getRealKeyCodeByName keyMap keyName
 
         handler :: State -> IO State
-        handler s = const s <$> changeCapsLockMode dpy keyCode
+        handler s = s <$ changeCapsLockMode dpy keyCode
 
 
-toggleAlternative :: Display -> Noiser -> Notifier -> KeyMap -> State
-                  -> IO State
-toggleAlternative dpy noise' notify' keyMap state =
+toggleAlternative :: Noiser -> Notifier -> State -> IO State
+toggleAlternative noise' notify' state =
 
   turnMode mcLens ([immediatelyMsg], laterMsgs) Nothing handler toOn
-           dpy noise' keyMap state
+           noise' state
 
   where immediatelyMsg = [qm| Toggling Alternative mode
                             \ (turning it {onOrOff toOn})... |]
@@ -252,7 +251,7 @@ toggleAlternative dpy noise' notify' keyMap state =
 
         handler :: State -> IO State
         handler = changeAlternativeMode toOn
-                   .> (\s -> const s <$> notifyAboutAlternative notify' s)
+                   .> (\s -> s <$ notifyAboutAlternative notify' s)
 
 
 
@@ -260,7 +259,7 @@ turnCapsLockMode :: Display -> Noiser -> KeyMap -> State -> Bool -> IO State
 turnCapsLockMode dpy noise' keyMap state toOn =
 
   turnMode mcLens ([immediatelyMsg], laterMsgs) already handler toOn
-           dpy noise' keyMap state
+           noise' state
 
   where immediatelyMsg = [qm| Turning Caps Lock mode {onOrOff toOn}
                             \ (by pressing and releasing {keyName})... |]
@@ -286,15 +285,14 @@ turnCapsLockMode dpy noise' keyMap state toOn =
         keyCode = fromJust $ Keys.getRealKeyCodeByName keyMap keyName
 
         handler :: State -> IO State
-        handler s = const s <$> changeCapsLockMode dpy keyCode
+        handler s = s <$ changeCapsLockMode dpy keyCode
 
 
-turnAlternativeMode :: Display -> Noiser -> Notifier -> KeyMap -> State -> Bool
-                    -> IO State
-turnAlternativeMode dpy noise' notify' keyMap state toOn =
+turnAlternativeMode :: Noiser -> Notifier -> State -> Bool -> IO State
+turnAlternativeMode noise' notify' state toOn =
 
   turnMode mcLens ([immediatelyMsg], laterMsgs) already handler toOn
-           dpy noise' keyMap state
+           noise' state
 
   where immediatelyMsg = [qm| Turning Alternative mode {onOrOff toOn}... |]
 
@@ -316,7 +314,7 @@ turnAlternativeMode dpy noise' notify' keyMap state toOn =
 
         handler :: State -> IO State
         handler = changeAlternativeMode toOn
-                   .> (\s -> const s <$> notifyAboutAlternative notify' s)
+                   .> (\s -> s <$ notifyAboutAlternative notify' s)
 
 
 
