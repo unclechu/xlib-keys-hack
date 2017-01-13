@@ -24,7 +24,6 @@ import "either" Control.Monad.Trans.Either (EitherT, runEitherT, left, right)
 
 import "base" Data.Maybe (fromJust, isJust)
 import qualified "containers" Data.Set as Set
-import "text-format-simple" Text.Format (format)
 
 import qualified "X11" Graphics.X11.Types      as XTypes
 import qualified "X11" Graphics.X11.ExtraTypes as XTypes
@@ -375,7 +374,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
              in return (state & State.pressedKeys' %~ action keyName)
 
   abstractRelease :: String -- `releaseMsg`
-                  -> String -- `releaseItemMsgMask`
+                  -> (KeyName -> String) -- `releaseItemMsgMask`
                   -> (KeyName -> Bool) -- `splitter`
                   -> (KeyName -> Maybe KeyCode) -- `getter`
                   -> Set KeyName -- `pressed`
@@ -385,7 +384,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
     when (Set.size toRelease > 0) $ do
       noise releaseMsg
       forM_ (Set.toList toRelease) $ \keyName -> do
-        noise $ format releaseItemMsgMask [show keyName]
+        noise $ releaseItemMsgMask keyName
         let Just keyCode = getter keyName
          in fakeKeyCodeEvent dpy keyCode False
     return rest
@@ -393,12 +392,14 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
   -- Release alternative keys.
   -- Useful when alternative mode turns off not by both alts
   -- and key could be still pressed.
-  releaseAlternative :: Set KeyName -> IO (Set KeyName)
-  releaseAlternative = abstractRelease
-    "Releasing alternative keys during turning alternative mode off..."
-    "Releasing alternative {0} during turning alternative mode off..."
-    isAlternative
-    (getAlternative .> fmap snd)
+  -- -- It's commented because it's never used anywhere
+  -- releaseAlternative :: Set KeyName -> IO (Set KeyName)
+  -- releaseAlternative = abstractRelease
+  --   "Releasing alternative keys during turning alternative mode off..."
+  --   (\keyName -> [qm| Releasing alternative {keyName}
+  --                   \ during turning alternative mode off... |])
+  --   isAlternative
+  --   (getAlternative .> fmap snd)
 
   -- Release apple media keys.
   -- Useful when user released `FNKey` erlier than media key.
@@ -406,8 +407,8 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
   releaseAppleMedia = abstractRelease
     [qm| Releasing held media keys of apple keyboard
        \ after {Keys.FNKey} released... |]
-    [qm| Releasing held media \{0} of apple keyboard
-       \ after {Keys.FNKey} released... |]
+    (\keyName -> [qm| Releasing held media {keyName} of apple keyboard
+                    \ after {Keys.FNKey} released... |])
     isMedia
     getMedia
 

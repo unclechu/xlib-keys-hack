@@ -128,7 +128,7 @@ processXEvents ctVars opts keyMap dpy rootWnd =
        liftIO $ noise [qm|Handling focus event: {evName}...|]
 
        lastWnd <- State.lastWindow <$> St.get
-       curWnd <- liftIO $ XEvent.get_Window evPtr
+       curWnd  <- liftIO $ XEvent.get_Window evPtr
 
        if curWnd == lastWnd
           then left  () -- If it's same window don't do anything

@@ -44,7 +44,6 @@ executable xlib-keys-hack
                      , mtl
                      , containers
                      , deepseq
-                     , text-format-simple
                      , data-default
                      , either
                      , transformers

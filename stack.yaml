@@ -44,7 +44,6 @@ packages:
 # (e.g., acme-missiles-0.3)
 extra-deps:
 - linux-evdev-0.3.2
-- text-format-simple-1.1.0
 - lens-4.15.1 # need newer version for lens renamer (see Utils module)
 - kan-extensions-5.0.1 # newer 'lens' required this
 
