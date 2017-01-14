@@ -45,7 +45,7 @@ import "base" Data.Maybe (fromJust, isJust)
 import Utils ((?), (<||>), (&), (.>), modifyState, modifyStateM, dieWith)
 import Utils.String (qm)
 import Bindings.XTest (fakeKeyCodeEvent)
-import Bindings.MoreXlib (getLeds, lockDisplay, unlockDisplay)
+import Bindings.MoreXlib (getLeds)
 import Bindings.Xkb (xkbSetGroup, xkbGetCurrentLayout)
 import qualified State
 import qualified Keys

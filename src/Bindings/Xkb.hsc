@@ -28,7 +28,6 @@ import qualified "X11" Graphics.X11.Types as XTypes
 -- local imports
 
 import qualified Bindings.Xkb.Types as XkbTypes
-import Bindings.MoreXlib (lockDisplay, unlockDisplay)
 
 
 #include <X11/XKBlib.h>
@@ -131,10 +130,8 @@ foreign import ccall unsafe "X11/XKBlib.h XkbLockGroup"
 -- abstract
 xkbSetGroup :: Display -> CTypes.CUInt -> IO Bool
 xkbSetGroup dpy groupNum = do
-  lockDisplay dpy
   result <- xkbLockGroup dpy (#const XkbUseCoreKbd) groupNum
   sync dpy False
-  unlockDisplay dpy
   return result
 
 
@@ -147,10 +144,8 @@ foreign import ccall unsafe "X11/XKBlib.h XkbGetState"
 -- abstract
 xkbGetCurrentLayout :: Display -> IO Int
 xkbGetCurrentLayout dpy = alloca $ \stRecPtr -> do
-  lockDisplay dpy
   xkbGetState dpy (#const XkbUseCoreKbd) stRecPtr -- Status is ignored here.
                                                   -- For some reason it returns
                                                   -- 0 (zero) that means error
                                                   -- but it works okay.
-  unlockDisplay dpy
   fromIntegral . XkbTypes.group <$> peek stRecPtr

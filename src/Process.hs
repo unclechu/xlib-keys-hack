@@ -46,7 +46,7 @@ import Utils ( (&), (.>), (<||>), (?)
              )
 import Utils.String (qm)
 import Bindings.Xkb (xkbSetGroup)
-import Bindings.MoreXlib (getLeds, lockDisplay, unlockDisplay)
+import Bindings.MoreXlib (getLeds)
 import qualified Options as O
 import qualified Actions
 import qualified State
