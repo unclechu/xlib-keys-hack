@@ -32,6 +32,8 @@ import State (LedModes(..))
 #include <X11/Xlib.h>
 #define  __XKEYBOARDSTATE_AUTO_REPEATS_S  sizeof(((XKeyboardState*)0)->auto_repeats)
 
+type Status = CTypes.CInt
+
 
 data XKeyboardState =
   XKeyboardState { key_click_percent  :: CTypes.CInt
@@ -47,25 +49,18 @@ data XKeyboardState =
 
 instance Storable.Storable XKeyboardState where
   sizeOf _ = (#size XKeyboardState)
-  alignment = sizeOf
-  peek ptr = do
-    v_key_click_percent  <- (#peek XKeyboardState, key_click_percent) ptr
-    v_bell_percent       <- (#peek XKeyboardState, bell_percent) ptr
-    v_bell_pitch         <- (#peek XKeyboardState, bell_pitch) ptr
-    v_bell_duration      <- (#peek XKeyboardState, bell_duration) ptr
-    v_led_mask           <- (#peek XKeyboardState, led_mask) ptr
-    v_global_auto_repeat <- (#peek XKeyboardState, global_auto_repeat) ptr
+  alignment _ = Storable.alignment (undefined :: CTypes.CUShort)
+  peek ptr = XKeyboardState
+               <$> (#peek XKeyboardState, key_click_percent) ptr
+               <*> (#peek XKeyboardState, bell_percent) ptr
+               <*> (#peek XKeyboardState, bell_pitch) ptr
+               <*> (#peek XKeyboardState, bell_duration) ptr
+               <*> (#peek XKeyboardState, led_mask) ptr
+               <*> (#peek XKeyboardState, global_auto_repeat) ptr
 
-    v_auto_repeats       <- peekArray (#const __XKEYBOARDSTATE_AUTO_REPEATS_S) $
-                                      (#ptr XKeyboardState, auto_repeats) ptr
-    return $ XKeyboardState
-             v_key_click_percent
-             v_bell_percent
-             v_bell_pitch
-             v_bell_duration
-             v_led_mask
-             v_global_auto_repeat
-             v_auto_repeats
+               <*> peekArray (#const __XKEYBOARDSTATE_AUTO_REPEATS_S)
+                             ((#ptr XKeyboardState, auto_repeats) ptr)
+
   poke ptr ( XKeyboardState
              v_key_click_percent
              v_bell_percent
@@ -102,21 +97,20 @@ getLeds dpy = do
   MAlloc.free statePtr
 
   let isOn n = led_mask state .&. n & (/= 0)
-      in return LedModes { capsLockLed = isOn 1
-                         , numLockLed  = isOn 2
-                         }
+   in return LedModes { capsLockLed = isOn 1
+                      , numLockLed  = isOn 2
+                      }
 
 
 -- native
 foreign import ccall unsafe "X11/Xlib.h XInitThreads"
-  xInitThreads :: IO CTypes.CInt
+  xInitThreads :: IO Status
 
 
 initThreads :: IO ()
 initThreads =
-  xInitThreads
-    >>= return . (/= 0)
-    >>= flip unless (dieWith "Xlib: init concurrent threads error")
+  (== 0) <$> xInitThreads
+    >>= flip when (dieWith "Xlib: init concurrent threads error")
 
 
 -- native

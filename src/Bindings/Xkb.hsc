@@ -12,6 +12,7 @@ module Bindings.Xkb
   , XkbGetDisplayError(..)
   , xkbGetDisplay
   , xkbSetGroup
+  , xkbGetCurrentLayout
   ) where
 
 import "base" Foreign
@@ -21,17 +22,20 @@ import qualified "base" Foreign.C.Types as CTypes
 
 import qualified "base" Data.Either as Either
 
-import "X11" Graphics.X11.Xlib.Types (Display(Display))
+import "X11" Graphics.X11.Xlib (Display(Display), sync)
 import qualified "X11" Graphics.X11.Types as XTypes
 
 -- local imports
 
 import qualified Bindings.Xkb.Types as XkbTypes
+import Bindings.MoreXlib (lockDisplay, unlockDisplay)
 
 
 #include <X11/XKBlib.h>
 
 #define  __INT_SIZE  sizeof(int)
+
+type Status = CTypes.CInt
 
 
 -- native
@@ -59,7 +63,7 @@ foreign import ccall unsafe "X11/XKBlib.h XkbGetControls"
   xkbGetControls :: Display
                  -> CTypes.CULong
                  -> Ptr XkbTypes.XkbDescRec
-                 -> IO CTypes.CInt
+                 -> IO Status
 
 -- abstract
 xkbFetchControls :: Display -> Ptr XkbTypes.XkbDescRec -> IO Bool
@@ -126,4 +130,27 @@ foreign import ccall unsafe "X11/XKBlib.h XkbLockGroup"
 
 -- abstract
 xkbSetGroup :: Display -> CTypes.CUInt -> IO Bool
-xkbSetGroup dpy groupNum = xkbLockGroup dpy (#const XkbUseCoreKbd) groupNum
+xkbSetGroup dpy groupNum = do
+  lockDisplay dpy
+  result <- xkbLockGroup dpy (#const XkbUseCoreKbd) groupNum
+  sync dpy False
+  unlockDisplay dpy
+  return result
+
+
+
+-- native
+foreign import ccall unsafe "X11/XKBlib.h XkbGetState"
+  xkbGetState :: Display -> CTypes.CUInt -> Ptr XkbTypes.XkbStateRec
+              -> IO Status
+
+-- abstract
+xkbGetCurrentLayout :: Display -> IO Int
+xkbGetCurrentLayout dpy = alloca $ \stRecPtr -> do
+  lockDisplay dpy
+  xkbGetState dpy (#const XkbUseCoreKbd) stRecPtr -- Status is ignored here.
+                                                  -- For some reason it returns
+                                                  -- 0 (zero) that means error
+                                                  -- but it works okay.
+  unlockDisplay dpy
+  fromIntegral . XkbTypes.group <$> peek stRecPtr

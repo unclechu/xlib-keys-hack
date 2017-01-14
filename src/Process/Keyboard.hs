@@ -45,6 +45,7 @@ import qualified Process.CrossThread as CrossThread
   , handleAlternativeModeChange
   , toggleCapsLock
   , toggleAlternative
+  , handleResetKbdLayout
   )
 
 
@@ -325,6 +326,9 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
   handleAlternativeModeChange =
     CrossThread.handleAlternativeModeChange dpy noise' notify' keyMap
 
+  handleResetKbdLayout :: State -> IO State
+  handleResetKbdLayout = CrossThread.handleResetKbdLayout dpy noise'
+
   -- Wait and extract event, make preparations and call handler
   onEv :: (KeyName -> KeyCode -> Bool -> State -> IO State) -> IO ()
   onEv m = EvdevEvent.hReadEvent fd >>= \case
@@ -353,6 +357,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
         f = ignoreDuplicates
          .> (>>= storeKey)
          .> (>>= lift . handleM)
+         .> (>>= lift . handleResetKbdLayout)
          .> (>>= lift . handleCapsLockModeChange)
          .> (>>= lift . handleAlternativeModeChange)
          .> runEitherT

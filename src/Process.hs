@@ -57,6 +57,7 @@ import qualified Process.CrossThread as CrossThread
   ( turnAlternativeMode
   , turnCapsLockMode
   , justTurnCapsLockMode
+  , resetKbdLayout
   )
 
 
@@ -67,19 +68,11 @@ type LedModes        = State.LedModes
 type CrossThreadVars = State.CrossThreadVars
 
 
-resetKbdLayout :: Display -> IO ()
-resetKbdLayout dpy =
-  lockDisplay dpy
-    >>  xkbSetGroup dpy 0
-    >>= flip unless (dieWith "xkbSetGroup error")
-    >>  unlockDisplay dpy
-
-
 initReset :: Options -> KeyMap -> Display -> Window -> IO ()
 initReset opts keyMap dpy rootWnd = do
 
   noise "Initial resetting of keyboard layout..."
-  resetKbdLayout dpy
+  initialResetKbdLayout dpy
 
   noise "Initial resetting Caps Lock mode..."
   justTurnCapsLockMode False
@@ -95,6 +88,10 @@ initReset opts keyMap dpy rootWnd = do
   where noise = O.noise opts
         justTurnCapsLockMode =
           CrossThread.justTurnCapsLockMode dpy noise keyMap
+
+        initialResetKbdLayout :: Display -> IO ()
+        initialResetKbdLayout dpy =
+          xkbSetGroup dpy 0 >>= flip unless (dieWith "xkbSetGroup error")
 
 
 processXEvents :: CrossThreadVars
@@ -134,8 +131,8 @@ processXEvents ctVars opts keyMap dpy rootWnd =
           then left  () -- If it's same window don't do anything
           else right () -- Go further
 
-       liftIO $ do noise "Resetting keyboard layout..."
-                   resetKbdLayout dpy
+       liftIO $ noise "Resetting keyboard layout..."
+       modifyStateM $ liftIO . resetKbdLayout
 
        liftIO $ noise "Resetting Caps Lock mode..."
        modifyStateM $ liftIO . flip turnCapsLockMode False
@@ -159,6 +156,9 @@ processXEvents ctVars opts keyMap dpy rootWnd =
 
         turnAlternativeMode :: State -> Bool -> IO State
         turnAlternativeMode = CrossThread.turnAlternativeMode noise' notify'
+
+        resetKbdLayout :: State -> IO State
+        resetKbdLayout = CrossThread.resetKbdLayout dpy noise'
 
 
 -- FIXME waiting in blocking-mode for new leds event

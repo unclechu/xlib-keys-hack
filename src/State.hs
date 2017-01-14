@@ -96,6 +96,10 @@ data ComboState =
              -- after all currently pressed keys will be released.
              , capsLockModeChange    :: Maybe Bool
              , alternativeModeChange :: Maybe Bool
+
+             -- Is keyboard layout reset deleyed til
+             -- all currently pressed keys will be released.
+             , resetKbdLayout :: Bool
              }
   deriving (Show, Eq, Generic)
 
@@ -107,6 +111,7 @@ instance NFData ComboState where
     isEnterPressedWithMods   x `seq`
     capsLockModeChange       x `deepseq`
     alternativeModeChange    x `deepseq`
+    resetKbdLayout           x `deepseq`
       ()
 
 instance Default ComboState where
@@ -117,6 +122,7 @@ instance Default ComboState where
     , isEnterPressedWithMods   = False
     , capsLockModeChange       = Nothing
     , alternativeModeChange    = Nothing
+    , resetKbdLayout           = False
     }
 
 
