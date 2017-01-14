@@ -20,6 +20,8 @@ import "base" Control.Monad (when, unless, forM_)
 import "lens" Control.Lens ((.~), (%~), (^.), set, over, view, Lens')
 import "base" Control.Concurrent.MVar (MVar, modifyMVar_)
 import "base" Control.Concurrent.Chan (Chan)
+import "transformers" Control.Monad.IO.Class (liftIO)
+import "transformers" Control.Monad.Trans.State (execStateT)
 import "either" Control.Monad.Trans.Either (EitherT, runEitherT, left, right)
 
 import "base" Data.Maybe (fromJust, isJust)
@@ -32,7 +34,9 @@ import "X11" Graphics.X11.Types (Window)
 
 -- local imports
 
-import Utils ((&), (.>), (<||>), (?))
+import Utils ( (&), (.>), (<||>), (?)
+             , EitherStateT, modifyState, modifyStateM
+             )
 import Utils.String (qm)
 import Bindings.XTest (fakeKeyCodeEvent)
 import qualified Options as O
@@ -43,9 +47,14 @@ import qualified Keys
 import qualified Process.CrossThread as CrossThread
   ( handleCapsLockModeChange
   , handleAlternativeModeChange
+  , handleResetKbdLayout
+
   , toggleCapsLock
   , toggleAlternative
-  , handleResetKbdLayout
+
+  , turnCapsLockMode
+  , turnAlternativeMode
+  , resetKbdLayout
   )
 
 
@@ -121,9 +130,9 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
               , Keys.SuperLeftKey,   Keys.SuperRightKey
               , Keys.CapsLockKey
               ]
+            remappedMods :: Set KeyName
             remappedMods =
               Set.foldr (Set.union . getRemappedByName) Set.empty mods
-              :: Set KeyName
 
             allMods = mods `Set.union` remappedMods
             otherPressed = Set.delete Keys.EnterKey pressed
@@ -138,7 +147,8 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
 
          in pressedCase || releasedCase
 
-      justTrigger = trigger keyName keyCode isPressed :: IO ()
+      justTrigger   = trigger   keyName keyCode isPressed :: IO ()
+      justAsTrigger = asTrigger keyName keyCode isPressed :: IO ()
 
       off :: KeyName -> IO ()
       off keyName =
@@ -246,11 +256,20 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
       return (state & flagLens .~ False)
 
     -- Just triggering default aliased key code to `CapsLockKey` or `EnterKey`
-    | otherwise -> do
+    | otherwise ->
       case keyName of
-           Keys.CapsLockKey -> asPressRelease keyName keyCode
-           Keys.EnterKey    -> pressRelease   keyName keyCode
-      return state
+           Keys.CapsLockKey -> do
+
+             ( if O.realCapsLock opts
+                  then pressRelease
+                  else asPressRelease ) keyName keyCode
+
+             if O.resetByEscapeOnCapsLock opts
+                then execStateT (runEitherT resetAll) state
+                else return state
+
+           Keys.EnterKey -> state <$ pressRelease keyName keyCode
+           _ -> return state
 
   -- When `CapsLockKey` or `EnterKey` pressed with combo
   | onWithAdditionalControlKey ->
@@ -271,7 +290,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
     in if
 
     -- When pressing of Control already triggered
-    | state ^. flagLens -> justTrigger >> return state
+    | state ^. flagLens -> state <$ justTrigger
 
     -- `CapsLockKey` or `EnterKey` pressed with combo,
     -- it means it should be interpreted as Control key.
@@ -283,8 +302,13 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
       justTrigger
       return (state & flagLens .~ True)
 
+  | keyName == Keys.CapsLockKey && not (O.realCapsLock opts) ->
+    if O.resetByEscapeOnCapsLock opts && not isPressed
+       then justAsTrigger >> execStateT (runEitherT resetAll) state
+       else state <$ justAsTrigger
+
   -- Usual key handling
-  | otherwise -> justTrigger >> return state
+  | otherwise -> state <$ justTrigger
 
   where
 
@@ -317,6 +341,15 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
 
   toggleAlternative :: State -> IO State
   toggleAlternative = CrossThread.toggleAlternative noise' notify'
+
+  turnCapsLockMode :: State -> Bool -> IO State
+  turnCapsLockMode = CrossThread.turnCapsLockMode dpy noise' keyMap
+
+  turnAlternativeMode :: State -> Bool -> IO State
+  turnAlternativeMode = CrossThread.turnAlternativeMode noise' notify'
+
+  resetKbdLayout :: State -> IO State
+  resetKbdLayout = CrossThread.resetKbdLayout dpy noise'
 
   handleCapsLockModeChange :: State -> IO State
   handleCapsLockModeChange =
@@ -378,6 +411,18 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
             let action = isPressed ? Set.insert $ Set.delete
              in return (state & State.pressedKeys' %~ action keyName)
 
+  resetAll :: EitherStateT State () IO ()
+  resetAll = do
+
+    liftIO $ noise "Resetting keyboard layout..."
+    modifyStateM $ liftIO . resetKbdLayout
+
+    liftIO $ noise "Resetting Caps Lock mode..."
+    modifyStateM $ liftIO . flip turnCapsLockMode False
+
+    liftIO $ noise "Resetting Alternative mode..."
+    modifyStateM $ liftIO . flip turnAlternativeMode False
+
   abstractRelease :: String -- `releaseMsg`
                   -> (KeyName -> String) -- `releaseItemMsgMask`
                   -> (KeyName -> Bool) -- `splitter`
@@ -422,6 +467,16 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
   trigger keyName keyCode isPressed = do
     noise [qm| Triggering {isPressed ? "pressing" $ "releasing"}
              \ of {keyName} (X key code: {keyCode})... |]
+    fakeKeyCodeEvent dpy keyCode isPressed
+
+  -- Trigger remapped key.
+  -- Difference between `trigger` is that this one
+  -- shows in log which key this key remapped to.
+  asTrigger :: KeyName -> KeyCode -> Bool -> IO ()
+  asTrigger keyName keyCode isPressed = do
+    noise [qm| Triggering {isPressed ? "pressing" $ "releasing"}
+             \ of {keyName} as {getAsName keyName}
+             \ (X key code: {keyCode})... |]
     fakeKeyCodeEvent dpy keyCode isPressed
 
   -- Triggering both press and release events to X server

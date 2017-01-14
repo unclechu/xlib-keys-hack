@@ -33,8 +33,12 @@ import Utils ((&), (.>), makeApoClassy)
 data Options =
   Options { showHelp                :: Bool
           , verboseMode             :: Bool
+
           , realCapsLock            :: Bool
           , additionalControls      :: Bool
+          , resetByEscapeOnCapsLock :: Bool
+          , resetByWindowFocusEvent :: Bool
+
           , disableXInputDeviceName :: [String]
           , disableXInputDeviceId   :: [Int]
           , handleDevicePath        :: [FilePath]
@@ -49,10 +53,14 @@ data Options =
 
 instance NFData Options where
   rnf opts =
-    showHelp                opts `seq`
-    verboseMode             opts `seq`
-    realCapsLock            opts `seq`
-    additionalControls      opts `seq`
+    showHelp                opts `deepseq`
+    verboseMode             opts `deepseq`
+
+    realCapsLock            opts `deepseq`
+    additionalControls      opts `deepseq`
+    resetByEscapeOnCapsLock opts `deepseq`
+    resetByWindowFocusEvent opts `deepseq`
+
     disableXInputDeviceName opts `deepseq`
     disableXInputDeviceId   opts `deepseq`
     handleDevicePath        opts `deepseq`
@@ -70,8 +78,12 @@ instance Default Options where
     -- From arguments
     { showHelp                = False
     , verboseMode             = False
+
     , realCapsLock            = False
     , additionalControls      = True
+    , resetByEscapeOnCapsLock = True
+    , resetByWindowFocusEvent = True
+
     , disableXInputDeviceName = []
     , disableXInputDeviceId   = []
     , handleDevicePath        = []
@@ -110,13 +122,26 @@ options =
   , GetOpt.Option ['v'] ["verbose"]
       (GetOpt.NoArg $ verboseMode' .~ True)
       "Start in verbose-mode"
+
   , GetOpt.Option  [ ]  ["real-capslock"]
-      (GetOpt.NoArg $ realCapsLock' .~ True)
+      (GetOpt.NoArg $ (realCapsLock' .~ True)
+                    . (resetByEscapeOnCapsLock' .~ False))
       "Use real Caps Lock instead of remapping it to Escape"
   , GetOpt.Option  [ ]  ["no-additional-controls"]
       (GetOpt.NoArg $ additionalControls' .~ False)
       "Disable additional controls behavior for Caps Lock and Enter keys\
       \ (could be comfortable for playing some video games)"
+  , GetOpt.Option  [ ]  ["disable-reset-by-escape-on-capslock"]
+      (GetOpt.NoArg $ resetByEscapeOnCapsLock' .~ False)
+      "Disable resetting Caps Lock mode, Alternative mode\
+      \ and keyboard layout by Escape that triggered by Caps Lock key\
+      \ (only when it's remapped, no need to use this option\
+      \ if you already used --real-capslock)"
+  , GetOpt.Option  [ ]  ["disable-reset-by-window-focus-event"]
+      (GetOpt.NoArg $ resetByWindowFocusEvent' .~ False)
+      "Disable resetting Caps Lock mode, Alternative mode\
+      \ and keyboard layout by switching between windows"
+
   , GetOpt.Option  [ ]  ["disable-xinput-device-name"]
       (GetOpt.OptArg
         (\x -> disableXInputDeviceName' %~ (++ [fromJust x]))

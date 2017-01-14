@@ -131,14 +131,16 @@ processXEvents ctVars opts keyMap dpy rootWnd =
           then left  () -- If it's same window don't do anything
           else right () -- Go further
 
-       liftIO $ noise "Resetting keyboard layout..."
-       modifyStateM $ liftIO . resetKbdLayout
+       when (O.resetByWindowFocusEvent opts) $ do
 
-       liftIO $ noise "Resetting Caps Lock mode..."
-       modifyStateM $ liftIO . flip turnCapsLockMode False
+         liftIO $ noise "Resetting keyboard layout..."
+         modifyStateM $ liftIO . resetKbdLayout
 
-       liftIO $ noise "Resetting Alternative mode..."
-       modifyStateM $ liftIO . flip turnAlternativeMode False
+         liftIO $ noise "Resetting Caps Lock mode..."
+         modifyStateM $ liftIO . flip turnCapsLockMode False
+
+         liftIO $ noise "Resetting Alternative mode..."
+         modifyStateM $ liftIO . flip turnAlternativeMode False
 
        liftIO $ noise [qm|Window focus moved from {lastWnd} to {curWnd}|]
        modifyState $ State.lastWindow' .~ curWnd
