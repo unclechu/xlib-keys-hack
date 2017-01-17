@@ -9,7 +9,9 @@ module Actions
 
   , seqHead
   , noise,        noise'
+  , panicNoise,   panicNoise'
   , notifyXmobar, notifyXmobar'
+  , initTerminate, threadIsDeath, overthrow
   ) where
 
 import "base" Control.Monad (when, unless)
@@ -36,13 +38,21 @@ seqHead (Sequence (x:xs)) = (x, Sequence xs)
 
 -- Checks if verbose mode is enabled and only then adds actions to queue.
 noise :: O.Options -> State.CrossThreadVars -> String -> IO ()
-noise opts ctVars msg = when (O.verboseMode opts) $
-  writeChan (State.actionsChan ctVars) $ Single $ Noise msg
+noise opts ctVars = when (O.verboseMode opts) .
+  writeChan (State.actionsChan ctVars) . Single . Noise
+
+panicNoise :: State.CrossThreadVars -> String -> IO ()
+panicNoise ctVars =
+  writeChan (State.actionsChan ctVars) . Single . PanicNoise
 
 -- Multiple version of `noise`.
 noise' :: O.Options -> State.CrossThreadVars -> [String] -> IO ()
-noise' opts ctVars msgs = when (O.verboseMode opts) $
-  writeChan (State.actionsChan ctVars) $ Sequence $ map Noise msgs
+noise' opts ctVars = when (O.verboseMode opts) .
+  writeChan (State.actionsChan ctVars) . Sequence . map Noise
+
+panicNoise' :: State.CrossThreadVars -> [String] -> IO ()
+panicNoise' ctVars =
+  writeChan (State.actionsChan ctVars) . Sequence . map PanicNoise
 
 
 -- Checks if we have xmobar pipe file descriptor
@@ -55,3 +65,19 @@ notifyXmobar opts ctVars msg = when (isJust $ opts ^. O.xmobarPipeFd') $
 notifyXmobar' :: O.Options -> State.CrossThreadVars -> [String] -> IO ()
 notifyXmobar' opts ctVars msgs = when (isJust $ opts ^. O.xmobarPipeFd') $
   writeChan (State.actionsChan ctVars) $ Sequence $ map NotifyXmobar msgs
+
+
+-- Initiates termination process of whole application
+initTerminate :: State.CrossThreadVars -> IO ()
+initTerminate ctVars =
+  writeChan (State.actionsChan ctVars) $ Single InitTerminate
+
+-- Notifies about thread's death
+threadIsDeath :: State.CrossThreadVars -> Int -> IO ()
+threadIsDeath ctVars =
+  writeChan (State.actionsChan ctVars) . Single . ThreadIsDead
+
+-- Kills main thread
+overthrow :: State.CrossThreadVars -> IO ()
+overthrow ctVars =
+  writeChan (State.actionsChan ctVars) $ Single JustDie

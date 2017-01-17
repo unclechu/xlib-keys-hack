@@ -39,6 +39,7 @@ executable xlib-keys-hack
                      , lens
                      , template-haskell
                      , linux-evdev
+                     , unix
                      , directory
                      , process
                      , mtl

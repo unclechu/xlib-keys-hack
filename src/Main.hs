@@ -5,43 +5,57 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 
 module Main (main) where
 
 import "base" System.Exit (exitFailure, exitSuccess)
 import "base" System.Environment (getArgs)
 import "directory" System.Directory (doesFileExist)
-
-import "deepseq" Control.DeepSeq (deepseq, force)
-import qualified "mtl" Control.Monad.State as St
-import "mtl" Control.Monad.State (StateT, execStateT)
-import "transformers" Control.Monad.Trans.Class (lift)
-import "base" Control.Monad (when, unless, filterM, forever, forM_)
-import "lens" Control.Lens ((.~), (%~), (^.), set, over, view)
-import "base" Control.Concurrent (forkIO, threadDelay)
-import "base" Control.Concurrent.MVar (newMVar)
-import "base" Control.Concurrent.Chan (Chan, newChan, readChan)
-
-import "base" Data.Maybe (fromJust, isJust)
+import "unix" System.Posix.Signals ( installHandler
+                                   , Handler(Catch)
+                                   , sigINT
+                                   , sigTERM
+                                   )
+import qualified "base" System.IO as SysIO
+import qualified "base" GHC.IO.Handle.FD as IOHandleFD
 
 import qualified "X11" Graphics.X11.Types       as XTypes
 import qualified "X11" Graphics.X11.ExtraTypes  as XTypes
 import qualified "X11" Graphics.X11.Xlib.Extras as XExtras
 import "X11" Graphics.X11.Types (Window)
 import "X11" Graphics.X11.Xlib.Types (Display)
-import "X11" Graphics.X11.Xlib.Display (defaultRootWindow)
+import "X11" Graphics.X11.Xlib.Display (defaultRootWindow, closeDisplay)
 import "X11" Graphics.X11.Xlib.Misc (keysymToKeycode)
 
-import qualified "base" System.IO as SysIO
-import qualified "base" GHC.IO.Handle.FD as IOHandleFD
+import "deepseq" Control.DeepSeq (deepseq, force)
+import qualified "mtl" Control.Monad.State as St (get, put)
+import "mtl" Control.Monad.State (StateT, execStateT, evalStateT)
+import "either" Control.Monad.Trans.Either (runEitherT, left, right)
+import "transformers" Control.Monad.IO.Class (liftIO)
+import "transformers" Control.Monad.Trans.Class (lift)
+import "base" Control.Monad (when, unless, filterM, forever, forM_)
+import "lens" Control.Lens ((.~), (%~), (^.), set, over, view)
+import "base" Control.Concurrent (forkFinally, throwTo, ThreadId)
+import "base" Control.Concurrent.MVar (newMVar, modifyMVar_)
+import "base" Control.Concurrent.Chan (Chan, newChan, readChan)
+import "base" Control.Exception (Exception(fromException))
+
+import "base" Data.Maybe (fromJust, isJust)
+import "base" Data.Typeable (Typeable)
 
 -- local imports
 
-import Utils ( (&), (.>)
+import Utils ( (&), (<&>), (.>), (<||>)
              , errPutStrLn
              , dieWith
              , updateState'
              , updateStateM'
+             , modifyState
+             , modifyStateM
              , writeToFd
              )
 import Utils.String (qm)
@@ -59,6 +73,7 @@ import Process ( initReset
 import qualified Options as O
 import qualified XInput
 import State ( CrossThreadVars(CrossThreadVars, stateMVar, actionsChan)
+             , State(isTerminating), HasState(isTerminating')
              , initState
              )
 import qualified Actions
@@ -70,53 +85,35 @@ type KeyMap  = Keys.KeyMap
 type KeyName = Keys.KeyName
 type KeyCode = XTypes.KeyCode
 
-
--- Initializes Xlib and Xkb and checks if everything is okay
--- and returns Xlib Display pointer then.
-xkbInit :: IO Display
-xkbInit = do
-
-  (dpy :: Display) <- xkbGetDisplay >>= flip either return
-    (\err -> dieWith [qm|Xkb open display error: {err}|])
-
-  xkbDescPtr <- xkbGetDescPtr dpy >>= flip either return
-    (\err -> dieWith [qm|Xkb error: get keyboard data error: {err}|])
-
-  xkbFetchControls dpy xkbDescPtr
-    >>= flip unless (dieWith "Xkb error: fetch controls error")
-
-  xkbGetGroupsCount xkbDescPtr
-    >>= return . (> 0)
-    >>= flip unless (dieWith "Xkb error: groups count is 0")
-
-  return dpy
+-- Bool indicates if it's alive or dead
+type ThreadsState = [(Bool, ThreadId)]
 
 
 main :: IO ()
-main = do
+main = flip evalStateT ([] :: ThreadsState) $ do
 
-  opts <- getArgs >>= parseOpts
+  opts <- liftIO $ getArgs >>= parseOpts
   opts `deepseq` return ()
-  let noise = O.noise opts
+  let noise = liftIO . O.noise opts
 
   noise "Enabling threads support for Xlib..."
-  initThreads
+  liftIO initThreads
 
 
   noise "Initialization of Xkb..."
-  dpy <- xkbInit -- for main thread
+  dpy <- liftIO xkbInit -- for main thread
 
   noise "Getting additional X Display for window focus handler thread..."
-  dpyForXWindowFocusHandler <- xkbInit
+  dpyForXWindowFocusHandler <- liftIO xkbInit
 
   noise "Getting additional X Display for leds watcher thread..."
-  dpyForLedsWatcher <- xkbInit
+  dpyForLedsWatcher <- liftIO xkbInit
 
   let rootWnd = defaultRootWindow dpy
 
 
   noise "Dynamically getting media keys X key codes..."
-  (mediaKeysAliases :: [(KeyName, KeyCode)]) <- mapM
+  (mediaKeysAliases :: [(KeyName, KeyCode)]) <- liftIO $ mapM
     (\(keyName, keySym) ->
       keysymToKeycode dpy keySym
         >>= \keyCode -> return (keyName, keyCode))
@@ -145,13 +142,13 @@ main = do
 
 
   -- prevent errors with closed windows
-  XExtras.xSetErrorHandler
+  liftIO XExtras.xSetErrorHandler
 
   noise "Initial resetting..."
-  initReset opts keyMap dpy rootWnd
+  liftIO $ initReset opts keyMap dpy rootWnd
 
   noise "Making cross-thread variables..."
-  ctVars <- do
+  ctVars <- liftIO $ do
     let state = initState rootWnd
     ctState <- newMVar $ force state
     (ctActions :: Chan Actions.ActionType) <- newChan
@@ -160,48 +157,115 @@ main = do
                            }
   ctVars `deepseq` return ()
 
-  let withData :: Display
-               -> ( CrossThreadVars
-                    -> Options
-                    -> KeyMap
-                    -> Display
-                    -> Window
-                    -> IO () )
-               -> IO ()
+  let termHook  = Actions.initTerminate ctVars
+      catch sig = installHandler sig (Catch termHook) Nothing
+   in liftIO $ mapM_ catch [sigINT, sigTERM]
+
+  let _getThreadIdx = (length <$> St.get) :: StateT ThreadsState IO Int
+      _handleFork idx (Left e) =
+        case fromException e of
+             Just MortifyThreadException -> Actions.threadIsDeath ctVars idx
+             _ -> do Actions.panicNoise ctVars
+                                        [qm|Unexpected thread exception: {e}|]
+                     Actions.overthrow ctVars
+
       withData tDpy m = m ctVars opts keyMap tDpy rootWnd
+      runThread m = modifyStateM $ \ids -> do
+        tIdx <- _getThreadIdx
+        (True,) .> (: ids) <$>
+          liftIO (forkFinally (forever m) $ _handleFork tIdx)
 
   noise "Starting window focus handler thread..."
-  forkIO $ forever $ withData dpyForXWindowFocusHandler processXEvents
+  runThread $ withData dpyForXWindowFocusHandler processXEvents
 
   noise "Starting leds watcher thread..."
-  forkIO $ forever $ withData dpyForLedsWatcher watchLeds
+  runThread $ withData dpyForLedsWatcher watchLeds
 
   noise "Starting device handle threads (one thread per device)..."
-  let m fd = do noise [qm|Getting own X Display for thread of device: {fd}|]
-                dpy <- xkbInit
-                noise [qm|Starting handle thread for device: {fd}|]
-                forkIO $ forever $
-                  handleKeyboard ctVars opts keyMap dpy rootWnd fd
-   in forM_ (opts ^. O.handleDeviceFd') m
+  (devicesDisplays :: [Display]) <-
+    let m fd = do noise [qm|Getting own X Display for thread of device: {fd}|]
+                  dpy <- liftIO xkbInit
+                  noise [qm|Starting handle thread for device: {fd}|]
+                  runThread $ withData dpy handleKeyboard fd
+                  return dpy
+     in mapM m $ O.handleDeviceFd opts
+
+  modifyState reverse
 
   noise "Listening for actions in main thread..."
   forever $ do
-    (action :: Actions.ActionType) <- readChan $ actionsChan ctVars
-    let f :: Actions.ActionType -> IO ()
+    (action :: Actions.ActionType) <- liftIO $ readChan $ actionsChan ctVars
+    let f :: Actions.ActionType -> StateT ThreadsState IO ()
         f (Actions.Single a) = m a
         f (Actions.Sequence []) = return ()
         f (Actions.seqHead -> (x, xs)) = m x >> f xs
 
-        m :: Actions.Action -> IO ()
+        m :: Actions.Action -> StateT ThreadsState IO ()
         m (Actions.Noise msg) = noise msg
+        m (Actions.PanicNoise msg) = liftIO $ errPutStrLn msg
+
         m (Actions.NotifyXmobar msg) =
           let pipeFd = opts ^. O.xmobarPipeFd'
               log :: String -> String
               log (reverse -> '\n':(reverse -> msg)) = msg
               log msg = msg
            in when (isJust pipeFd) $ do
-             noise [qm|Notifying xmobar with message '{log msg}'...|]
-             let xmobarFd = fromJust pipeFd in writeToFd xmobarFd msg
+              noise [qm|Notifying xmobar with message '{log msg}'...|]
+              let xmobarFd = fromJust pipeFd
+               in liftIO $ writeToFd xmobarFd msg
+
+        m Actions.InitTerminate = do
+          threads <- St.get
+          liftIO $ modifyMVar_ (State.stateMVar ctVars)
+                 $ execStateT . runEitherT $ do
+
+            -- Check if termination process already initialized
+            not . State.isTerminating <$> St.get
+              >>= right () <||> let msg = "Attempt to initialize application\
+                                          \ termination process when it's\
+                                          \ already initialized was skipped"
+                                 in noise msg >> left ()
+
+            modifyState $ State.isTerminating' .~ True
+            noise "Application termination process initialization..."
+
+            liftIO $ forM_ threads $ snd .> flip throwTo MortifyThreadException
+
+        m (Actions.ThreadIsDead tIdx) = do
+
+          let markAsDead (_, []) = []
+              markAsDead (l, (_, x) : xs) = l ++ (False, x) : xs
+           in modifyState $ splitAt tIdx .> markAsDead
+
+          s <- St.get
+          let count = s & map fst .> filter not .> length
+              total = length s
+
+          noise [qm| Thread #{tIdx + 1} is dead
+                   \ ({count} of {total} is dead) |]
+          when (count == total) $ liftIO $ Actions.overthrow ctVars
+
+        m Actions.JustDie = do
+
+          noise "Application is going to die"
+
+          noise "Closing devices files descriptors..."
+          forM_ (O.handleDeviceFd opts) $ \fd -> do
+            noise [qm|Closing device file descriptor: {fd}...|]
+            liftIO $ SysIO.hClose fd
+
+          when (isJust $ O.xmobarPipeFd opts) $ do
+            let Just fd = O.xmobarPipeFd opts
+            noise [qm|Closing XMobar pipe file descriptor: {fd}...|]
+            liftIO $ SysIO.hClose fd
+
+          noise "Closing X Display descriptors..."
+          [dpy, dpyForXWindowFocusHandler, dpyForLedsWatcher]
+            & (++ devicesDisplays)
+            & liftIO . mapM_ closeDisplay
+
+          noise "The end"
+          liftIO exitSuccess
 
      in f action
 
@@ -295,3 +359,29 @@ main = do
                 logDisabled opts = opts ^. O.availableXInputDevices'
                   & show .> ("XInput devices ids that was disabled: " ++)
                   & (\x -> O.noise opts x >> return opts)
+
+
+-- Initializes Xlib and Xkb and checks if everything is okay
+-- and returns Xlib Display pointer then.
+xkbInit :: IO Display
+xkbInit = do
+
+  (dpy :: Display) <- xkbGetDisplay >>= flip either return
+    (\err -> dieWith [qm|Xkb open display error: {err}|])
+
+  xkbDescPtr <- xkbGetDescPtr dpy >>= flip either return
+    (\err -> dieWith [qm|Xkb error: get keyboard data error: {err}|])
+
+  xkbFetchControls dpy xkbDescPtr
+    >>= flip unless (dieWith "Xkb error: fetch controls error")
+
+  (> 0) <$> xkbGetGroupsCount xkbDescPtr
+    >>= flip unless (dieWith "Xkb error: groups count is 0")
+
+  return dpy
+
+
+data MyThreadException = MortifyThreadException
+                         deriving (Show, Typeable)
+
+instance Exception MyThreadException

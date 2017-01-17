@@ -33,30 +33,33 @@ import Keys (KeyName)
 
 
 data State =
-  State { lastWindow  :: Window
-        , pressedKeys :: Set.Set KeyName
-        , leds        :: LedModes
-        , alternative :: Bool -- Alternative mode on/off
-        , comboState  :: ComboState
+  State { lastWindow    :: Window
+        , pressedKeys   :: Set.Set KeyName
+        , leds          :: LedModes
+        , alternative   :: Bool -- Alternative mode on/off
+        , comboState    :: ComboState
+        , isTerminating :: Bool
         }
   deriving (Show, Eq, Generic)
 
 instance NFData State where
   rnf x =
-    lastWindow  x `seq`
-    pressedKeys x `deepseq`
-    leds        x `deepseq`
-    alternative x `seq`
-    comboState  x `deepseq`
+    lastWindow    x `deepseq`
+    pressedKeys   x `deepseq`
+    leds          x `deepseq`
+    alternative   x `deepseq`
+    comboState    x `deepseq`
+    isTerminating x `deepseq`
       ()
 
 instance Default State where
   def = State
-    { lastWindow  = undefined -- Must be overwritten
-    , pressedKeys = Set.empty
-    , leds        = def
-    , alternative = False
-    , comboState  = def
+    { lastWindow    = undefined -- Must be overwritten
+    , pressedKeys   = Set.empty
+    , leds          = def
+    , alternative   = False
+    , comboState    = def
+    , isTerminating = False
     }
 
 
@@ -68,8 +71,8 @@ data LedModes =
 
 instance NFData LedModes where
   rnf x =
-    capsLockLed x `seq`
-    numLockLed  x `seq`
+    capsLockLed x `deepseq`
+    numLockLed  x `deepseq`
       ()
 
 instance Default LedModes where
@@ -105,10 +108,10 @@ data ComboState =
 
 instance NFData ComboState where
   rnf x =
-    appleMediaPressed        x `seq`
-    isCapsLockUsedWithCombos x `seq`
-    isEnterUsedWithCombos    x `seq`
-    isEnterPressedWithMods   x `seq`
+    appleMediaPressed        x `deepseq`
+    isCapsLockUsedWithCombos x `deepseq`
+    isEnterUsedWithCombos    x `deepseq`
+    isEnterPressedWithMods   x `deepseq`
     capsLockModeChange       x `deepseq`
     alternativeModeChange    x `deepseq`
     resetKbdLayout           x `deepseq`
