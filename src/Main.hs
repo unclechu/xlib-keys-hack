@@ -43,6 +43,7 @@ import "base" Control.Concurrent (forkFinally, throwTo, ThreadId)
 import "base" Control.Concurrent.MVar (newMVar, modifyMVar_)
 import "base" Control.Concurrent.Chan (Chan, newChan, readChan)
 import "base" Control.Exception (Exception(fromException))
+import "base" Control.Arrow ((&&&))
 
 import "base" Data.Maybe (fromJust, isJust)
 import "base" Data.Typeable (Typeable)
@@ -237,13 +238,11 @@ main = flip evalStateT ([] :: ThreadsState) $ do
               markAsDead (l, (_, x) : xs) = l ++ (False, x) : xs
            in modifyState $ splitAt tIdx .> markAsDead
 
-          s <- St.get
-          let count = s & map fst .> filter not .> length
-              total = length s
+          (dead, total) <- St.get <&> (length . filter not . map fst &&& length)
 
           noise [qm| Thread #{tIdx + 1} is dead
-                   \ ({count} of {total} is dead) |]
-          when (count == total) $ liftIO $ Actions.overthrow ctVars
+                   \ ({dead} of {total} is dead) |]
+          when (dead == total) $ liftIO $ Actions.overthrow ctVars
 
         m Actions.JustDie = do
 
