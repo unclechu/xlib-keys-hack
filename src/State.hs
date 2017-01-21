@@ -85,10 +85,14 @@ data ComboState =
   ComboState { appleMediaPressed :: Bool
 
              -- When Caps Lock works as additional Control
-             , isCapsLockUsedWithCombos :: Bool
+             , isCapsLockUsedWithCombos  :: Bool
+             -- For fast-typing cases
+             , keysPressedBeforeCapsLock :: Set.Set KeyName
 
              -- When Enter works as additional Control
-             , isEnterUsedWithCombos :: Bool
+             , isEnterUsedWithCombos  :: Bool
+             -- For fast-typing cases
+             , keysPressedBeforeEnter :: Set.Set KeyName
 
              -- When Enter wors as additional Control
              -- and pressed with modifiers like for example
@@ -108,24 +112,36 @@ data ComboState =
 
 instance NFData ComboState where
   rnf x =
-    appleMediaPressed        x `deepseq`
-    isCapsLockUsedWithCombos x `deepseq`
-    isEnterUsedWithCombos    x `deepseq`
-    isEnterPressedWithMods   x `deepseq`
-    capsLockModeChange       x `deepseq`
-    alternativeModeChange    x `deepseq`
-    resetKbdLayout           x `deepseq`
+    appleMediaPressed         x `deepseq`
+
+    isCapsLockUsedWithCombos  x `deepseq`
+    keysPressedBeforeCapsLock x `deepseq`
+
+    isEnterUsedWithCombos     x `deepseq`
+    keysPressedBeforeEnter    x `deepseq`
+
+    isEnterPressedWithMods    x `deepseq`
+
+    capsLockModeChange        x `deepseq`
+    alternativeModeChange     x `deepseq`
+    resetKbdLayout            x `deepseq`
       ()
 
 instance Default ComboState where
   def = ComboState
-    { appleMediaPressed        = False
-    , isCapsLockUsedWithCombos = False
-    , isEnterUsedWithCombos    = False
-    , isEnterPressedWithMods   = False
-    , capsLockModeChange       = Nothing
-    , alternativeModeChange    = Nothing
-    , resetKbdLayout           = False
+    { appleMediaPressed         = False
+
+    , isCapsLockUsedWithCombos  = False
+    , keysPressedBeforeCapsLock = Set.empty
+
+    , isEnterUsedWithCombos     = False
+    , keysPressedBeforeEnter    = Set.empty
+
+    , isEnterPressedWithMods    = False
+
+    , capsLockModeChange        = Nothing
+    , alternativeModeChange     = Nothing
+    , resetKbdLayout            = False
     }
 
 

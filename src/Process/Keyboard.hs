@@ -99,6 +99,8 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
          in pressed == ctrls
          || (O.additionalControls opts && pressed == additionalControls)
 
+      -- Caps Lock or Enter pressed (current key)
+      -- but not Enter with modifiers.
       onAdditionalControlKey :: Bool
       onAdditionalControlKey =
         O.additionalControls opts &&
@@ -108,6 +110,8 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
           state ^. State.comboState' . State.isEnterPressedWithMods'
         )
 
+      -- Caps Lock or Enter pressed (previously pressed)
+      -- but ignoring just Enter with modifiers.
       onWithAdditionalControlKey :: Bool
       onWithAdditionalControlKey =
         O.additionalControls opts &&
@@ -155,7 +159,8 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
         when (keyName `Set.member` pressed) $
           trigger keyName (fromJust $ getKeyCodeByName keyName) False
 
-  in if
+  in
+  if
 
   -- Alternative mode on/off by Alts handling
   | onOnlyBothAltsPressed -> do
@@ -177,7 +182,9 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
     return state
 
   -- Hadling `FNKey` pressing on apple keyboard
-  | keyName == Keys.FNKey -> if
+  | keyName == Keys.FNKey ->
+
+    if
 
     -- Prevent triggering when just pressed
     | isPressed -> return state
@@ -224,84 +231,115 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
     let lens = State.comboState' . State.isEnterPressedWithMods'
      in return (state & lens .~ isPressed)
 
-  -- Handling of additional controls by `CapsLockKey` and `EnterKey`
+  -- Handling of additional controls by `CapsLockKey` and `EnterKey`.
+  -- They can't be pressed both in the same time here, it handled above.
   | onAdditionalControlKey ->
 
-    let (flagLens, controlKeyName) = case keyName of
-          Keys.CapsLockKey ->
-            ( State.comboState' . State.isCapsLockUsedWithCombos'
-            , Keys.ControlLeftKey
-            )
-          Keys.EnterKey ->
-            ( State.comboState' . State.isEnterUsedWithCombos'
-            , Keys.ControlRightKey
-            )
-          :: (Lens' State Bool, KeyName)
-    in if
+    let (withCombosFlagLens, pressedBeforeLens, controlKeyName) =
+          case keyName of
+               Keys.CapsLockKey ->
+                 ( State.comboState' . State.isCapsLockUsedWithCombos'
+                 , State.comboState' . State.keysPressedBeforeCapsLock'
+                 , Keys.ControlLeftKey
+                 )
+               Keys.EnterKey ->
+                 ( State.comboState' . State.isEnterUsedWithCombos'
+                 , State.comboState' . State.keysPressedBeforeEnter'
+                 , Keys.ControlRightKey
+                 )
+          :: (Lens' State Bool, Lens' State (Set KeyName), KeyName)
+     in if
 
-    -- Prevent triggering when just pressed
-    | isPressed -> return state
+        -- Prevent triggering when just pressed.
+        -- But store keys that hadn't released in time.
+        | isPressed -> do
+          let onlyAnother = pressed & Set.delete keyName
+          unless (Set.null onlyAnother) $
+            noise' [ [qm| {keyName} was pressed with some another keys
+                        \ that hadn't be released in time, these another keys
+                        \ WONT be taken as combo with additional control |]
+                   , [qm| Storing keys was pressed before {keyName}:
+                        \ {Set.toList onlyAnother}... |]
+                   ]
+          return (state & pressedBeforeLens .~ onlyAnother)
 
-    -- Trigger Control releasing because when you press
-    -- `CapsLockKey` or `EnterKey` with combo (see below)
-    -- it triggers Control pressing.
-    | state ^. flagLens -> do
-      let keyCode = fromJust $ getKeyCodeByName controlKeyName
-      noise' [ [qm| {keyName} released after pressed with combos,
-                  \ it means it was interpreted as {controlKeyName} |]
-             , [qm| Triggering releasing of {controlKeyName}
-                  \ (X key code: {keyCode})... |]
-             ]
-      fakeKeyCodeEvent dpy keyCode False
-      return (state & flagLens .~ False)
+        -- Trigger Control releasing because when you press
+        -- `CapsLockKey` or `EnterKey` with combo (see below)
+        -- it triggers Control pressing.
+        | state ^. withCombosFlagLens -> do
+          let keyCode = fromJust $ getKeyCodeByName controlKeyName
+          noise' [ [qm| {keyName} released after pressed with combos,
+                      \ it means it was interpreted as {controlKeyName} |]
+                 , [qm| Triggering releasing of {controlKeyName}
+                      \ (X key code: {keyCode})... |]
+                 ]
+          fakeKeyCodeEvent dpy keyCode False
+          return (state & withCombosFlagLens .~ False)
 
-    -- Just triggering default aliased key code to `CapsLockKey` or `EnterKey`
-    | otherwise ->
-      case keyName of
-           Keys.CapsLockKey -> do
+        -- Just triggering default aliased key code
+        -- to `CapsLockKey` or `EnterKey`.
+        | otherwise ->
+          case keyName of
+               Keys.CapsLockKey -> do
 
-             ( if O.realCapsLock opts
-                  then pressRelease
-                  else asPressRelease ) keyName keyCode
+                 ( if O.realCapsLock opts
+                      then pressRelease
+                      else asPressRelease ) keyName keyCode
 
-             if O.resetByEscapeOnCapsLock opts
-                then execStateT (runEitherT resetAll) state
-                else return state
+                 if O.resetByEscapeOnCapsLock opts
+                    then execStateT (runEitherT resetAll) state
+                    else return state
 
-           Keys.EnterKey -> state <$ pressRelease keyName keyCode
-           _ -> return state
+               Keys.EnterKey -> state <$ pressRelease keyName keyCode
+               _ -> return state
 
-  -- When `CapsLockKey` or `EnterKey` pressed with combo
+  -- When either `CapsLockKey` or `EnterKey` pressed with combo.
+  -- They couldn't be pressed both, it handled above.
   | onWithAdditionalControlKey ->
 
-    let (mainKeyName, flagLens, controlKeyName) = x
-          where x :: (KeyName, Lens' State Bool, KeyName)
-                x = if
-                  | Keys.CapsLockKey `Set.member` pressed ->
-                    ( Keys.CapsLockKey
-                    , State.comboState' . State.isCapsLockUsedWithCombos'
-                    , Keys.ControlLeftKey
-                    )
-                  | Keys.EnterKey `Set.member` pressed ->
-                    ( Keys.EnterKey
-                    , State.comboState' . State.isEnterUsedWithCombos'
-                    , Keys.ControlRightKey
-                    )
-    in if
+    let _f :: (KeyName, Lens' State Bool, Lens' State (Set KeyName), KeyName)
+        _f | Keys.CapsLockKey `Set.member` pressed =
+             ( Keys.CapsLockKey
+             , State.comboState' . State.isCapsLockUsedWithCombos'
+             , State.comboState' . State.keysPressedBeforeCapsLock'
+             , Keys.ControlLeftKey
+             )
+           | Keys.EnterKey `Set.member` pressed =
+             ( Keys.EnterKey
+             , State.comboState' . State.isEnterUsedWithCombos'
+             , State.comboState' . State.keysPressedBeforeEnter'
+             , Keys.ControlRightKey
+             )
+        ( mainKeyName,
+          withCombosFlagLens,
+          pressedBeforeLens,
+          controlKeyName ) = _f
+        pressedBeforeList = state ^. pressedBeforeLens
+     in if
 
-    -- When pressing of Control already triggered
-    | state ^. flagLens -> state <$ justTrigger
+        -- Some key is released and this key was pressed before
+        -- additional control, so we just remove this key from
+        -- list of keys that pressed before additional control.
+        | not isPressed && (keyName `Set.member` pressedBeforeList) ->
+          (state & pressedBeforeLens %~ Set.delete keyName) <$ justTrigger
 
-    -- `CapsLockKey` or `EnterKey` pressed with combo,
-    -- it means it should be interpreted as Control key.
-    | otherwise -> do
-      let keyCode = fromJust $ getKeyCodeByName controlKeyName
-      noise [qm| {mainKeyName} pressed with combo,
-               \ triggering {controlKeyName} (X key code: {keyCode})... |]
-      fakeKeyCodeEvent dpy keyCode True
-      justTrigger
-      return (state & flagLens .~ True)
+        -- When pressing of Control already triggered
+        | state ^. withCombosFlagLens -> state <$ justTrigger
 
+        -- `CapsLockKey` or `EnterKey` pressed with combo,
+        -- it means it should be interpreted as Control key.
+        | otherwise -> do
+          let keyCode = fromJust $ getKeyCodeByName controlKeyName
+          noise [qm| {mainKeyName} pressed with combo,
+                   \ triggering {controlKeyName}
+                   \ (X key code: {keyCode})... |]
+          fakeKeyCodeEvent dpy keyCode True
+          justTrigger
+          return (state & withCombosFlagLens .~ True)
+
+  -- When Caps Lock remapped as Escape key.
+  -- Resetting stuff (if it's enabled)
+  -- and specific logging (noticing about remapping).
   | keyName == Keys.CapsLockKey && not (O.realCapsLock opts) ->
     if O.resetByEscapeOnCapsLock opts && not isPressed
        then justAsTrigger >> execStateT (runEitherT resetAll) state
