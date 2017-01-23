@@ -72,9 +72,9 @@ handleModeChange :: ModeChangeLens -- Lens for delayed mode change
                                         -- some keys events for example.
                  -> Bool -- Flag that indicates current state of mode
                          -- that we handle.
-                 -> Display -> Noiser -> KeyMap -> State -> IO State
+                 -> Noiser -> State -> IO State
 handleModeChange mcLens (doingItMsg, alreadyMsg) doHandle isNowOn
-                 dpy noise' keyMap state =
+                 noise' state =
 
   flip execStateT state . runEitherT $ do
 
@@ -107,7 +107,7 @@ handleCapsLockModeChange :: Display -> Noiser -> KeyMap -> State -> IO State
 handleCapsLockModeChange dpy noise' keyMap state =
 
   handleModeChange mcLens (doingItMsg, alreadyMsg) handler isNowOn
-                   dpy noise' keyMap state
+                   noise' state
 
   where doingItMsg = [qm| Delayed Caps Lock mode turning
                         \ {toOn ? "on" $ "off"}
@@ -133,12 +133,11 @@ handleCapsLockModeChange dpy noise' keyMap state =
 
 
 -- Handle delayed Alternative mode change
-handleAlternativeModeChange :: Display -> Noiser -> Notifier -> KeyMap -> State
-                            -> IO State
-handleAlternativeModeChange dpy noise' notify' keyMap state =
+handleAlternativeModeChange :: Noiser -> Notifier -> State -> IO State
+handleAlternativeModeChange noise' notify' state =
 
   handleModeChange mcLens (doingItMsg, alreadyMsg) handler isNowOn
-                   dpy noise' keyMap state
+                   noise' state
 
   where doingItMsg = [qm| Delayed Alternative mode turning
                         \ {toOn ? "on" $ "off"}
@@ -326,7 +325,7 @@ turnAlternativeMode noise' notify' state toOn =
 
 
 handleResetKbdLayout :: Display -> Noiser -> State -> IO State
-handleResetKbdLayout dpy noise' state =  flip execStateT state . runEitherT $ do
+handleResetKbdLayout dpy noise' state = flip execStateT state . runEitherT $ do
 
   -- Break if we don't have to do anything
   if hasDelayed

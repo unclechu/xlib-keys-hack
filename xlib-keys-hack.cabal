@@ -25,6 +25,7 @@ executable xlib-keys-hack
                      , Process
                      , Process.Keyboard
                      , Process.CrossThread
+                     , Process.KeysActions
                      , Options
                      , Actions
                      , Actions.Types

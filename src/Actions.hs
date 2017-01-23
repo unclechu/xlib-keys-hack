@@ -4,15 +4,19 @@
 {-# LANGUAGE PackageImports #-}
 
 module Actions
-  ( ActionType(..), HasActionType(..)
+  ( ActionType(..)
   , Action(..),     HasAction(..)
+  , KeyAction(..),  HasKeyAction(..)
 
   , seqHead
-  , noise,        noise'
-  , panicNoise,   panicNoise'
-  , notifyXmobar, notifyXmobar'
+  , noise,         noise'
+  , panicNoise,    panicNoise'
+  , notifyXmobar,  notifyXmobar'
   , initTerminate, threadIsDeath, overthrow
+  , pressKey,      releaseKey,    pressReleaseKey
   ) where
+
+import "X11" Graphics.X11.Xlib (KeyCode)
 
 import "base" Control.Monad (when, unless)
 import "base" Control.Concurrent.Chan (writeChan)
@@ -26,13 +30,14 @@ import Utils (makeApoClassy)
 import qualified Options as O
 import qualified State
 
-import Actions.Types ( ActionType(..), HasActionType(..)
+import Actions.Types ( ActionType(..)
                      , Action(..),     HasAction(..)
+                     , KeyAction(..),  HasKeyAction(..)
                      )
 
 
 -- Takes head from actions sequence and returns it with wrapped tail.
-seqHead :: ActionType -> (Action, ActionType)
+seqHead :: ActionType a -> (a, ActionType a)
 seqHead (Sequence (x:xs)) = (x, Sequence xs)
 
 
@@ -81,3 +86,20 @@ threadIsDeath ctVars =
 overthrow :: State.CrossThreadVars -> IO ()
 overthrow ctVars =
   writeChan (State.actionsChan ctVars) $ Single JustDie
+
+
+
+-- Keys actions
+
+pressKey :: State.CrossThreadVars -> KeyCode -> IO ()
+pressKey ctVars =
+  writeChan (State.keysActionsChan ctVars) . Single . KeyCodePress
+
+releaseKey :: State.CrossThreadVars -> KeyCode -> IO ()
+releaseKey ctVars =
+  writeChan (State.keysActionsChan ctVars) . Single . KeyCodeRelease
+
+pressReleaseKey :: State.CrossThreadVars -> KeyCode -> IO ()
+pressReleaseKey ctVars keyCode =
+  writeChan (State.keysActionsChan ctVars) $
+    Sequence [KeyCodePress keyCode, KeyCodeRelease keyCode]

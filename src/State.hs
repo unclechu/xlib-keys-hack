@@ -28,7 +28,7 @@ import qualified "containers" Data.Set as Set
 -- local imports
 
 import Utils (makeApoClassy)
-import Actions.Types (ActionType)
+import Actions.Types (ActionType, Action, KeyAction)
 import Keys (KeyName)
 
 
@@ -36,6 +36,7 @@ data State =
   State { lastWindow    :: Window
         , pressedKeys   :: Set.Set KeyName
         , leds          :: LedModes
+        , kbdLayout     :: Int
         , alternative   :: Bool -- Alternative mode on/off
         , comboState    :: ComboState
         , isTerminating :: Bool
@@ -47,6 +48,7 @@ instance NFData State where
     lastWindow    x `deepseq`
     pressedKeys   x `deepseq`
     leds          x `deepseq`
+    kbdLayout     x `deepseq`
     alternative   x `deepseq`
     comboState    x `deepseq`
     isTerminating x `deepseq`
@@ -57,6 +59,7 @@ instance Default State where
     { lastWindow    = undefined -- Must be overwritten
     , pressedKeys   = Set.empty
     , leds          = def
+    , kbdLayout     = 0
     , alternative   = False
     , comboState    = def
     , isTerminating = False
@@ -150,8 +153,9 @@ initState wnd = def { lastWindow = wnd }
 
 
 data CrossThreadVars =
-  CrossThreadVars { stateMVar   :: MVar State
-                  , actionsChan :: Chan ActionType
+  CrossThreadVars { stateMVar       :: MVar State
+                  , actionsChan     :: Chan (ActionType Action)
+                  , keysActionsChan :: Chan (ActionType KeyAction)
                   }
   deriving (Generic)
 
@@ -160,8 +164,9 @@ instance Show CrossThreadVars where
 
 instance NFData CrossThreadVars where
   rnf ctVars =
-    stateMVar   ctVars `seq`
-    actionsChan ctVars `seq`
+    stateMVar       ctVars `seq`
+    actionsChan     ctVars `seq`
+    keysActionsChan ctVars `seq`
       ()
 
 

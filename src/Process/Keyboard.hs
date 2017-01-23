@@ -38,7 +38,6 @@ import Utils ( (&), (.>), (<||>), (?)
              , EitherStateT, modifyState, modifyStateM
              )
 import Utils.String (qm)
-import Bindings.XTest (fakeKeyCodeEvent)
 import qualified Options as O
 import qualified Actions
 import qualified State
@@ -78,7 +77,7 @@ handleKeyboard :: CrossThreadVars
                -> Window
                -> Handle
                -> IO ()
-handleKeyboard ctVars opts keyMap dpy rootWnd fd =
+handleKeyboard ctVars opts keyMap dpy _ fd =
   onEv $ \keyName keyCode isPressed state ->
 
   let pressed     = state ^. State.pressedKeys'
@@ -178,7 +177,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
     noise [qm| Triggering {isPressed ? "pressing" $ "releasing"}
              \ of alternative {keyNameTo}
              \ (X key code: {keyCodeTo}) by {keyName}... |]
-    fakeKeyCodeEvent dpy keyCodeTo isPressed
+    (isPressed ? pressKey $ releaseKey) keyCodeTo
     return state
 
   -- Hadling `FNKey` pressing on apple keyboard
@@ -273,7 +272,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
                  , [qm| Triggering releasing of {controlKeyName}
                       \ (X key code: {keyCode})... |]
                  ]
-          fakeKeyCodeEvent dpy keyCode False
+          releaseKey keyCode
           return (state & withCombosFlagLens .~ False)
 
         -- Just triggering default aliased key code
@@ -333,7 +332,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
           noise [qm| {mainKeyName} pressed with combo,
                    \ triggering {controlKeyName}
                    \ (X key code: {keyCode})... |]
-          fakeKeyCodeEvent dpy keyCode True
+          pressKey keyCode
           justTrigger
           return (state & withCombosFlagLens .~ True)
 
@@ -353,6 +352,10 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
   noise   = Actions.noise         opts ctVars ::  String  -> IO ()
   noise'  = Actions.noise'        opts ctVars :: [String] -> IO ()
   notify' = Actions.notifyXmobar' opts ctVars :: [String] -> IO ()
+
+  pressKey        = Actions.pressKey        ctVars :: KeyCode -> IO ()
+  releaseKey      = Actions.releaseKey      ctVars :: KeyCode -> IO ()
+  pressReleaseKey = Actions.pressReleaseKey ctVars :: KeyCode -> IO ()
 
   getAlias :: EvdevEvent.Key -> Maybe KeyAlias
   getAlias = Keys.getAliasByKey keyMap
@@ -395,7 +398,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
 
   handleAlternativeModeChange :: State -> IO State
   handleAlternativeModeChange =
-    CrossThread.handleAlternativeModeChange dpy noise' notify' keyMap
+    CrossThread.handleAlternativeModeChange noise' notify'
 
   handleResetKbdLayout :: State -> IO State
   handleResetKbdLayout = CrossThread.handleResetKbdLayout dpy noise'
@@ -474,7 +477,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
       forM_ (Set.toList toRelease) $ \keyName -> do
         noise $ releaseItemMsgMask keyName
         let Just keyCode = getter keyName
-         in fakeKeyCodeEvent dpy keyCode False
+         in releaseKey keyCode
     return rest
 
   -- Release alternative keys.
@@ -505,7 +508,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
   trigger keyName keyCode isPressed = do
     noise [qm| Triggering {isPressed ? "pressing" $ "releasing"}
              \ of {keyName} (X key code: {keyCode})... |]
-    fakeKeyCodeEvent dpy keyCode isPressed
+    (isPressed ? pressKey $ releaseKey) keyCode
 
   -- Trigger remapped key.
   -- Difference between `trigger` is that this one
@@ -515,14 +518,14 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
     noise [qm| Triggering {isPressed ? "pressing" $ "releasing"}
              \ of {keyName} as {getAsName keyName}
              \ (X key code: {keyCode})... |]
-    fakeKeyCodeEvent dpy keyCode isPressed
+    (isPressed ? pressKey $ releaseKey) keyCode
 
   -- Triggering both press and release events to X server
   pressRelease :: KeyName -> KeyCode -> IO ()
   pressRelease keyName keyCode = do
     noise [qm| Triggering pressing and releasing of {keyName}
              \ (X key code: {keyCode})... |]
-    let f = fakeKeyCodeEvent dpy keyCode in f True >> f False
+    pressReleaseKey keyCode
 
   -- Triggering both press and release events to X server.
   -- Also write to log about to which key this key remapped.
@@ -531,7 +534,7 @@ handleKeyboard ctVars opts keyMap dpy rootWnd fd =
     noise [qm| Triggering pressing and releasing
              \ of {keyName} as {getAsName keyName}
              \ (X key code: {keyCode})... |]
-    let f = fakeKeyCodeEvent dpy keyCode in f True >> f False
+    pressReleaseKey keyCode
 
 
 onOff :: Bool -> String

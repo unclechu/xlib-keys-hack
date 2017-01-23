@@ -5,11 +5,21 @@
 {-# LANGUAGE PackageImports #-}
 
 module Actions.Types
-  ( ActionType(..), HasActionType(..)
+  ( ActionType(..)
   , Action(..),     HasAction(..)
+  , KeyAction(..),  HasKeyAction(..)
   ) where
 
+import "X11" Graphics.X11.Xlib (KeyCode)
+
+-- local imports
+
 import Utils (makeApoClassy)
+
+
+data ActionType a = Single    a
+                  | Sequence [a]
+                    deriving (Show, Eq)
 
 
 data Action = Noise        String
@@ -23,10 +33,10 @@ data Action = Noise        String
               deriving (Show, Eq)
 
 
-data ActionType = Single    Action
-                | Sequence [Action]
-                  deriving (Show, Eq)
+data KeyAction = KeyCodePress   KeyCode
+               | KeyCodeRelease KeyCode
+                 deriving (Show, Eq)
 
 
 makeApoClassy ''Action
-makeApoClassy ''ActionType
+makeApoClassy ''KeyAction

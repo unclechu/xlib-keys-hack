@@ -107,8 +107,7 @@ ifMaybe f x = if f x then Just x else Nothing
 -- A version of nextEvent that does not block in foreign calls.
 nextEvent' :: Display -> XEvent.XEventPtr -> IO ()
 nextEvent' dpy evPtr =
-  pending dpy
-    >>= return . (/= 0)
+  pending dpy <&> (/= 0)
     >>= XEvent.nextEvent dpy evPtr <||>
         (threadWaitRead (Fd fd) >> nextEvent' dpy evPtr)
   where fd = connectionNumber dpy

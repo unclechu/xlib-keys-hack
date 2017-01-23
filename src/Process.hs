@@ -9,13 +9,15 @@
 
 module Process
   ( initReset
-  , processXEvents
+  , processWindowFocus
   , watchLeds
   , handleKeyboard
+  , processKeysActions
+  , processKeyboardState
   ) where
 
 
-import "base" Control.Monad (when, unless)
+import "base" Control.Monad (when, unless, forever, guard)
 import "lens" Control.Lens ((.~), (%~), (^.), set, over, view)
 import "base" Control.Concurrent (threadDelay)
 import "base" Control.Concurrent.MVar (MVar, modifyMVar_)
@@ -45,7 +47,10 @@ import Utils ( (&), (.>), (<||>), (?)
              , modifyState, modifyStateM
              )
 import Utils.String (qm)
-import Bindings.Xkb (xkbSetGroup)
+import Bindings.Xkb ( xkbSetGroup
+                    , xkbListenForKeyboardStateEvents
+                    , xkbGetCurrentLayout
+                    )
 import Bindings.MoreXlib (getLeds)
 import qualified Options as O
 import qualified Actions
@@ -53,6 +58,7 @@ import qualified State
 import qualified Keys
 
 import Process.Keyboard (handleKeyboard)
+import Process.KeysActions (processKeysActions)
 import qualified Process.CrossThread as CrossThread
   ( turnAlternativeMode
   , turnCapsLockMode
@@ -69,7 +75,7 @@ type CrossThreadVars = State.CrossThreadVars
 
 
 initReset :: Options -> KeyMap -> Display -> Window -> IO ()
-initReset opts keyMap dpy rootWnd = do
+initReset opts keyMap dpy _ = do
 
   noise "Initial resetting of keyboard layout..."
   initialResetKbdLayout dpy
@@ -94,13 +100,13 @@ initReset opts keyMap dpy rootWnd = do
           xkbSetGroup dpy 0 >>= flip unless (dieWith "xkbSetGroup error")
 
 
-processXEvents :: CrossThreadVars
-               -> Options
-               -> KeyMap
-               -> Display
-               -> Window
-               -> IO ()
-processXEvents ctVars opts keyMap dpy rootWnd =
+processWindowFocus :: CrossThreadVars
+                   -> Options
+                   -> KeyMap
+                   -> Display
+                   -> Window
+                   -> IO ()
+processWindowFocus ctVars opts keyMap dpy rootWnd =
   fmap (either id id) $ runEitherT $ do
 
   (wnd, _) <- lift $ getInputFocus dpy
@@ -167,7 +173,7 @@ processXEvents ctVars opts keyMap dpy rootWnd =
 -- Watch for new leds state and when new leds state is coming
 -- store it in State, notify xmobar pipe and log.
 watchLeds :: CrossThreadVars -> Options -> KeyMap -> Display -> Window -> IO ()
-watchLeds ctVars opts keyMap dpy rootWnd = f $ \leds prevState -> do
+watchLeds ctVars opts _ dpy _ = f $ \leds prevState -> do
 
   let prevCapsLock = prevState ^. State.leds' . State.capsLockLed'
       newCapsLock  = leds ^. State.capsLockLed'
@@ -194,3 +200,23 @@ watchLeds ctVars opts keyMap dpy rootWnd = f $ \leds prevState -> do
           leds <- getLeds dpy
           modifyMVar_ (State.stateMVar ctVars) (m leds)
           threadDelay $ 100 * 1000
+
+
+-- Watch for keyboard layout change
+processKeyboardState :: CrossThreadVars
+                     -> Options
+                     -> KeyMap
+                     -> Display
+                     -> Window
+                     -> IO ()
+processKeyboardState ctVars opts _ dpy _ = do
+  xkbListenForKeyboardStateEvents dpy
+  XEvent.allocaXEvent $ \e -> do
+    nextEvent' dpy e
+    XExtras.getEvent e
+    layoutNum <- xkbGetCurrentLayout dpy
+    noise [qm| Keyboard layout switched to: {layoutNum} |]
+    modifyMVar_ (State.stateMVar ctVars) $
+                return . (State.kbdLayout' .~ layoutNum)
+
+  where noise = Actions.noise opts ctVars :: String -> IO ()

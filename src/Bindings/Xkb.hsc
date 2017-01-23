@@ -13,12 +13,15 @@ module Bindings.Xkb
   , xkbGetDisplay
   , xkbSetGroup
   , xkbGetCurrentLayout
+  , xkbListenForKeyboardStateEvents
   ) where
 
 import "base" Foreign
 import "base" Foreign.Ptr (nullPtr)
 import qualified "base" Foreign.Marshal.Alloc as MAlloc
 import qualified "base" Foreign.C.Types as CTypes
+
+import "base" Control.Monad (when, unless)
 
 import qualified "base" Data.Either as Either
 
@@ -82,11 +85,11 @@ xkbGetGroupsCount descPtr = do
 -- native
 foreign import ccall unsafe "X11/XKBlib.h XkbOpenDisplay"
   xkbOpenDisplay :: Ptr CTypes.CChar -- display_name
-                 -> Ptr CTypes.CInt -- event_rtrn
-                 -> Ptr CTypes.CInt -- error_rtrn
-                 -> Ptr CTypes.CInt -- major_in_out
-                 -> Ptr CTypes.CInt -- minor_in_out
-                 -> Ptr CTypes.CInt -- reason_rtrn
+                 -> Ptr CTypes.CInt  -- event_rtrn
+                 -> Ptr CTypes.CInt  -- error_rtrn
+                 -> Ptr CTypes.CInt  -- major_in_out
+                 -> Ptr CTypes.CInt  -- minor_in_out
+                 -> Ptr CTypes.CInt  -- reason_rtrn
                  -> IO (Ptr Display)
 
 data XkbGetDisplayError = BadLibraryVersion
@@ -149,3 +152,37 @@ xkbGetCurrentLayout dpy = alloca $ \stRecPtr -> do
                                                   -- 0 (zero) that means error
                                                   -- but it works okay.
   fromIntegral . XkbTypes.group <$> peek stRecPtr
+
+
+
+-- native
+foreign import ccall unsafe "X11/XKBlib.h XkbSelectEventDetails"
+  xkbSelectEventDetails :: Display
+                        -> CTypes.CUInt  -- device_spec
+                        -> CTypes.CUInt  -- event_type
+                        -> CTypes.CULong -- bits_to_change
+                        -> CTypes.CULong -- values_for_bits
+                        -> IO Bool
+
+-- native
+foreign import ccall unsafe "X11/XKBlib.h XkbSelectEvents"
+  xkbSelectEvents :: Display
+                  -> CTypes.CUInt  -- device_spec
+                  -> CTypes.CULong -- bits_to_change
+                  -> CTypes.CULong -- values_for_bits
+                  -> IO Bool
+
+-- abstract
+xkbListenForKeyboardStateEvents :: Display -> IO ()
+xkbListenForKeyboardStateEvents dpy = do
+  -- Listen for group changes
+  flip unless (error "XkbSelectEventDetails error")
+    =<< xkbSelectEventDetails dpy (#const XkbUseCoreKbd)
+                                  (#const XkbStateNotify)
+                                  (#const XkbAllStateComponentsMask)
+                                  (#const XkbGroupStateMask)
+  -- Layout/geometry changes
+  flip unless (error "XkbSelectEvents error")
+    =<< xkbSelectEvents dpy (#const XkbUseCoreKbd)
+                            (#const XkbNewKeyboardNotifyMask)
+                            (#const XkbNewKeyboardNotifyMask)
