@@ -75,8 +75,8 @@ type LedModes        = State.LedModes
 type CrossThreadVars = State.CrossThreadVars
 
 
-initReset :: Options -> KeyMap -> Display -> Window -> IO ()
-initReset opts keyMap dpy _ = do
+initReset :: Options -> KeyMap -> Display -> IO ()
+initReset opts keyMap dpy = do
 
   noise "Initial resetting of keyboard layout..."
   initialResetKbdLayout dpy
@@ -101,57 +101,10 @@ initReset opts keyMap dpy _ = do
           xkbSetGroup dpy 0 >>= flip unless (dieWith "xkbSetGroup error")
 
 
-processWindowFocus :: CrossThreadVars
-                   -> Options
-                   -> KeyMap
-                   -> Display
-                   -> Window
-                   -> IO ()
-processWindowFocus ctVars opts keyMap dpy rootWnd =
-  fmap (either id id) $ runEitherT $ do
+processWindowFocus :: CrossThreadVars -> Options -> KeyMap -> Display -> IO ()
+processWindowFocus ctVars opts keyMap dpy =
 
-  (wnd, _) <- lift $ getInputFocus dpy
-  continueIf $ wnd /= rootWnd
-
-  lift $ XEvent.sync dpy False
-  lift $ XEvent.selectInput dpy wnd XTypes.focusChangeMask
-
-  evPtr <- lift $ XEvent.allocaXEvent return
-  lift $ noise "Waiting for next X event..."
-
-  lift $ nextEvent dpy evPtr
-  ev <- lift $ XExtras.getEvent evPtr
-  let evName = XExtras.eventName ev
-
-  if
-   | evName `elem` ["FocusIn", "FocusOut"] -> do
-     let m f = modifyMVar_ (State.stateMVar ctVars)
-                           (execStateT $ runEitherT f)
-     lift $ m $ do
-
-       liftIO $ noise [qm|Handling focus event: {evName}...|]
-
-       lastWnd <- State.lastWindow <$> St.get
-       curWnd  <- liftIO $ XEvent.get_Window evPtr
-
-       -- Do not continue if it's same window
-       continueIf $ curWnd /= lastWnd
-
-       when (O.resetByWindowFocusEvent opts) $ do
-
-         liftIO $ noise "Resetting keyboard layout..."
-         modifyStateM $ liftIO . resetKbdLayout
-
-         liftIO $ noise "Resetting Caps Lock mode..."
-         modifyStateM $ liftIO . flip turnCapsLockMode False
-
-         liftIO $ noise "Resetting Alternative mode..."
-         modifyStateM $ liftIO . flip turnAlternativeMode False
-
-       liftIO $ noise [qm|Window focus moved from {lastWnd} to {curWnd}|]
-       modifyState $ State.lastWindow' .~ curWnd
-
-   | otherwise -> return ()
+  XEvent.allocaXEvent $ \evPtr -> loop evPtr True
 
   where nextEvent = nextEvent'
 
@@ -168,12 +121,52 @@ processWindowFocus ctVars opts keyMap dpy rootWnd =
         resetKbdLayout :: State -> IO State
         resetKbdLayout = CrossThread.resetKbdLayout ctVars noise'
 
+        loop :: XEvent.XEventPtr -> Bool -> IO ()
+        loop evPtr needReselect = do
+
+          when needReselect $ do
+
+            liftIO $ noise "Getting current focused window id..."
+            (wnd, _) <- liftIO $ getInputFocus dpy
+
+            noise [qm|Listening for window {wnd} for focus events...|]
+            XEvent.selectInput dpy wnd XTypes.focusChangeMask -- XTypes.destroyNotify
+
+          noise "Waiting for next X event about new window focus..."
+          nextEvent dpy evPtr
+
+          handle evPtr >>= loop evPtr
+
+        handle :: XEvent.XEventPtr -> IO Bool
+        handle evPtr =
+
+          fmap (either (const False) (const True)) $ runEitherT $ do
+
+          ev <- liftIO $ XExtras.getEvent evPtr
+          let evName = XExtras.eventName ev
+          continueIf $ evName == "FocusOut"
+
+          liftIO $ noise [qm|Handling focus event: {evName}...|]
+
+          when (O.resetByWindowFocusEvent opts) $ liftIO $
+            modifyMVar_ (State.stateMVar ctVars) $
+                         execStateT $ runEitherT $ do
+
+            liftIO $ noise "Resetting keyboard layout..."
+            modifyStateM $ liftIO . resetKbdLayout
+
+            liftIO $ noise "Resetting Caps Lock mode..."
+            modifyStateM $ liftIO . flip turnCapsLockMode False
+
+            liftIO $ noise "Resetting Alternative mode..."
+            modifyStateM $ liftIO . flip turnAlternativeMode False
+
 
 -- FIXME waiting in blocking-mode for new leds event
 -- Watch for new leds state and when new leds state is coming
 -- store it in State, notify xmobar pipe and log.
-watchLeds :: CrossThreadVars -> Options -> KeyMap -> Display -> Window -> IO ()
-watchLeds ctVars opts _ dpy _ = f $ \leds prevState -> do
+watchLeds :: CrossThreadVars -> Options -> KeyMap -> Display -> IO ()
+watchLeds ctVars opts _ dpy = forever $ f $ \leds prevState -> do
 
   let prevCapsLock = prevState ^. State.leds' . State.capsLockLed'
       newCapsLock  = leds ^. State.capsLockLed'
@@ -203,17 +196,13 @@ watchLeds ctVars opts _ dpy _ = f $ \leds prevState -> do
 
 
 -- Watch for keyboard layout change
-processKeyboardState :: CrossThreadVars
-                     -> Options
-                     -> KeyMap
-                     -> Display
-                     -> Window
-                     -> IO ()
-processKeyboardState ctVars opts _ dpy _ = do
+processKeyboardState :: CrossThreadVars -> Options -> KeyMap -> Display -> IO ()
+processKeyboardState ctVars opts _ dpy = do
   xkbListenForKeyboardStateEvents dpy
-  XEvent.allocaXEvent $ \e -> do
-    nextEvent' dpy e
-    XExtras.getEvent e
+  XEvent.allocaXEvent $ \evPtr -> forever $ do
+    noise "Waiting for next X event about new keyboard layout state..."
+    nextEvent' dpy evPtr
+    XExtras.getEvent evPtr
     layoutNum <- xkbGetCurrentLayout dpy
     noise [qm| Keyboard layout switched to: {layoutNum} |]
     modifyMVar_ (State.stateMVar ctVars) $

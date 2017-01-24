@@ -328,7 +328,9 @@ turnAlternativeMode noise' notify' state toOn =
 
 
 handleResetKbdLayout :: CrossThreadVars -> Noiser -> State -> IO State
-handleResetKbdLayout ctVars noise' state = flip execStateT state . runEitherT $ do
+handleResetKbdLayout ctVars noise' state =
+
+  flip execStateT state . runEitherT $ do
 
   -- Break if we don't have to do anything
   continueIf hasDelayed

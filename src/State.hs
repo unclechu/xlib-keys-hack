@@ -11,8 +11,6 @@ module State
   , ComboState(..), HasComboState(..)
 
   , CrossThreadVars(..), HasCrossThreadVars(..)
-
-  , initState
   ) where
 
 import "base" GHC.Generics (Generic)
@@ -33,8 +31,7 @@ import Keys (KeyName)
 
 
 data State =
-  State { lastWindow    :: Window
-        , pressedKeys   :: Set.Set KeyName
+  State { pressedKeys   :: Set.Set KeyName
         , leds          :: LedModes
         , kbdLayout     :: Int
         , alternative   :: Bool -- Alternative mode on/off
@@ -45,7 +42,6 @@ data State =
 
 instance NFData State where
   rnf x =
-    lastWindow    x `deepseq`
     pressedKeys   x `deepseq`
     leds          x `deepseq`
     kbdLayout     x `deepseq`
@@ -56,8 +52,7 @@ instance NFData State where
 
 instance Default State where
   def = State
-    { lastWindow    = undefined -- Must be overwritten
-    , pressedKeys   = Set.empty
+    { pressedKeys   = Set.empty
     , leds          = def
     , kbdLayout     = 0
     , alternative   = False
@@ -146,10 +141,6 @@ instance Default ComboState where
     , alternativeModeChange     = Nothing
     , resetKbdLayout            = False
     }
-
-
-initState :: Window -> State
-initState wnd = def { lastWindow = wnd }
 
 
 data CrossThreadVars =

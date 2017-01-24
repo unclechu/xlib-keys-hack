@@ -24,12 +24,11 @@ import "unix" System.Posix (exitImmediately)
 import qualified "base" System.IO as SysIO
 import qualified "base" GHC.IO.Handle.FD as IOHandleFD
 
-import qualified "X11" Graphics.X11.Types       as XTypes
-import qualified "X11" Graphics.X11.ExtraTypes  as XTypes
-import qualified "X11" Graphics.X11.Xlib.Extras as XExtras
+import qualified "X11" Graphics.X11.Types      as XTypes
+import qualified "X11" Graphics.X11.ExtraTypes as XTypes
 import "X11" Graphics.X11.Types (Window)
 import "X11" Graphics.X11.Xlib.Types (Display)
-import "X11" Graphics.X11.Xlib.Display (defaultRootWindow, closeDisplay)
+import "X11" Graphics.X11.Xlib.Display (closeDisplay)
 import "X11" Graphics.X11.Xlib.Misc (keysymToKeycode)
 
 import "deepseq" Control.DeepSeq (deepseq, force)
@@ -53,6 +52,7 @@ import "base" Control.Arrow ((&&&))
 
 import "base" Data.Maybe (fromJust, isJust)
 import "base" Data.Typeable (Typeable)
+import "data-default" Data.Default (def)
 
 -- local imports
 
@@ -87,7 +87,6 @@ import State ( CrossThreadVars ( CrossThreadVars
                                , keysActionsChan
                                )
              , State(isTerminating), HasState(isTerminating')
-             , initState
              )
 import qualified Actions
 import Actions (ActionType, Action, KeyAction)
@@ -130,8 +129,6 @@ main = flip evalStateT ([] :: ThreadsState) $ do
   noise "Getting additional X Display for leds watcher thread..."
   dpyForLedsWatcher <- liftIO xkbInit
 
-  let rootWnd = defaultRootWindow dpy
-
 
   noise "Dynamically getting media keys X key codes..."
   (mediaKeysAliases :: [(KeyName, KeyCode)]) <- liftIO $ mapM
@@ -162,17 +159,12 @@ main = flip evalStateT ([] :: ThreadsState) $ do
   keyMap `deepseq` return ()
 
 
-  -- TODO remove it after window focus handler will be separated to own process
-  -- Prevent errors with closed windows
-  liftIO XExtras.xSetErrorHandler
-
   noise "Initial resetting..."
-  liftIO $ initReset opts keyMap dpy rootWnd
+  liftIO $ initReset opts keyMap dpy
 
   noise "Making cross-thread variables..."
   ctVars <- liftIO $ do
-    let state = initState rootWnd
-    ctState <- newMVar $ force state
+    ctState <- newMVar $ force def
     (ctActions     :: Chan (ActionType Action))    <- newChan
     (ctKeysActions :: Chan (ActionType KeyAction)) <- newChan
     return CrossThreadVars { stateMVar       = ctState
@@ -190,14 +182,17 @@ main = flip evalStateT ([] :: ThreadsState) $ do
         case fromException e of
              Just MortifyThreadException -> Actions.threadIsDeath ctVars idx
              _ -> do Actions.panicNoise ctVars
-                                        [qm|Unexpected thread exception: {e}|]
+                       [qm|Unexpected thread #{idx} exception: {e}|]
                      Actions.overthrow ctVars
+      _handleFork idx (Right _) = do
+        Actions.panicNoise ctVars [qm|Thread #{idx} unexpectedly terminated|]
+        Actions.overthrow ctVars
 
-      withData tDpy m = m ctVars opts keyMap tDpy rootWnd
+      withData tDpy m = m ctVars opts keyMap tDpy
       runThread m = modifyStateM $ \ids -> do
         tIdx <- _getThreadIdx
         (True,) .> (: ids) <$>
-          liftIO (forkFinally (forever m) $ _handleFork tIdx)
+          liftIO (forkFinally m $ _handleFork tIdx)
 
   noise "Starting keys actions handler thread..."
   runThread $ withData dpyForKeysActionsHanlder processKeysActions

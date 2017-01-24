@@ -11,7 +11,7 @@ module Process.KeysActions
   ) where
 
 import "base" Control.Concurrent.Chan (readChan)
-import "base" Control.Monad (when, unless)
+import "base" Control.Monad (when, unless, forever)
 
 import "base" Data.Maybe (fromJust)
 
@@ -38,9 +38,8 @@ import State (CrossThreadVars, keysActionsChan)
 import qualified State
 
 
-processKeysActions :: CrossThreadVars -> Options -> KeyMap -> Display -> Window
-                   -> IO ()
-processKeysActions ctVars _ keyMap dpy _ = do
+processKeysActions :: CrossThreadVars -> Options -> KeyMap -> Display -> IO ()
+processKeysActions ctVars _ keyMap dpy = forever $ do
 
   (action :: ActionType KeyAction) <- readChan $ keysActionsChan ctVars
 

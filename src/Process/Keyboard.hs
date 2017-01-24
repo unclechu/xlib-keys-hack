@@ -16,7 +16,7 @@ import qualified "base" GHC.IO.Handle as IOHandle
 import qualified "linux-evdev" System.Linux.Input.Event as EvdevEvent
 
 import "transformers" Control.Monad.Trans.Class (lift)
-import "base" Control.Monad (when, unless, forM_)
+import "base" Control.Monad (when, unless, forM_, forever)
 import "lens" Control.Lens ((.~), (%~), (^.), set, over, view, Lens')
 import "base" Control.Concurrent.MVar (MVar, modifyMVar_)
 import "base" Control.Concurrent.Chan (Chan)
@@ -70,14 +70,9 @@ type CrossThreadVars = State.CrossThreadVars
 
 
 -- Wait for key events and simulate them in X server.
-handleKeyboard :: CrossThreadVars
-               -> Options
-               -> KeyMap
-               -> Display
-               -> Window
-               -> Handle
+handleKeyboard :: CrossThreadVars -> Options -> KeyMap -> Display -> Handle
                -> IO ()
-handleKeyboard ctVars opts keyMap _ _ fd =
+handleKeyboard ctVars opts keyMap _ fd =
   onEv $ \keyName keyCode isPressed state ->
 
   let pressed     = state ^. State.pressedKeys'
@@ -405,7 +400,7 @@ handleKeyboard ctVars opts keyMap _ _ fd =
 
   -- Wait and extract event, make preparations and call handler
   onEv :: (KeyName -> KeyCode -> Bool -> State -> IO State) -> IO ()
-  onEv m = EvdevEvent.hReadEvent fd >>= \case
+  onEv m = forever $ EvdevEvent.hReadEvent fd >>= \case
 
     Just EvdevEvent.KeyEvent
            { EvdevEvent.evKeyCode      = (getAlias -> Just (name, _, code))
