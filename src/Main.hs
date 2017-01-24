@@ -24,8 +24,9 @@ import "unix" System.Posix (exitImmediately)
 import qualified "base" System.IO as SysIO
 import qualified "base" GHC.IO.Handle.FD as IOHandleFD
 
-import qualified "X11" Graphics.X11.Types      as XTypes
-import qualified "X11" Graphics.X11.ExtraTypes as XTypes
+import qualified "X11" Graphics.X11.Types       as XTypes
+import qualified "X11" Graphics.X11.ExtraTypes  as XTypes
+import qualified "X11" Graphics.X11.Xlib.Extras as XExtras
 import "X11" Graphics.X11.Types (Window)
 import "X11" Graphics.X11.Xlib.Types (Display)
 import "X11" Graphics.X11.Xlib.Display (closeDisplay)
@@ -158,6 +159,9 @@ main = flip evalStateT ([] :: ThreadsState) $ do
   -- Making it fail at start app time if media keys described incorrectly
   keyMap `deepseq` return ()
 
+
+  -- Prevent errors with closed windows
+  liftIO XExtras.xSetErrorHandler
 
   noise "Initial resetting..."
   liftIO $ initReset opts keyMap dpy

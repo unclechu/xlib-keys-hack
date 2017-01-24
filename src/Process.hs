@@ -130,7 +130,7 @@ processWindowFocus ctVars opts keyMap dpy =
             (wnd, _) <- liftIO $ getInputFocus dpy
 
             noise [qm|Listening for window {wnd} for focus events...|]
-            XEvent.selectInput dpy wnd XTypes.focusChangeMask -- XTypes.destroyNotify
+            XEvent.selectInput dpy wnd XTypes.focusChangeMask
 
           noise "Waiting for next X event about new window focus..."
           nextEvent dpy evPtr
@@ -144,13 +144,13 @@ processWindowFocus ctVars opts keyMap dpy =
 
           ev <- liftIO $ XExtras.getEvent evPtr
           let evName = XExtras.eventName ev
-          continueIf $ evName == "FocusOut"
+          continueIf $ evName `elem` ["FocusIn", "FocusOut"]
 
           liftIO $ noise [qm|Handling focus event: {evName}...|]
 
-          when (O.resetByWindowFocusEvent opts) $ liftIO $
-            modifyMVar_ (State.stateMVar ctVars) $
-                         execStateT $ runEitherT $ do
+          when (O.resetByWindowFocusEvent opts) $
+            liftIO $ modifyMVar_ (State.stateMVar ctVars) $
+                                  execStateT $ runEitherT $ do
 
             liftIO $ noise "Resetting keyboard layout..."
             modifyStateM $ liftIO . resetKbdLayout
