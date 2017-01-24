@@ -45,6 +45,7 @@ import Utils ( (&), (.>), (<||>), (?)
              , dieWith
              , writeToFd
              , modifyState, modifyStateM
+             , continueIf, continueUnless
              )
 import Utils.String (qm)
 import Bindings.Xkb ( xkbSetGroup
@@ -110,7 +111,7 @@ processWindowFocus ctVars opts keyMap dpy rootWnd =
   fmap (either id id) $ runEitherT $ do
 
   (wnd, _) <- lift $ getInputFocus dpy
-  if wnd == rootWnd then left () else right ()
+  continueIf $ wnd /= rootWnd
 
   lift $ XEvent.sync dpy False
   lift $ XEvent.selectInput dpy wnd XTypes.focusChangeMask
@@ -133,9 +134,8 @@ processWindowFocus ctVars opts keyMap dpy rootWnd =
        lastWnd <- State.lastWindow <$> St.get
        curWnd  <- liftIO $ XEvent.get_Window evPtr
 
-       if curWnd == lastWnd
-          then left  () -- If it's same window don't do anything
-          else right () -- Go further
+       -- Do not continue if it's same window
+       continueIf $ curWnd /= lastWnd
 
        when (O.resetByWindowFocusEvent opts) $ do
 
@@ -160,13 +160,13 @@ processWindowFocus ctVars opts keyMap dpy rootWnd =
         notify' = Actions.notifyXmobar' opts ctVars :: [String] -> IO ()
 
         turnCapsLockMode :: State -> Bool -> IO State
-        turnCapsLockMode = CrossThread.turnCapsLockMode dpy noise' keyMap
+        turnCapsLockMode = CrossThread.turnCapsLockMode ctVars noise' keyMap
 
         turnAlternativeMode :: State -> Bool -> IO State
         turnAlternativeMode = CrossThread.turnAlternativeMode noise' notify'
 
         resetKbdLayout :: State -> IO State
-        resetKbdLayout = CrossThread.resetKbdLayout dpy noise'
+        resetKbdLayout = CrossThread.resetKbdLayout ctVars noise'
 
 
 -- FIXME waiting in blocking-mode for new leds event

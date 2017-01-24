@@ -35,6 +35,8 @@ data Action = Noise        String
 
 data KeyAction = KeyCodePress   KeyCode
                | KeyCodeRelease KeyCode
+               | TurnCapsLock   Bool
+               | ResetKeyboardLayout
                  deriving (Show, Eq)
 
 

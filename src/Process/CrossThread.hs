@@ -42,19 +42,25 @@ import "base" Data.Maybe (fromJust, isJust)
 
 -- local imports
 
-import Utils ((?), (<||>), (&), (.>), modifyState, modifyStateM, dieWith)
+import Utils ( (?), (<||>), (&), (.>)
+             , modifyState, modifyStateM
+             , continueIf, continueUnless
+             , dieWith
+             )
 import Utils.String (qm)
 import Bindings.XTest (fakeKeyCodeEvent)
 import Bindings.MoreXlib (getLeds)
-import Bindings.Xkb (xkbSetGroup, xkbGetCurrentLayout)
+import qualified Actions
 import qualified State
 import qualified Keys
 
 
-type State    = State.State
-type Noiser   = [String] -> IO ()
-type Notifier = [String] -> IO ()
-type KeyMap   = Keys.KeyMap
+
+type State           = State.State
+type CrossThreadVars = State.CrossThreadVars
+type Noiser          = [String] -> IO ()
+type Notifier        = [String] -> IO ()
+type KeyMap          = Keys.KeyMap
 
 type ModeChangeLens = Lens' State (Maybe Bool)
 
@@ -87,9 +93,7 @@ handleModeChange mcLens (doingItMsg, alreadyMsg) doHandle isNowOn
 
   -- Do nothing if Caps Lock mode changing is not requested
   -- or if all another keys isn't released yet.
-  if hasDelayed && everyKeyIsReleased
-     then right ()
-     else left ()
+  continueIf $ hasDelayed && everyKeyIsReleased
 
   -- Handling it!
   liftIO $ noise' [doingItMsg]
@@ -103,8 +107,9 @@ handleModeChange mcLens (doingItMsg, alreadyMsg) doHandle isNowOn
 
 
 -- Handle delayed Caps Lock mode change
-handleCapsLockModeChange :: Display -> Noiser -> KeyMap -> State -> IO State
-handleCapsLockModeChange dpy noise' keyMap state =
+handleCapsLockModeChange :: CrossThreadVars -> Noiser -> KeyMap -> State
+                         -> IO State
+handleCapsLockModeChange ctVars noise' keyMap state =
 
   handleModeChange mcLens (doingItMsg, alreadyMsg) handler isNowOn
                    noise' state
@@ -125,11 +130,10 @@ handleCapsLockModeChange dpy noise' keyMap state =
         toOn    = (fromJust $ state ^. mcLens)                :: Bool
         isNowOn = (state ^. State.leds' . State.capsLockLed') :: Bool
 
-        handler :: State -> IO State
-        handler s = s <$ changeCapsLockMode dpy keyCode
-
         keyName = Keys.RealCapsLockKey
-        keyCode = fromJust $ Keys.getRealKeyCodeByName keyMap keyName
+
+        handler :: State -> IO State
+        handler s = s <$ Actions.turnCapsLock ctVars toOn
 
 
 -- Handle delayed Alternative mode change
@@ -202,15 +206,15 @@ turnMode mcLens (immediatelyMsgs, laterMsgs) already nowHandle toOn
 
 
 
-toggleCapsLock :: Display -> Noiser -> KeyMap -> State -> IO State
-toggleCapsLock dpy noise' keyMap state =
+toggleCapsLock :: CrossThreadVars -> Noiser -> KeyMap -> State -> IO State
+toggleCapsLock ctVars noise' keyMap state =
 
   turnMode mcLens ([immediatelyMsg], laterMsgs) Nothing handler toOn
            noise' state
 
   where immediatelyMsg =
-            [qm| Toggling Caps Lock mode (turning it {onOrOff toOn}
-               \ by pressing and releasing {keyName})... |]
+          [qm| Toggling Caps Lock mode (turning it {onOrOff toOn}
+             \ by pressing and releasing {keyName})... |]
 
         laterMsgs = [ [qm| Attempt to toggle Caps Lock mode
                          \ (to turn it {onOrOff toOn}
@@ -227,10 +231,9 @@ toggleCapsLock dpy noise' keyMap state =
         toOn    = (not $ state ^. State.leds' . State.capsLockLed') :: Bool
 
         keyName = Keys.RealCapsLockKey
-        keyCode = fromJust $ Keys.getRealKeyCodeByName keyMap keyName
 
         handler :: State -> IO State
-        handler s = s <$ changeCapsLockMode dpy keyCode
+        handler s = s <$ Actions.turnCapsLock ctVars toOn
 
 
 toggleAlternative :: Noiser -> Notifier -> State -> IO State
@@ -261,8 +264,9 @@ toggleAlternative noise' notify' state =
 
 
 
-turnCapsLockMode :: Display -> Noiser -> KeyMap -> State -> Bool -> IO State
-turnCapsLockMode dpy noise' keyMap state toOn =
+turnCapsLockMode :: CrossThreadVars -> Noiser -> KeyMap -> State -> Bool
+                 -> IO State
+turnCapsLockMode ctVars noise' keyMap state toOn =
 
   turnMode mcLens ([immediatelyMsg], laterMsgs) already handler toOn
            noise' state
@@ -288,10 +292,9 @@ turnCapsLockMode dpy noise' keyMap state toOn =
         already = Just (isNowOn, [alreadyMsg]) :: Maybe (Bool, [String])
 
         keyName = Keys.RealCapsLockKey
-        keyCode = fromJust $ Keys.getRealKeyCodeByName keyMap keyName
 
         handler :: State -> IO State
-        handler s = s <$ changeCapsLockMode dpy keyCode
+        handler s = s <$ Actions.turnCapsLock ctVars toOn
 
 
 turnAlternativeMode :: Noiser -> Notifier -> State -> Bool -> IO State
@@ -324,27 +327,24 @@ turnAlternativeMode noise' notify' state toOn =
 
 
 
-handleResetKbdLayout :: Display -> Noiser -> State -> IO State
-handleResetKbdLayout dpy noise' state = flip execStateT state . runEitherT $ do
+handleResetKbdLayout :: CrossThreadVars -> Noiser -> State -> IO State
+handleResetKbdLayout ctVars noise' state = flip execStateT state . runEitherT $ do
 
   -- Break if we don't have to do anything
-  if hasDelayed
-     then right () -- Go further
-     else left  () -- Don't do anything because we don't need to
+  continueIf hasDelayed
 
   -- Skip if it's already done
-  (/= 0) <$> liftIO (xkbGetCurrentLayout dpy)
-    >>= right () <||> let msg = "Delayed reset keyboard layout to default\
-                                \ after all other keys release was skipped\
-                                \ because it's already done now"
-                       in liftIO (noise' [msg])
-                            >> modifyState (mcLens .~ False)
-                            >> left ()
+  if State.kbdLayout state == 0
+     then let msg = "Delayed reset keyboard layout to default\
+                    \ after all other keys release was skipped\
+                    \ because it's already done now"
+           in liftIO (noise' [msg])
+                >> modifyState (mcLens .~ False)
+                >> left ()
+     else right ()
 
   -- Do nothing right now if we have some not released keys yet
-  if everyKeyIsReleased
-     then right () -- Go further
-     else left  () -- Not a good time to do it
+  continueIf everyKeyIsReleased
 
   -- Perfect time to do it!
   liftIO $ noise' [ "Delayed resetting keyboard layout to default\
@@ -353,20 +353,21 @@ handleResetKbdLayout dpy noise' state = flip execStateT state . runEitherT $ do
   modifyState $ mcLens .~ False
 
   where mcLens             = State.comboState' . State.resetKbdLayout'
-        handle             = resetKbdLayoutBareHandler dpy
-        hasDelayed         = (state ^. mcLens == True) :: Bool
+        handle             = Actions.resetKeyboardLayout ctVars
+        hasDelayed         = (state ^. mcLens) :: Bool
         everyKeyIsReleased = (Set.null $ State.pressedKeys state) :: Bool
 
-resetKbdLayout :: Display -> Noiser -> State -> IO State
-resetKbdLayout dpy noise' state = flip execStateT state . runEitherT $ do
+resetKbdLayout :: CrossThreadVars -> Noiser -> State -> IO State
+resetKbdLayout ctVars noise' state = flip execStateT state . runEitherT $ do
 
   -- Skip if it's already done
-  (/= 0) <$> liftIO (xkbGetCurrentLayout dpy)
-    >>= right () <||> let msg = "Skipping attempt to reset keyboard layout\
-                                \ to default because it's already done"
-                       in liftIO (noise' [msg])
-                            >> modifyState (mcLens .~ False)
-                            >> left ()
+  if State.kbdLayout state == 0
+     then let msg = "Skipping attempt to reset keyboard layout\
+                    \ to default because it's already done"
+           in liftIO (noise' [msg])
+                >> modifyState (mcLens .~ False)
+                >> left ()
+     else right ()
 
   -- Doing it right now
   if Set.null (State.pressedKeys state)
@@ -385,11 +386,7 @@ resetKbdLayout dpy noise' state = flip execStateT state . runEitherT $ do
   modifyState $ mcLens .~ True
 
   where mcLens = State.comboState' . State.resetKbdLayout'
-        handle = resetKbdLayoutBareHandler dpy
-
-resetKbdLayoutBareHandler :: Display -> IO ()
-resetKbdLayoutBareHandler dpy =
-  xkbSetGroup dpy 0 >>= flip unless (dieWith "xkbSetGroup error")
+        handle = Actions.resetKeyboardLayout ctVars
 
 
 
@@ -425,11 +422,6 @@ justTurnCapsLockMode dpy noise keyMap isOn =
           isOn /= isOnAlready ? a $ b
 
 
-
--- Caps Lock mode change bare handler
-changeCapsLockMode :: Display -> KeyCode -> IO ()
-changeCapsLockMode dpy keyCode = f True >> f False
-  where f = fakeKeyCodeEvent dpy keyCode
 
 -- Alternative mode change bare handler
 changeAlternativeMode :: Bool -> State -> State

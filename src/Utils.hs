@@ -27,6 +27,8 @@ module Utils
   , modifyState
   , modifyStateM
   , EitherStateT
+  , continueIf
+  , continueUnless
 
   , writeToFd
   ) where
@@ -38,7 +40,7 @@ import "X11" Graphics.X11.Xlib.Display (connectionNumber)
 
 import "base" Control.Concurrent (threadWaitRead)
 import qualified "mtl" Control.Monad.State.Class as St (MonadState(get, put, state))
-import "either" Control.Monad.Trans.Either (EitherT)
+import "either" Control.Monad.Trans.Either (EitherT, left, right)
 import "transformers" Control.Monad.Trans.State (StateT)
 
 import "base" System.Posix.Types (Fd(Fd))
@@ -178,6 +180,12 @@ modifyStateM fm = St.get >>= fm >>= St.put
 
 -- Simplified alias for combined `EitherT` and `StateT`
 type EitherStateT s l m r = EitherT l (StateT s m) r
+
+continueIf :: Monad m => Bool -> EitherT () m ()
+continueIf cond = if cond then right () else left ()
+
+continueUnless :: Monad m => Bool -> EitherT () m ()
+continueUnless cond = if cond then left () else right ()
 
 
 writeToFd :: IOHandle.Handle -> String -> IO ()

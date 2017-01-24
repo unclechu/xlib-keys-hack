@@ -77,7 +77,7 @@ handleKeyboard :: CrossThreadVars
                -> Window
                -> Handle
                -> IO ()
-handleKeyboard ctVars opts keyMap dpy _ fd =
+handleKeyboard ctVars opts keyMap _ _ fd =
   onEv $ \keyName keyCode isPressed state ->
 
   let pressed     = state ^. State.pressedKeys'
@@ -378,30 +378,30 @@ handleKeyboard ctVars opts keyMap dpy _ fd =
   getRemappedByName = Keys.getRemappedByName keyMap
 
   toggleCapsLock :: State -> IO State
-  toggleCapsLock = CrossThread.toggleCapsLock dpy noise' keyMap
+  toggleCapsLock = CrossThread.toggleCapsLock ctVars noise' keyMap
 
   toggleAlternative :: State -> IO State
   toggleAlternative = CrossThread.toggleAlternative noise' notify'
 
   turnCapsLockMode :: State -> Bool -> IO State
-  turnCapsLockMode = CrossThread.turnCapsLockMode dpy noise' keyMap
+  turnCapsLockMode = CrossThread.turnCapsLockMode ctVars noise' keyMap
 
   turnAlternativeMode :: State -> Bool -> IO State
   turnAlternativeMode = CrossThread.turnAlternativeMode noise' notify'
 
   resetKbdLayout :: State -> IO State
-  resetKbdLayout = CrossThread.resetKbdLayout dpy noise'
+  resetKbdLayout = CrossThread.resetKbdLayout ctVars noise'
 
   handleCapsLockModeChange :: State -> IO State
   handleCapsLockModeChange =
-    CrossThread.handleCapsLockModeChange dpy noise' keyMap
+    CrossThread.handleCapsLockModeChange ctVars noise' keyMap
 
   handleAlternativeModeChange :: State -> IO State
   handleAlternativeModeChange =
     CrossThread.handleAlternativeModeChange noise' notify'
 
   handleResetKbdLayout :: State -> IO State
-  handleResetKbdLayout = CrossThread.handleResetKbdLayout dpy noise'
+  handleResetKbdLayout = CrossThread.handleResetKbdLayout ctVars noise'
 
   -- Wait and extract event, make preparations and call handler
   onEv :: (KeyName -> KeyCode -> Bool -> State -> IO State) -> IO ()

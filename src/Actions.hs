@@ -5,8 +5,8 @@
 
 module Actions
   ( ActionType(..)
-  , Action(..),     HasAction(..)
-  , KeyAction(..),  HasKeyAction(..)
+  , Action(..),    HasAction(..)
+  , KeyAction(..), HasKeyAction(..)
 
   , seqHead
   , noise,         noise'
@@ -14,6 +14,8 @@ module Actions
   , notifyXmobar,  notifyXmobar'
   , initTerminate, threadIsDeath, overthrow
   , pressKey,      releaseKey,    pressReleaseKey
+  , resetKeyboardLayout
+  , turnCapsLock
   ) where
 
 import "X11" Graphics.X11.Xlib (KeyCode)
@@ -31,8 +33,8 @@ import qualified Options as O
 import qualified State
 
 import Actions.Types ( ActionType(..)
-                     , Action(..),     HasAction(..)
-                     , KeyAction(..),  HasKeyAction(..)
+                     , Action(..),    HasAction(..)
+                     , KeyAction(..), HasKeyAction(..)
                      )
 
 
@@ -103,3 +105,11 @@ pressReleaseKey :: State.CrossThreadVars -> KeyCode -> IO ()
 pressReleaseKey ctVars keyCode =
   writeChan (State.keysActionsChan ctVars) $
     Sequence [KeyCodePress keyCode, KeyCodeRelease keyCode]
+
+resetKeyboardLayout :: State.CrossThreadVars -> IO ()
+resetKeyboardLayout ctVars =
+  writeChan (State.keysActionsChan ctVars) $ Single ResetKeyboardLayout
+
+turnCapsLock :: State.CrossThreadVars -> Bool -> IO ()
+turnCapsLock ctVars =
+  writeChan (State.keysActionsChan ctVars) . Single . TurnCapsLock
