@@ -133,9 +133,7 @@ main = flip evalStateT ([] :: ThreadsState) $ do
 
   noise "Dynamically getting media keys X key codes..."
   (mediaKeysAliases :: [(KeyName, KeyCode)]) <- liftIO $ mapM
-    (\(keyName, keySym) ->
-      keysymToKeycode dpy keySym
-        >>= \keyCode -> return (keyName, keyCode))
+    (\(keyName, keySym) -> (keyName,) <$> keysymToKeycode dpy keySym)
     [ (Keys.MCalculatorKey,        XTypes.xF86XK_Calculator)
     , (Keys.MEjectKey,             XTypes.xF86XK_Eject)
 
@@ -195,8 +193,8 @@ main = flip evalStateT ([] :: ThreadsState) $ do
       withData tDpy m = m ctVars opts keyMap tDpy
       runThread m = modifyStateM $ \ids -> do
         tIdx <- _getThreadIdx
-        (True,) .> (: ids) <$>
-          liftIO (forkFinally m $ _handleFork tIdx)
+        tId  <- liftIO (forkFinally m $ _handleFork tIdx)
+        return $ (True, tId) : ids
 
   noise "Starting keys actions handler thread..."
   runThread $ withData dpyForKeysActionsHanlder processKeysActions
@@ -300,6 +298,9 @@ main = flip evalStateT ([] :: ThreadsState) $ do
                                       : dpyForLedsWatcher
                                       : devicesDisplays
 
+          noise "Enabling disabled before XInput devices back..."
+          liftIO $ XInput.enable opts
+
           noise "The end"
           liftIO exitSuccess
 
@@ -378,7 +379,7 @@ main = flip evalStateT ([] :: ThreadsState) $ do
 
         -- Lift up a monad and return back original value
         liftBetween :: Monad m => m () -> a -> StateT s m a
-        liftBetween monad x = lift monad >> return x
+        liftBetween monad x = x <$ lift monad
 
         -- Completely parse input arguments and returns options
         -- data structure based on them.
@@ -387,14 +388,14 @@ main = flip evalStateT ([] :: ThreadsState) $ do
           getOptsFromArgs argv
             >>= extractAvailableDevices
             >>= XInput.getAvailable
-            >>= XInput.disable
+            >>= (\opts -> opts <$ XInput.disable opts)
             >>= logDisabled
             >>= extractPipeFd
 
           where logDisabled :: Options -> IO Options
                 logDisabled opts = opts ^. O.availableXInputDevices'
                   & show .> ("XInput devices ids that was disabled: " ++)
-                  & (\x -> O.noise opts x >> return opts)
+                  & (\x -> opts <$ O.noise opts x)
 
         -- For situations when something went wrong and application
         -- can't finish its stuff correctly.

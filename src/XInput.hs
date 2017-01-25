@@ -10,10 +10,11 @@
 module XInput
   ( getAvailable
   , disable
+  , enable
   ) where
 
 import "base" System.Exit (ExitCode(ExitSuccess, ExitFailure))
-import qualified "process" System.Process as P
+import "process" System.Process (readProcessWithExitCode)
 
 import "base" Control.Monad (when, unless, forM_)
 import "mtl" Control.Monad.State (execStateT, StateT)
@@ -39,7 +40,7 @@ type Options = O.Options
 -- Gets only available ids of 'xinput' devices
 -- and store it to 'availableXInputDevices' option.
 getAvailable :: Options -> IO Options
-getAvailable opts = flip execStateT opts $
+getAvailable = execStateT $
   -- Deal with bare ids first.
   lift (fromProc "xinput" ["list", "--id-only"])
     >>= return . map (\x -> read x :: Int)
@@ -135,11 +136,13 @@ getAvailable opts = flip execStateT opts $
                       .> (++ new) .> fromList .> toList
 
 
-disable :: Options -> IO Options
-disable opts =
-  opts <$ forM_ (O.availableXInputDevices opts) off
-  where off :: Int -> IO [String]
-        off id = fromProc "xinput" ["disable", show id]
+disable :: Options -> IO ()
+disable opts = forM_ (O.availableXInputDevices opts) off
+  where off id = fromProc "xinput" ["disable", show id]
+
+enable :: Options -> IO ()
+enable opts = forM_ (O.availableXInputDevices opts) on
+  where on id = fromProc "xinput" ["enable", show id]
 
 
 rmTabs :: Char -> Char
@@ -148,7 +151,7 @@ rmTabs   x  =  x
 
 -- Run child process and extract its output.
 fromProc :: String -> [String] -> IO [String]
-fromProc proc args = P.readProcessWithExitCode proc args ""
+fromProc proc args = readProcessWithExitCode proc args ""
                        >>= checkExitCode (proc:args)
                        >>= return . lines . map rmTabs
 
