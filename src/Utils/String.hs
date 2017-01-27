@@ -29,7 +29,7 @@ import "base" Data.Char (isAlpha, isAlphaNum)
 
 -- local imports
 
-import Utils (ifMaybe)
+import Utils.Sugar (ifMaybe)
 
 
 class ShowQ a where

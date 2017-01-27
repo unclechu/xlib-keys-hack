@@ -30,6 +30,8 @@ library
                      , State
                      , XInput
                      , Utils
+                     , Utils.X
+                     , Utils.Sugar
                      , Utils.String
                      , Keys
 
@@ -75,6 +77,17 @@ executable xlib-keys-hack
 
   extra-libraries:     "Xtst"
   ghc-options:         -threaded
+  default-language:    Haskell2010
+
+executable xlib-keys-hack-watch-for-window-focus-events
+  hs-source-dirs:      app
+  main-is:             WindowFocusWatcher.hs
+
+  build-depends:       base
+                     , X11
+
+                     , xlib-keys-hack
+
   default-language:    Haskell2010
 
 source-repository head

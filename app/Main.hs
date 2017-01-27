@@ -57,41 +57,42 @@ import "data-default" Data.Default (def)
 
 -- local imports
 
-import Utils ( (&), (<&>), (.>), (<||>)
-             , errPutStrLn
-             , dieWith
-             , updateState'
-             , updateStateM'
-             , modifyState
-             , modifyStateM
-             , writeToFd
-             )
-import Utils.String (qm)
-import Bindings.Xkb ( xkbGetDescPtr
-                    , xkbFetchControls
-                    , xkbGetGroupsCount
-                    , xkbGetDisplay
-                    )
-import Bindings.MoreXlib (initThreads)
-import Process ( initReset
-               , watchLeds
-               , handleKeyboard
-               , processWindowFocus
-               , processKeysActions
-               , processKeyboardState
-               )
-import qualified Options as O
-import qualified XInput
-import State ( CrossThreadVars ( CrossThreadVars
-                               , stateMVar
-                               , actionsChan
-                               , keysActionsChan
-                               )
-             , State(isTerminating), HasState(isTerminating')
-             )
-import qualified Actions
-import Actions (ActionType, Action, KeyAction)
-import qualified Keys
+import "xlib-keys-hack" Utils ( errPutStrLn
+                              , dieWith
+                              , updateState'
+                              , updateStateM'
+                              , modifyState
+                              , modifyStateM
+                              , writeToFd
+                              )
+import "xlib-keys-hack" Utils.Sugar ((&), (<&>), (.>), (|?|))
+import "xlib-keys-hack" Utils.String (qm)
+import "xlib-keys-hack" Bindings.Xkb ( xkbGetDescPtr
+                                     , xkbFetchControls
+                                     , xkbGetGroupsCount
+                                     , xkbGetDisplay
+                                     )
+import "xlib-keys-hack" Bindings.MoreXlib (initThreads)
+import "xlib-keys-hack" Process ( initReset
+                                , watchLeds
+                                , handleKeyboard
+                                , processWindowFocus
+                                , processKeysActions
+                                , processKeyboardState
+                                )
+import qualified "xlib-keys-hack" Options as O
+import qualified "xlib-keys-hack" XInput
+import "xlib-keys-hack" State ( CrossThreadVars ( CrossThreadVars
+                                                , stateMVar
+                                                , actionsChan
+                                                , keysActionsChan
+                                                )
+                              , State(isTerminating)
+                              , HasState(isTerminating')
+                              )
+import qualified "xlib-keys-hack" Actions
+import "xlib-keys-hack" Actions (ActionType, Action, KeyAction)
+import qualified "xlib-keys-hack" Keys
 
 
 type Options = O.Options
@@ -252,10 +253,10 @@ main = flip evalStateT ([] :: ThreadsState) $ do
 
             -- Check if termination process already initialized
             not . State.isTerminating <$> St.get
-              >>= right () <||> let msg = "Attempt to initialize application\
-                                          \ termination process when it's\
-                                          \ already initialized was skipped"
-                                 in noise msg >> left ()
+              >>= right () |?| let msg = "Attempt to initialize application\
+                                         \ termination process when it's\
+                                         \ already initialized was skipped"
+                                in noise msg >> left ()
 
             modifyState $ State.isTerminating' .~ True
             noise "Application termination process initialization..."

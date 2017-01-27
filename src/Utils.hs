@@ -1,19 +1,14 @@
 -- Author: Viacheslav Lotsmanov
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE PackageImports #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Utils
-  ( (&), (.>), (<&>) -- pipes
-  , (<||>)
-  , (?)
-
-  , ifMaybe
-
-  , nextEvent'
-
-  , errPutStrLn
+  ( errPutStrLn
   , errPutStr
   , dieWith
 
@@ -33,19 +28,14 @@ module Utils
   , writeToFd
   ) where
 
-import "X11" Graphics.X11.Xlib (pending)
-import "X11" Graphics.X11.Xlib.Types (Display)
-import qualified "X11" Graphics.X11.Xlib.Event as XEvent
-import "X11" Graphics.X11.Xlib.Display (connectionNumber)
-
-import "base" Control.Concurrent (threadWaitRead)
-import qualified "mtl" Control.Monad.State.Class as St (MonadState(get, put, state))
+import qualified "mtl" Control.Monad.State.Class as St
+  (MonadState(get, put, state))
 import "either" Control.Monad.Trans.Either (EitherT, left, right)
 import "transformers" Control.Monad.Trans.State (StateT)
+import "transformers" Control.Monad.Trans.Maybe (MaybeT(MaybeT))
 
-import "base" System.Posix.Types (Fd(Fd))
 import "base" System.IO (hPutStrLn, hPutStr, stderr)
-import qualified "base" GHC.IO.Handle as IOHandle
+import "base" GHC.IO.Handle (Handle, hIsWritable, hPutStr, hFlushAll)
 
 import qualified "template-haskell" Language.Haskell.TH as TH
 
@@ -54,65 +44,9 @@ import qualified "lens" Control.Lens.TH as LTH
 
 import "base" Data.Char (toLower)
 
+-- local imports
 
--- Pipe operator.
--- Left-to-right call instead of right-to-left.
--- Actually it's part of `Data.Function` from `base` package
--- but only since 4.8 version.
--- http://hackage.haskell.org/package/base-4.9.0.0/docs/Data-Function.html#v:-38-
-(&) :: a -> (a -> b) -> b
-(&) = flip ($)
-infixl 0 &
-
-
--- Pipe composition operator.
--- Left-to-right composition instead of right-to-left.
--- Just like bind operator (>>=) for monads but for simple functions.
-(.>) :: (a -> b) -> (b -> c) -> a -> c
-(.>) = flip (.)
-infixl 9 .>
-
-
--- Pipe version of `fmap` operator.
-(<&>) :: Functor f => f a -> (a -> b) -> f b
-(<&>) = flip (<$>)
-infixr 4 <&>
-
-
--- Makes function from then-else values that takes an expression.
--- Example:
---   let foo = "Yes" <||> "No"
---    in [foo (2+2 == 4), foo (2+2 == 5)] -- returns: ["Yes", "No"]
-(<||>) :: a -> a -> (Bool -> a)
-a <||> b = \x -> if x then a else b
-infixl 2 <||>
-
-
--- If-then-else chain operator.
--- See more: https://wiki.haskell.org/Case
--- Example:
---   isFoo ? "foo" $
---   isBar ? "bar" $
---    "default"
-(?) :: Bool -> a -> a -> a
-(?) True  x _ = x
-(?) False _ y = y
-infixl 1 ?
-
-
--- Same as 'partial' from 'Control-Monad-Plus'
-ifMaybe :: (a -> Bool) -> a -> Maybe a
-ifMaybe f x = if f x then Just x else Nothing
-
-
--- https://wiki.haskell.org/X_window_programming_in_Haskell
--- A version of nextEvent that does not block in foreign calls.
-nextEvent' :: Display -> XEvent.XEventPtr -> IO ()
-nextEvent' dpy evPtr =
-  pending dpy <&> (/= 0)
-    >>= XEvent.nextEvent dpy evPtr <||>
-        (threadWaitRead (Fd fd) >> nextEvent' dpy evPtr)
-  where fd = connectionNumber dpy
+import Utils.Sugar ((&), (.>), (|?|), (?))
 
 
 errPutStrLn :: String -> IO ()
@@ -181,16 +115,26 @@ modifyStateM fm = St.get >>= fm >>= St.put
 -- Simplified alias for combined `EitherT` and `StateT`
 type EitherStateT s l m r = EitherT l (StateT s m) r
 
-continueIf :: Monad m => Bool -> EitherT () m ()
-continueIf cond = if cond then right () else left ()
+class Monad m => BreakableMonad m where
+  continueIf     :: Bool -> m ()
+  continueUnless :: Bool -> m ()
 
-continueUnless :: Monad m => Bool -> EitherT () m ()
-continueUnless cond = if cond then left () else right ()
+instance BreakableMonad (Either ()) where
+  continueIf     cond = cond ? Right () $ Left  ()
+  continueUnless cond = cond ? Left  () $ Right ()
+instance Monad t => BreakableMonad (EitherT () t) where
+  continueIf     cond = cond ? right () $ left  ()
+  continueUnless cond = cond ? left  () $ right ()
+
+instance BreakableMonad Maybe where
+  continueIf     cond = cond ? Just () $ Nothing
+  continueUnless cond = cond ? Nothing $ Just ()
+instance Monad t => BreakableMonad (MaybeT t) where
+  continueIf     cond = cond ? return () $ fail undefined
+  continueUnless cond = cond ? return () $ fail undefined
 
 
-writeToFd :: IOHandle.Handle -> String -> IO ()
-writeToFd fd chunk = do
-  isWritable <- IOHandle.hIsWritable fd
-  if isWritable
-     then IOHandle.hPutStr fd chunk >> IOHandle.hFlushAll fd
-     else writeToFd fd chunk -- try again
+writeToFd :: Handle -> String -> IO ()
+writeToFd fd chunk = hIsWritable fd >>= write |?| tryAgain
+  where write = hPutStr fd chunk >> hFlushAll fd
+        tryAgain = writeToFd fd chunk

@@ -44,8 +44,9 @@ import "base" Data.Word (Word16)
 
 -- local imports
 
-import Utils ((&), (<&>), (?), makeApoClassy)
 import Utils.String (qm)
+import Utils.Sugar ((&), (<&>), (?))
+import Utils (makeApoClassy)
 import qualified Options as O
 
 

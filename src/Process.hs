@@ -22,9 +22,9 @@ import "lens" Control.Lens ((.~), (%~), (^.), set, over, view)
 import "base" Control.Concurrent (threadDelay)
 import "base" Control.Concurrent.MVar (MVar, modifyMVar_)
 import "base" Control.Concurrent.Chan (Chan)
-import "transformers" Control.Monad.Trans.Class (lift)
 import "transformers" Control.Monad.IO.Class (liftIO)
-import "either" Control.Monad.Trans.Either (runEitherT, left, right)
+import "transformers" Control.Monad.Trans.Class (lift)
+import "transformers" Control.Monad.Trans.Maybe (MaybeT, runMaybeT)
 import "transformers" Control.Monad.Trans.State (execStateT)
 import qualified "mtl" Control.Monad.State.Class as St (MonadState(get, put))
 
@@ -40,13 +40,13 @@ import "X11" Graphics.X11.Types (Window)
 
 -- local imports
 
-import Utils ( (&), (.>), (<||>), (?)
-             , nextEvent'
-             , dieWith
+import Utils ( dieWith
              , writeToFd
              , modifyState, modifyStateM
              , continueIf, continueUnless
              )
+import Utils.X (nextEvent')
+import Utils.Sugar ((&), (.>), (?))
 import Utils.String (qm)
 import Bindings.Xkb ( xkbSetGroup
                     , xkbListenForKeyboardStateEvents
@@ -140,7 +140,7 @@ processWindowFocus ctVars opts keyMap dpy =
         handle :: XEvent.XEventPtr -> IO Bool
         handle evPtr =
 
-          fmap (either (const False) (const True)) $ runEitherT $ do
+          fmap (maybe False $ const True) $ runMaybeT $ do
 
           ev <- liftIO $ XExtras.getEvent evPtr
           let evName = XExtras.eventName ev
@@ -150,16 +150,16 @@ processWindowFocus ctVars opts keyMap dpy =
 
           when (O.resetByWindowFocusEvent opts) $
             liftIO $ modifyMVar_ (State.stateMVar ctVars) $
-                                  execStateT $ runEitherT $ do
+                                  execStateT $ do
 
-            liftIO $ noise "Resetting keyboard layout..."
-            modifyStateM $ liftIO . resetKbdLayout
+              liftIO $ noise "Resetting keyboard layout..."
+              modifyStateM $ liftIO . resetKbdLayout
 
-            liftIO $ noise "Resetting Caps Lock mode..."
-            modifyStateM $ liftIO . flip turnCapsLockMode False
+              liftIO $ noise "Resetting Caps Lock mode..."
+              modifyStateM $ liftIO . flip turnCapsLockMode False
 
-            liftIO $ noise "Resetting Alternative mode..."
-            modifyStateM $ liftIO . flip turnAlternativeMode False
+              liftIO $ noise "Resetting Alternative mode..."
+              modifyStateM $ liftIO . flip turnAlternativeMode False
 
 
 -- FIXME waiting in blocking-mode for new leds event

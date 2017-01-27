@@ -25,7 +25,8 @@ import "base" Data.Bits ((.&.))
 
 -- local imports
 
-import Utils ((&), (.>), dieWith)
+import Utils.Sugar ((&), (.>))
+import Utils (dieWith)
 import State (LedModes(..))
 
 

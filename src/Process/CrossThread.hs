@@ -42,12 +42,12 @@ import "base" Data.Maybe (fromJust, isJust)
 
 -- local imports
 
-import Utils ( (?), (<||>), (&), (.>)
-             , modifyState, modifyStateM
+import Utils ( modifyState, modifyStateM
              , continueIf, continueUnless
              , dieWith
              )
 import Utils.String (qm)
+import Utils.Sugar ((?), (|?|), (&), (.>))
 import Bindings.XTest (fakeKeyCodeEvent)
 import Bindings.MoreXlib (getLeds)
 import qualified Actions
@@ -434,8 +434,8 @@ changeAlternativeMode toOn = State.alternative' .~ toOn
 notifyAboutAlternative :: Notifier -> State -> IO ()
 notifyAboutAlternative notify' state =
   notify' [msg $ state ^. State.alternative']
-  where msg = "alternative:on\n" <||> "alternative:off\n"
+  where msg = "alternative:on\n" |?| "alternative:off\n"
 
 
 onOrOff :: Bool -> String
-onOrOff = "on" <||> "off"
+onOrOff = "on" |?| "off"
