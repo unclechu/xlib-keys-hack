@@ -137,6 +137,8 @@ processWindowFocus ctVars opts keyMap _ = forever $ do
   (forever $ hIsEOF outH >>= throw IsEOFException |?| handle outH)
     `catch` \IsEOFException -> handleFail outH procH
 
+  threadDelay $ 100 * 1000 -- Little delay between restarts
+
   where handle :: Handle -> IO ()
         handle outH = do
           noise [qm| Got new window focus event
