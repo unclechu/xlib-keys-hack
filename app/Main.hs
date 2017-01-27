@@ -23,6 +23,7 @@ import "unix" System.Posix.Signals ( installHandler
 import "unix" System.Posix (exitImmediately)
 import qualified "base" System.IO as SysIO
 import qualified "base" GHC.IO.Handle.FD as IOHandleFD
+import "process" System.Process (terminateProcess, waitForProcess)
 
 import qualified "X11" Graphics.X11.Types      as XTypes
 import qualified "X11" Graphics.X11.ExtraTypes as XTypes
@@ -44,6 +45,7 @@ import "base" Control.Concurrent ( forkIO
                                  , throwTo
                                  , ThreadId
                                  , threadDelay
+                                 , tryTakeMVar
                                  )
 import "base" Control.Concurrent.MVar (newMVar, modifyMVar_)
 import "base" Control.Concurrent.Chan (Chan, newChan, readChan)
@@ -86,8 +88,8 @@ import "xlib-keys-hack" State ( CrossThreadVars ( CrossThreadVars
                                                 , actionsChan
                                                 , keysActionsChan
                                                 )
-                              , State(isTerminating)
-                              , HasState(isTerminating')
+                              , State(isTerminating, windowFocusProc)
+                              , HasState(isTerminating', windowFocusProc')
                               )
 import qualified "xlib-keys-hack" Actions
 import "xlib-keys-hack" Actions (ActionType, Action, KeyAction)
@@ -298,8 +300,22 @@ main = flip evalStateT ([] :: ThreadsState) $ do
                                       : dpyForKeyboardStateHandler
                                       : dpyForLedsWatcher
                                       : devicesDisplays
-          when (O.resetByWindowFocusEvent opts) $
+          when (O.resetByWindowFocusEvent opts) $ do
+
             liftIO $ closeDisplay dpyForXWindowFocusHandler
+
+            liftIO $ tryTakeMVar (State.stateMVar ctVars)
+                      <&> fmap State.windowFocusProc
+              >>= let f (fromJust -> Just (execFilePath, procH, outH)) = do
+                        noise [qm| Terminating of window focus events watcher
+                                 \ '{execFilePath}' subprocess...|]
+                        liftIO $ SysIO.hClose outH
+                        liftIO $ terminateProcess procH
+                        exitCode <- liftIO $ waitForProcess procH
+                        noise [qm| Subprocess '{execFilePath}' terminated
+                                 \ with exit code: {exitCode} |]
+                      f _ = return ()
+                   in f
 
           noise "Enabling disabled before XInput devices back..."
           liftIO $ XInput.enable opts

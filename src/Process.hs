@@ -131,8 +131,13 @@ processWindowFocus ctVars opts keyMap _ = forever $ do
   hSetBinaryMode outH False
   hSetBuffering outH NoBuffering
 
+  noise [qm| Storing handlers of subprocess '{appExecPath}' in the state... |]
+  modifyMVar_
+    (State.stateMVar ctVars) $
+    return . (State.windowFocusProc' .~ Just (appExecPath, procH, outH))
+
   noise [qm| Starting listening for window focus events
-           \ from '{appExecPath}' subprocess ... |]
+           \ from '{appExecPath}' subprocess... |]
   (forever $ hIsEOF outH >>= throw IsEOFException |?| handle outH)
     `catch` \IsEOFException -> handleFail outH procH
 
@@ -162,23 +167,24 @@ processWindowFocus ctVars opts keyMap _ = forever $ do
 
         handleFail :: Handle -> ProcessHandle -> IO ()
         handleFail outH procH = do
-          noise [qm| Subprocess '{appExecPath}' unexpectedly
-                   \ closed its stdout |]
+          scream [qm| Subprocess '{appExecPath}' unexpectedly
+                    \ closed its stdout |]
           hClose outH
           getProcessExitCode procH >>= \case
             Nothing -> do
-              noise [qm| Subprocess '{appExecPath}' for some reason
-                       \ still running, terminating it... |]
+              scream [qm| Subprocess '{appExecPath}' for some reason
+                        \ still running, terminating it... |]
               terminateProcess procH
               exitCode <- waitForProcess procH
-              noise [qm| Subprocess '{appExecPath}' just terminated
-                       \ with exit code: {exitCode} |]
+              scream [qm| Subprocess '{appExecPath}' just terminated
+                        \ with exit code: {exitCode} |]
             Just exitCode ->
-              noise [qm| Subprocess '{appExecPath}' was terminated with
-                       \ with exit code: {exitCode} |]
+              scream [qm| Subprocess '{appExecPath}' was terminated with
+                        \ with exit code: {exitCode} |]
 
         noise   = Actions.noise  opts ctVars        ::  String  -> IO ()
         noise'  = Actions.noise' opts ctVars        :: [String] -> IO ()
+        scream  = Actions.panicNoise ctVars         ::  String  -> IO ()
         notify' = Actions.notifyXmobar' opts ctVars :: [String] -> IO ()
 
         turnCapsLockMode :: State -> Bool -> IO State

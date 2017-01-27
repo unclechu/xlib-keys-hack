@@ -14,7 +14,8 @@ module State
   ) where
 
 import "base" GHC.Generics (Generic)
-import "X11" Graphics.X11.Types (Window)
+import "process" System.Process (ProcessHandle)
+import "base" System.IO (Handle)
 
 import "deepseq" Control.DeepSeq (NFData, rnf, deepseq)
 import "base" Control.Concurrent.MVar (MVar)
@@ -22,6 +23,8 @@ import "base" Control.Concurrent.Chan (Chan)
 
 import "data-default" Data.Default (Default, def)
 import qualified "containers" Data.Set as Set
+
+import "X11" Graphics.X11.Types (Window)
 
 -- local imports
 
@@ -31,33 +34,36 @@ import Keys (KeyName)
 
 
 data State =
-  State { pressedKeys   :: Set.Set KeyName
-        , leds          :: LedModes
-        , kbdLayout     :: Int
-        , alternative   :: Bool -- Alternative mode on/off
-        , comboState    :: ComboState
-        , isTerminating :: Bool
+  State { pressedKeys     :: Set.Set KeyName
+        , leds            :: LedModes
+        , kbdLayout       :: Int
+        , alternative     :: Bool -- Alternative mode on/off
+        , comboState      :: ComboState
+        , isTerminating   :: Bool
+        , windowFocusProc :: Maybe (FilePath, ProcessHandle, Handle)
         }
-  deriving (Show, Eq, Generic)
+  deriving (Show, Generic)
 
 instance NFData State where
   rnf x =
-    pressedKeys   x `deepseq`
-    leds          x `deepseq`
-    kbdLayout     x `deepseq`
-    alternative   x `deepseq`
-    comboState    x `deepseq`
-    isTerminating x `deepseq`
+    pressedKeys     x `deepseq`
+    leds            x `deepseq`
+    kbdLayout       x `deepseq`
+    alternative     x `deepseq`
+    comboState      x `deepseq`
+    isTerminating   x `deepseq`
+    windowFocusProc x `deepseq`
       ()
 
 instance Default State where
   def = State
-    { pressedKeys   = Set.empty
-    , leds          = def
-    , kbdLayout     = 0
-    , alternative   = False
-    , comboState    = def
-    , isTerminating = False
+    { pressedKeys     = Set.empty
+    , leds            = def
+    , kbdLayout       = 0
+    , alternative     = False
+    , comboState      = def
+    , isTerminating   = False
+    , windowFocusProc = Nothing
     }
 
 
@@ -159,6 +165,11 @@ instance NFData CrossThreadVars where
     actionsChan     ctVars `seq`
     keysActionsChan ctVars `seq`
       ()
+
+
+instance Show ProcessHandle   where show _ = "ProcessHandle"
+instance NFData ProcessHandle where rnf x = x `seq` ()
+instance NFData Handle        where rnf x = x `seq` ()
 
 
 makeApoClassy ''State

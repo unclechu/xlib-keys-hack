@@ -64,6 +64,7 @@ executable xlib-keys-hack
 
   build-depends:       base
                      , unix
+                     , process
                      , directory
                      , X11
                      , deepseq
