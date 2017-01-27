@@ -21,9 +21,7 @@ import "mtl" Control.Monad.State (execStateT, StateT)
 import qualified "mtl" Control.Monad.State as St (get, put)
 import "mtl" Control.Monad.State.Class (MonadState)
 import "transformers" Control.Monad.Trans.Class (lift)
-import "lens" Control.Lens ( (.~), (%~), (^.), (.=), (&~)
-                           , set, over, view
-                           )
+import "lens" Control.Lens ((.~), (%~), (^.), set, over, view)
 
 import "containers" Data.Set (toList, fromList, insert, difference)
 

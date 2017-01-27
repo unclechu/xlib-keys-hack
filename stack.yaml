@@ -46,6 +46,7 @@ extra-deps:
 - linux-evdev-0.3.2
 - lens-4.15.1 # need newer version for lens renamer (see Utils module)
 - kan-extensions-5.0.1 # newer 'lens' required this
+- process-1.4.3.0
 
 # Override default flag values for local packages and extra-deps
 flags: {}

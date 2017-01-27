@@ -11,12 +11,18 @@
 
 module Main (main) where
 
+import "base" System.IO (stdout, hFlush)
+
 import "base" Control.Monad (when, forever)
 import "base" Control.Concurrent (threadDelay)
 
 import "X11" Graphics.X11.Xlib (Display, openDisplay, closeDisplay)
-import "X11" Graphics.X11.Xlib.Event (XEventPtr, allocaXEvent, selectInput, flush)
-import "X11" Graphics.X11.Xlib.Extras (getEvent, xSetErrorHandler)
+import "X11" Graphics.X11.Xlib.Event ( XEventPtr
+                                     , allocaXEvent
+                                     , selectInput
+                                     , flush
+                                     )
+import "X11" Graphics.X11.Xlib.Extras (xSetErrorHandler)
 import "X11" Graphics.X11.Xlib.Misc (getInputFocus)
 import "X11" Graphics.X11.Types (noEventMask, focusChangeMask)
 
@@ -37,5 +43,6 @@ waitForEvent dpy evPtr = do
   selectInput dpy wnd noEventMask -- Do not react on new window focus events
                                   -- until next iteration.
   flush dpy -- Ignore remaining events in queue
-  putStrLn "" -- Just to notify main process about new window focus event
+  putChar '\n' -- Just to notify main process about new window focus event
+  hFlush stdout
   threadDelay $ 200 * 1000 -- Prevent it from notifying too often

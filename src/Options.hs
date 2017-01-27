@@ -130,18 +130,22 @@ options =
       "Use real Caps Lock instead of remapping it to Escape"
   , GetOpt.Option  [ ]  ["no-additional-controls"]
       (GetOpt.NoArg $ additionalControls' .~ False)
-      "Disable additional controls behavior for Caps Lock and Enter keys\
-      \ (could be comfortable for playing some video games)"
+      "Disable additional controls behavior for Caps Lock and Enter keys\n\
+      \(could be comfortable for playing some video games)"
   , GetOpt.Option  [ ]  ["disable-reset-by-escape-on-capslock"]
       (GetOpt.NoArg $ resetByEscapeOnCapsLock' .~ False)
       "Disable resetting Caps Lock mode, Alternative mode\
-      \ and keyboard layout by Escape that triggered by Caps Lock key\
-      \ (only when it's remapped, no need to use this option\
+      \ and keyboard layout by Escape that triggered by Caps Lock key\n\
+      \(only when it's remapped, no need to use this option\
       \ if you already used --real-capslock)"
   , GetOpt.Option  [ ]  ["disable-reset-by-window-focus-event"]
       (GetOpt.NoArg $ resetByWindowFocusEvent' .~ False)
       "Disable resetting Caps Lock mode, Alternative mode\
-      \ and keyboard layout by switching between windows"
+      \ and keyboard layout by switching between windows.\n\
+      \WARNING! If you don't disable this feature you should ensure\
+      \ that you have directory that contains\
+      \ 'xlib-keys-hack-watch-for-window-focus-events'\
+      \ executable in your 'PATH' environment variable!"
 
   , GetOpt.Option  [ ]  ["disable-xinput-device-name"]
       (GetOpt.OptArg

@@ -6,6 +6,7 @@
 {-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Process
   ( initReset
@@ -16,27 +17,39 @@ module Process
   , processKeyboardState
   ) where
 
+import "base" System.IO ( BufferMode(NoBuffering)
+                        , Handle
+                        , hSetBinaryMode
+                        , hSetBuffering
+                        , hGetLine
+                        , hClose
+                        , hIsEOF
+                        )
+import "process" System.Process ( CreateProcess(std_in, std_out, std_err)
+                                , StdStream(CreatePipe, NoStream)
+                                , ProcessHandle
+                                , createProcess
+                                , proc
+                                , waitForProcess
+                                , terminateProcess
+                                , getProcessExitCode
+                                )
+import "base" System.Exit (ExitCode(ExitSuccess, ExitFailure))
 
-import "base" Control.Monad (when, unless, forever, guard)
+import "base" Control.Monad (when, unless, forever)
 import "lens" Control.Lens ((.~), (%~), (^.), set, over, view)
 import "base" Control.Concurrent (threadDelay)
-import "base" Control.Concurrent.MVar (MVar, modifyMVar_)
-import "base" Control.Concurrent.Chan (Chan)
+import "base" Control.Concurrent.MVar (modifyMVar_)
 import "transformers" Control.Monad.IO.Class (liftIO)
-import "transformers" Control.Monad.Trans.Class (lift)
-import "transformers" Control.Monad.Trans.Maybe (MaybeT, runMaybeT)
 import "transformers" Control.Monad.Trans.State (execStateT)
-import qualified "mtl" Control.Monad.State.Class as St (MonadState(get, put))
+import "base" Control.Exception (Exception(fromException), throw, catch)
 
 import "base" Data.Maybe (fromJust, isJust)
+import "base" Data.Typeable (Typeable)
 
-import qualified "X11" Graphics.X11.Types       as XTypes
-import qualified "X11" Graphics.X11.ExtraTypes  as XTypes
 import qualified "X11" Graphics.X11.Xlib.Event  as XEvent
 import qualified "X11" Graphics.X11.Xlib.Extras as XExtras
-import "X11" Graphics.X11.Xlib.Misc (getInputFocus)
 import "X11" Graphics.X11.Xlib.Types (Display)
-import "X11" Graphics.X11.Types (Window)
 
 -- local imports
 
@@ -46,7 +59,7 @@ import Utils ( dieWith
              , continueIf, continueUnless
              )
 import Utils.X (nextEvent')
-import Utils.Sugar ((&), (.>), (?))
+import Utils.Sugar ((&), (.>), (?), (|?|))
 import Utils.String (qm)
 import Bindings.Xkb ( xkbSetGroup
                     , xkbListenForKeyboardStateEvents
@@ -101,12 +114,67 @@ initReset opts keyMap dpy = do
           xkbSetGroup dpy 0 >>= flip unless (dieWith "xkbSetGroup error")
 
 
+data IsEOFException = IsEOFException deriving (Show, Typeable)
+instance Exception IsEOFException
+
 processWindowFocus :: CrossThreadVars -> Options -> KeyMap -> Display -> IO ()
-processWindowFocus ctVars opts keyMap dpy =
+processWindowFocus ctVars opts keyMap _ = forever $ do
 
-  XEvent.allocaXEvent $ \evPtr -> loop evPtr True
+  noise [qm| Spawning subprocess of '{appExecPath}'
+           \ to get window focus events... |]
 
-  where nextEvent = nextEvent'
+  (Nothing, Just outH, Nothing, procH) <-
+    createProcess (proc appExecPath []) { std_in  = NoStream
+                                        , std_out = CreatePipe
+                                        , std_err = NoStream
+                                        }
+
+  hSetBinaryMode outH False
+  hSetBuffering outH NoBuffering
+
+  noise [qm| Starting listening for window focus events
+           \ from '{appExecPath}' subprocess ... |]
+  (forever $ hIsEOF outH >>= throw IsEOFException |?| handle outH)
+    `catch` \IsEOFException -> handleFail outH procH
+
+  where handle :: Handle -> IO ()
+        handle outH = do
+          noise [qm| Got new window focus event
+                   \ from '{appExecPath}' subprocess |]
+          hGetLine outH
+          when (O.resetByWindowFocusEvent opts) reset
+
+        reset :: IO ()
+        reset = modifyMVar_ (State.stateMVar ctVars) $ execStateT $ do
+
+          liftIO $ noise "Resetting keyboard layout..."
+          modifyStateM $ liftIO . resetKbdLayout
+
+          liftIO $ noise "Resetting Caps Lock mode..."
+          modifyStateM $ liftIO . flip turnCapsLockMode False
+
+          liftIO $ noise "Resetting Alternative mode..."
+          modifyStateM $ liftIO . flip turnAlternativeMode False
+
+        appExecPath :: FilePath
+        appExecPath = "xlib-keys-hack-watch-for-window-focus-events"
+
+        handleFail :: Handle -> ProcessHandle -> IO ()
+        handleFail outH procH = do
+          noise [qm| Subprocess '{appExecPath}' unexpectedly
+                   \ closed its stdout |]
+          hClose outH
+          getProcessExitCode procH >>= \case
+            Nothing -> do
+              noise [qm| Subprocess '{appExecPath}' for some reason
+                       \ still running, terminating it... |]
+              terminateProcess procH
+              exitCode <- waitForProcess procH
+              noise [qm| Subprocess '{appExecPath}' just terminated
+                       \ with exit code: {exitCode} |]
+            Just exitCode ->
+              noise [qm| Subprocess '{appExecPath}' was terminated with
+                       \ with exit code: {exitCode} |]
 
         noise   = Actions.noise  opts ctVars        ::  String  -> IO ()
         noise'  = Actions.noise' opts ctVars        :: [String] -> IO ()
@@ -120,46 +188,6 @@ processWindowFocus ctVars opts keyMap dpy =
 
         resetKbdLayout :: State -> IO State
         resetKbdLayout = CrossThread.resetKbdLayout ctVars noise'
-
-        loop :: XEvent.XEventPtr -> Bool -> IO ()
-        loop evPtr needReselect = do
-
-          when needReselect $ do
-
-            liftIO $ noise "Getting current focused window id..."
-            (wnd, _) <- liftIO $ getInputFocus dpy
-
-            noise [qm|Listening for window {wnd} for focus events...|]
-            XEvent.selectInput dpy wnd XTypes.focusChangeMask
-
-          noise "Waiting for next X event about new window focus..."
-          nextEvent dpy evPtr
-
-          handle evPtr >>= loop evPtr
-
-        handle :: XEvent.XEventPtr -> IO Bool
-        handle evPtr =
-
-          fmap (maybe False $ const True) $ runMaybeT $ do
-
-          ev <- liftIO $ XExtras.getEvent evPtr
-          let evName = XExtras.eventName ev
-          continueIf $ evName `elem` ["FocusIn", "FocusOut"]
-
-          liftIO $ noise [qm|Handling focus event: {evName}...|]
-
-          when (O.resetByWindowFocusEvent opts) $
-            liftIO $ modifyMVar_ (State.stateMVar ctVars) $
-                                  execStateT $ do
-
-              liftIO $ noise "Resetting keyboard layout..."
-              modifyStateM $ liftIO . resetKbdLayout
-
-              liftIO $ noise "Resetting Caps Lock mode..."
-              modifyStateM $ liftIO . flip turnCapsLockMode False
-
-              liftIO $ noise "Resetting Alternative mode..."
-              modifyStateM $ liftIO . flip turnAlternativeMode False
 
 
 -- FIXME waiting in blocking-mode for new leds event
