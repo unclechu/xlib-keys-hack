@@ -121,8 +121,12 @@ main = flip evalStateT ([] :: ThreadsState) $ do
   noise "Getting additional X Display for keys actions handler thread..."
   dpyForKeysActionsHanlder <- liftIO xkbInit
 
-  noise "Getting additional X Display for window focus handler thread..."
-  dpyForXWindowFocusHandler <- liftIO xkbInit
+  dpyForXWindowFocusHandler <-
+    if O.resetByWindowFocusEvent opts
+       then do noise "Getting additional X Display\
+                     \ for window focus handler thread..."
+               liftIO xkbInit
+       else return undefined
 
   noise "Getting additional X Display for keyboard state handler thread..."
   dpyForKeyboardStateHandler <- liftIO xkbInit
@@ -199,8 +203,9 @@ main = flip evalStateT ([] :: ThreadsState) $ do
   noise "Starting keyboard state handler thread..."
   runThread $ withData dpyForKeyboardStateHandler processKeyboardState
 
-  noise "Starting window focus handler thread..."
-  runThread $ withData dpyForXWindowFocusHandler processWindowFocus
+  when (O.resetByWindowFocusEvent opts) $ do
+    noise "Starting window focus handler thread..."
+    runThread $ withData dpyForXWindowFocusHandler processWindowFocus
 
   noise "Starting leds watcher thread..."
   runThread $ withData dpyForLedsWatcher watchLeds
@@ -290,10 +295,11 @@ main = flip evalStateT ([] :: ThreadsState) $ do
           noise "Closing X Display descriptors..."
           liftIO $ mapM_ closeDisplay $ dpy
                                       : dpyForKeysActionsHanlder
-                                      : dpyForXWindowFocusHandler
                                       : dpyForKeyboardStateHandler
                                       : dpyForLedsWatcher
                                       : devicesDisplays
+          when (O.resetByWindowFocusEvent opts) $
+            liftIO $ closeDisplay dpyForXWindowFocusHandler
 
           noise "Enabling disabled before XInput devices back..."
           liftIO $ XInput.enable opts

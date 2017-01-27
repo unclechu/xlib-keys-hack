@@ -34,7 +34,6 @@ import "process" System.Process ( CreateProcess(std_in, std_out, std_err)
                                 , terminateProcess
                                 , getProcessExitCode
                                 )
-import "base" System.Exit (ExitCode(ExitSuccess, ExitFailure))
 
 import "base" Control.Monad (when, unless, forever)
 import "lens" Control.Lens ((.~), (%~), (^.), set, over, view)
