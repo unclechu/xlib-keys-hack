@@ -86,6 +86,7 @@ executable xlib-keys-hack-watch-for-window-focus-events
 
   build-depends:       base
                      , X11
+                     , unix
 
                      , xlib-keys-hack
 

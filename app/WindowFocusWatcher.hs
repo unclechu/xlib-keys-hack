@@ -12,9 +12,18 @@
 module Main (main) where
 
 import "base" System.IO (stdout, hFlush)
+import "base" System.Exit (exitSuccess)
+import "unix" System.Posix.Signals ( installHandler
+                                   , Handler(Catch)
+                                   , sigINT, sigTERM
+                                   )
 
-import "base" Control.Monad (when, forever)
-import "base" Control.Concurrent (threadDelay)
+import "base" Control.Monad (forever)
+import "base" Control.Concurrent (threadDelay, forkIO, throwTo)
+import "base" Control.Concurrent.MVar (newEmptyMVar, putMVar, takeMVar)
+import "base" Control.Exception (Exception, catch)
+
+import "base" Data.Typeable (Typeable)
 
 import "X11" Graphics.X11.Xlib (Display, openDisplay, closeDisplay)
 import "X11" Graphics.X11.Xlib.Event ( XEventPtr
@@ -31,12 +40,30 @@ import "xlib-keys-hack" Utils.X (nextEvent')
 
 main :: IO ()
 main = do
+
   dpy <- openDisplay ""
   xSetErrorHandler -- Prevent errors with closed windows
-  allocaXEvent $ \evPtr -> forever $ waitForEvent dpy evPtr
+
+  mVar <- newEmptyMVar
+  let terminate = closeDisplay dpy >> putMVar mVar ()
+
+  threadId <- forkIO $
+    (allocaXEvent $ \evPtr -> forever $ waitForEvent dpy evPtr)
+      `catch` \MortifyThreadException -> terminate
+
+  let catch sig = installHandler sig (Catch termHook) Nothing
+      timeout   = threadDelay (5000 * 1000)
+      termHook  = do throwTo threadId MortifyThreadException
+                     timeout >> terminate
+   in mapM_ catch [sigINT, sigTERM]
+
+  takeMVar mVar
+  exitSuccess
+
 
 waitForEvent :: Display -> XEventPtr -> IO ()
 waitForEvent dpy evPtr = do
+
   (wnd, _) <- getInputFocus dpy
   selectInput dpy wnd focusChangeMask
   nextEvent' dpy evPtr
@@ -46,3 +73,7 @@ waitForEvent dpy evPtr = do
   putChar '\n' -- Just to notify main process about new window focus event
   hFlush stdout
   threadDelay $ 200 * 1000 -- Prevent it from notifying too often
+
+
+data MyThreadException = MortifyThreadException deriving (Show, Typeable)
+instance Exception MyThreadException
