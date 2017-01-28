@@ -24,6 +24,8 @@ import "transformers" Control.Monad.Trans.Class (lift)
 import "lens" Control.Lens ((.~), (%~), (^.), set, over, view)
 
 import "containers" Data.Set (toList, fromList, insert, difference)
+import "base" Data.List (elemIndex, find)
+import "base" Data.Maybe (isJust)
 
 -- local imports
 
@@ -93,9 +95,11 @@ getAvailable = execStateT $
                 reducer (_, "")
                         ((hasNameSymbols -> False):xs) = reducer (0, "") xs
                 -- Got id, end of recursion.
-                reducer (_, name) ((getId -> Just id):_)
-                  | name == "" = (0, "") -- no name, invalid line
-                  | otherwise  = (id, name) -- got id and name, done
+                reducer (_, name) ((getId -> Just id):xs)
+                  -- invalid line (no name) or it's not a keyboard (pointer)
+                  | name == "" || not (isKeyboard xs) = (0, "")
+                  -- got id and name, done
+                  | otherwise = (id, name)
                 -- Extracting name.
                 reducer (_, name) (x:xs)
                   | name == "" = reducer (0, x) xs -- first word of name
@@ -104,6 +108,12 @@ getAvailable = execStateT $
                 getId :: String -> Maybe Int
                 getId ('i':'d':'=':(read -> id :: Int)) = Just id
                 getId _ = Nothing
+
+                isKeyboard :: [String] -> Bool
+                isKeyboard (unwords -> x) = isJust $
+                  elemIndex '[' x <&> (+1) <&> flip drop x
+                    >>= \x -> elemIndex ']' x <&> flip take x <&> words
+                    >>= find (== "keyboard")
 
                 hasNameSymbols :: String -> Bool
                 hasNameSymbols "" = False
