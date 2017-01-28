@@ -33,6 +33,7 @@ library
                      , Utils.X
                      , Utils.Sugar
                      , Utils.String
+                     , Utils.Instances
                      , Keys
 
   build-depends:       base

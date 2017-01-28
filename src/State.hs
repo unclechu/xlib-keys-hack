@@ -29,6 +29,7 @@ import "X11" Graphics.X11.Types (Window)
 -- local imports
 
 import Utils (makeApoClassy)
+import Utils.Instances ()
 import Actions.Types (ActionType, Action, KeyAction)
 import Keys (KeyName)
 
@@ -165,11 +166,6 @@ instance NFData CrossThreadVars where
     actionsChan     ctVars `seq`
     keysActionsChan ctVars `seq`
       ()
-
-
-instance Show ProcessHandle   where show _ = "ProcessHandle"
-instance NFData ProcessHandle where rnf x = x `seq` ()
-instance NFData Handle        where rnf x = x `seq` ()
 
 
 makeApoClassy ''State

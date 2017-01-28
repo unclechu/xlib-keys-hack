@@ -50,9 +50,7 @@ import qualified Process.CrossThread as CrossThread
   , toggleCapsLock
   , toggleAlternative
 
-  , turnCapsLockMode
-  , turnAlternativeMode
-  , resetKbdLayout
+  , resetAll
   )
 
 
@@ -75,10 +73,11 @@ handleKeyboard ctVars opts keyMap _ fd =
   onEv $ \keyName keyCode isPressed state ->
 
   let pressed     = State.pressedKeys state
-      alternative = getAlternative keyName
+      alternative = O.alternativeMode opts ? getAlternative keyName $ Nothing
 
       onOnlyBothAltsPressed :: Bool
       onOnlyBothAltsPressed =
+        O.alternativeMode opts &&
         let set = Set.fromList [Keys.AltLeftKey, Keys.AltRightKey]
          in keyName `Set.member` set && pressed == set
 
@@ -366,7 +365,7 @@ handleKeyboard ctVars opts keyMap _ fd =
   getRealKeyCodeByName :: KeyName -> Maybe KeyCode
   getRealKeyCodeByName = Keys.getRealKeyCodeByName keyMap
 
-  isAlternative = Keys.isAlternative keyMap :: KeyName -> Bool
+  -- isAlternative = Keys.isAlternative keyMap :: KeyName -> Bool
   getAlternative :: KeyName -> Maybe (KeyName, KeyCode)
   getAlternative = Keys.getAlternative keyMap
 
@@ -383,25 +382,21 @@ handleKeyboard ctVars opts keyMap _ fd =
   toggleAlternative :: State -> IO State
   toggleAlternative = CrossThread.toggleAlternative noise' notify'
 
-  turnCapsLockMode :: State -> Bool -> IO State
-  turnCapsLockMode = CrossThread.turnCapsLockMode ctVars noise' keyMap
-
-  turnAlternativeMode :: State -> Bool -> IO State
-  turnAlternativeMode = CrossThread.turnAlternativeMode noise' notify'
-
-  resetKbdLayout :: State -> IO State
-  resetKbdLayout = CrossThread.resetKbdLayout ctVars noise'
-
   handleCapsLockModeChange :: State -> IO State
   handleCapsLockModeChange =
     CrossThread.handleCapsLockModeChange ctVars noise' keyMap
 
   handleAlternativeModeChange :: State -> IO State
   handleAlternativeModeChange =
-    CrossThread.handleAlternativeModeChange noise' notify'
+    O.alternativeMode opts
+      ? CrossThread.handleAlternativeModeChange noise' notify'
+      $ return
 
   handleResetKbdLayout :: State -> IO State
   handleResetKbdLayout = CrossThread.handleResetKbdLayout ctVars noise'
+
+  resetAll :: EitherStateT State () IO ()
+  resetAll = CrossThread.resetAll opts ctVars noise' notify' keyMap
 
   -- Wait and extract event, make preparations and call handler
   onEv :: (KeyName -> KeyCode -> Bool -> State -> IO State) -> IO ()
@@ -451,18 +446,6 @@ handleKeyboard ctVars opts keyMap _ fd =
           storeKey state =
             let action = isPressed ? Set.insert $ Set.delete
              in return (state & State.pressedKeys' %~ action keyName)
-
-  resetAll :: EitherStateT State () IO ()
-  resetAll = do
-
-    liftIO $ noise "Resetting keyboard layout..."
-    modifyStateM $ liftIO . resetKbdLayout
-
-    liftIO $ noise "Resetting Caps Lock mode..."
-    modifyStateM $ liftIO . flip turnCapsLockMode False
-
-    liftIO $ noise "Resetting Alternative mode..."
-    modifyStateM $ liftIO . flip turnAlternativeMode False
 
   abstractRelease :: String -- `releaseMsg`
                   -> (KeyName -> String) -- `releaseItemMsgMask`

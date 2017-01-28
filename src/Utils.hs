@@ -34,8 +34,9 @@ import "either" Control.Monad.Trans.Either (EitherT, left, right)
 import "transformers" Control.Monad.Trans.State (StateT)
 import "transformers" Control.Monad.Trans.Maybe (MaybeT(MaybeT))
 
-import "base" System.IO (hPutStrLn, hPutStr, stderr)
-import "base" GHC.IO.Handle (Handle, hIsWritable, hPutStr, hFlushAll)
+import "base" GHC.IO.Handle (hFlushAll)
+import "base" System.IO
+  (Handle, stderr, hPutStrLn, hPutStr, hIsWritable, hPutStr)
 
 import qualified "template-haskell" Language.Haskell.TH as TH
 

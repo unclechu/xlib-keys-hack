@@ -8,6 +8,8 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Process.CrossThread
   ( handleCapsLockModeChange
@@ -25,6 +27,8 @@ module Process.CrossThread
 
   , handleResetKbdLayout
   , resetKbdLayout
+
+  , resetAll
   ) where
 
 import "X11" Graphics.X11.Xlib (Display, KeyCode)
@@ -35,7 +39,7 @@ import "lens" Control.Lens ((.~), (%~), (^.), set, over, view, Lens')
 import "either" Control.Monad.Trans.Either (EitherT, runEitherT, left, right)
 import "transformers" Control.Monad.Trans.State (StateT, evalStateT, execStateT)
 import qualified "mtl" Control.Monad.State.Class as St (MonadState(get, put))
-import "transformers" Control.Monad.IO.Class (liftIO)
+import "transformers" Control.Monad.IO.Class (MonadIO, liftIO)
 
 import qualified "containers" Data.Set as Set (null)
 import "base" Data.Maybe (fromJust, isJust)
@@ -50,12 +54,14 @@ import Utils.String (qm)
 import Utils.Sugar ((?), (|?|), (&), (.>))
 import Bindings.XTest (fakeKeyCodeEvent)
 import Bindings.MoreXlib (getLeds)
+import qualified Options
 import qualified Actions
 import qualified State
 import qualified Keys
 
 
 
+type Options         = Options.Options
 type State           = State.State
 type CrossThreadVars = State.CrossThreadVars
 type Noiser          = [String] -> IO ()
@@ -389,6 +395,26 @@ resetKbdLayout ctVars noise' state = flip execStateT state . runEitherT $ do
 
   where mcLens = State.comboState' . State.resetKbdLayout'
         handle = Actions.resetKeyboardLayout ctVars
+
+
+
+resetAll :: (St.MonadState State m, MonadIO m)
+         => Options -> CrossThreadVars -> Noiser -> Notifier -> KeyMap -> m ()
+resetAll opts ctVars noise' notify' keyMap = do
+
+  liftIO $ noise' ["Resetting keyboard layout..."]
+  modifyStateM $ liftIO . resetKbdLayout
+
+  liftIO $ noise' ["Resetting Caps Lock mode..."]
+  modifyStateM $ liftIO . turnCapsLockModeOff
+
+  when (Options.alternativeMode opts) $ do
+    liftIO $ noise' ["Resetting Alternative mode..."]
+    modifyStateM $ liftIO . turnAlternativeModeOff
+
+  where resetKbdLayout = Process.CrossThread.resetKbdLayout ctVars noise'
+        turnCapsLockModeOff = flip (turnCapsLockMode ctVars noise' keyMap) False
+        turnAlternativeModeOff = flip (turnAlternativeMode noise' notify') False
 
 
 

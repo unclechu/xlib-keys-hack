@@ -6,6 +6,7 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE PackageImports #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Options
   ( Options(..)
@@ -16,7 +17,7 @@ module Options
   ) where
 
 import "base" GHC.Generics (Generic)
-import qualified "base" GHC.IO.Handle as IOHandle
+import "base" System.IO (Handle)
 import qualified "base" System.Console.GetOpt as GetOpt
 
 import "lens" Control.Lens ((.~), (%~), (^.), set, over, view)
@@ -28,6 +29,7 @@ import "data-default" Data.Default (Default, def)
 -- local imports
 
 import Utils.Sugar ((&), (.>))
+import Utils.Instances ()
 import Utils (makeApoClassy)
 
 
@@ -36,6 +38,7 @@ data Options =
           , verboseMode             :: Bool
 
           , realCapsLock            :: Bool
+          , alternativeMode         :: Bool
           , additionalControls      :: Bool
           , resetByEscapeOnCapsLock :: Bool
           , resetByWindowFocusEvent :: Bool
@@ -45,10 +48,10 @@ data Options =
           , handleDevicePath        :: [FilePath]
           , xmobarPipeFile          :: Maybe FilePath
 
-          , handleDeviceFd          :: [IOHandle.Handle]
+          , handleDeviceFd          :: [Handle]
           , availableDevices        :: [FilePath]
           , availableXInputDevices  :: [Int]
-          , xmobarPipeFd            :: Maybe IOHandle.Handle
+          , xmobarPipeFd            :: Maybe Handle
           }
   deriving (Show, Eq, Generic)
 
@@ -58,6 +61,7 @@ instance NFData Options where
     verboseMode             opts `deepseq`
 
     realCapsLock            opts `deepseq`
+    alternativeMode         opts `deepseq`
     additionalControls      opts `deepseq`
     resetByEscapeOnCapsLock opts `deepseq`
     resetByWindowFocusEvent opts `deepseq`
@@ -67,10 +71,10 @@ instance NFData Options where
     handleDevicePath        opts `deepseq`
     xmobarPipeFile          opts `deepseq`
 
-    handleDeviceFd          opts `seq`
+    handleDeviceFd          opts `deepseq`
     availableDevices        opts `deepseq`
     availableXInputDevices  opts `deepseq`
-    xmobarPipeFd            opts `seq`
+    xmobarPipeFd            opts `deepseq`
       ()
 
 instance Default Options where
@@ -81,6 +85,7 @@ instance Default Options where
     , verboseMode             = False
 
     , realCapsLock            = False
+    , alternativeMode         = True
     , additionalControls      = True
     , resetByEscapeOnCapsLock = True
     , resetByWindowFocusEvent = True
@@ -128,6 +133,9 @@ options =
       (GetOpt.NoArg $ (realCapsLock' .~ True)
                     . (resetByEscapeOnCapsLock' .~ False))
       "Use real Caps Lock instead of remapping it to Escape"
+  , GetOpt.Option  [ ]  ["no-alternative-mode"]
+      (GetOpt.NoArg $ alternativeMode' .~ False)
+      "Disable Alternative mode feature"
   , GetOpt.Option  [ ]  ["no-additional-controls"]
       (GetOpt.NoArg $ additionalControls' .~ False)
       "Disable additional controls behavior for Caps Lock and Enter keys\n\

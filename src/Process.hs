@@ -40,7 +40,7 @@ import "lens" Control.Lens ((.~), (%~), (^.), set, over, view)
 import "base" Control.Concurrent (threadDelay)
 import "base" Control.Concurrent.MVar (modifyMVar_)
 import "transformers" Control.Monad.IO.Class (liftIO)
-import "transformers" Control.Monad.Trans.State (execStateT)
+import "transformers" Control.Monad.Trans.State (StateT, execStateT)
 import "base" Control.Exception (Exception(fromException), throw, catch)
 
 import "base" Data.Maybe (fromJust, isJust)
@@ -73,11 +73,7 @@ import qualified Keys
 import Process.Keyboard (handleKeyboard)
 import Process.KeysActions (processKeysActions)
 import qualified Process.CrossThread as CrossThread
-  ( turnAlternativeMode
-  , turnCapsLockMode
-  , justTurnCapsLockMode
-  , resetKbdLayout
-  )
+  (justTurnCapsLockMode, resetAll)
 
 
 type Options         = O.Options
@@ -138,7 +134,7 @@ processWindowFocus ctVars opts keyMap _ = forever $ do
 
   noise [qm| Starting listening for window focus events
            \ from '{appExecPath}' subprocess... |]
-  (forever $ hIsEOF outH >>= throw IsEOFException |?| handle outH)
+  forever (hIsEOF outH >>= throw IsEOFException |?| handle outH)
     `catch` \IsEOFException -> handleFail outH procH
 
   threadDelay $ 100 * 1000 -- Little delay between restarts
@@ -148,19 +144,9 @@ processWindowFocus ctVars opts keyMap _ = forever $ do
           noise [qm| Got new window focus event
                    \ from '{appExecPath}' subprocess |]
           hGetLine outH
-          when (O.resetByWindowFocusEvent opts) reset
-
-        reset :: IO ()
-        reset = modifyMVar_ (State.stateMVar ctVars) $ execStateT $ do
-
-          liftIO $ noise "Resetting keyboard layout..."
-          modifyStateM $ liftIO . resetKbdLayout
-
-          liftIO $ noise "Resetting Caps Lock mode..."
-          modifyStateM $ liftIO . flip turnCapsLockMode False
-
-          liftIO $ noise "Resetting Alternative mode..."
-          modifyStateM $ liftIO . flip turnAlternativeMode False
+          when (O.resetByWindowFocusEvent opts) $
+            modifyMVar_ (State.stateMVar ctVars) $ execStateT $
+              CrossThread.resetAll opts ctVars noise' notify' keyMap
 
         appExecPath :: FilePath
         appExecPath = "xlib-keys-hack-watch-for-window-focus-events"
@@ -186,15 +172,6 @@ processWindowFocus ctVars opts keyMap _ = forever $ do
         noise'  = Actions.noise' opts ctVars        :: [String] -> IO ()
         scream  = Actions.panicNoise ctVars         ::  String  -> IO ()
         notify' = Actions.notifyXmobar' opts ctVars :: [String] -> IO ()
-
-        turnCapsLockMode :: State -> Bool -> IO State
-        turnCapsLockMode = CrossThread.turnCapsLockMode ctVars noise' keyMap
-
-        turnAlternativeMode :: State -> Bool -> IO State
-        turnAlternativeMode = CrossThread.turnAlternativeMode noise' notify'
-
-        resetKbdLayout :: State -> IO State
-        resetKbdLayout = CrossThread.resetKbdLayout ctVars noise'
 
 
 -- FIXME waiting in blocking-mode for new leds event
