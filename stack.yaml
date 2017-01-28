@@ -43,10 +43,10 @@ packages:
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
 extra-deps:
-- linux-evdev-0.3.2
+- linux-evdev-0.3.2 # getting events from devices files descriptors
 - lens-4.15.1 # need newer version for lens renamer (see Utils module)
 - kan-extensions-5.0.1 # newer 'lens' required this
-- process-1.4.3.0
+- process-1.4.3.0 # need newer api for subprocess (like StdStream(NoStream))
 
 # Override default flag values for local packages and extra-deps
 flags: {}

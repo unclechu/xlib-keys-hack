@@ -74,7 +74,7 @@ handleKeyboard :: CrossThreadVars -> Options -> KeyMap -> Display -> Handle
 handleKeyboard ctVars opts keyMap _ fd =
   onEv $ \keyName keyCode isPressed state ->
 
-  let pressed     = state ^. State.pressedKeys'
+  let pressed     = State.pressedKeys state
       alternative = getAlternative keyName
 
       onOnlyBothAltsPressed :: Bool
@@ -144,8 +144,23 @@ handleKeyboard ctVars opts keyMap _ fd =
 
          in pressedCase || releasedCase
 
+      -- When Alternative mode is on and current key has alternative map
+      onAlternativeKey :: Bool
+      onAlternativeKey = State.alternative state && isJust alternative
+
       justTrigger   = trigger   keyName keyCode isPressed :: IO ()
       justAsTrigger = asTrigger keyName keyCode isPressed :: IO ()
+
+      smartTrigger :: IO ()
+      smartTrigger = onAlternativeKey ? alternativeTrigger $ justTrigger
+
+      alternativeTrigger :: IO ()
+      alternativeTrigger = do
+        let Just (keyNameTo, keyCodeTo) = alternative
+        noise [qm| Triggering {isPressed ? "pressing" $ "releasing"}
+                 \ of alternative {keyNameTo}
+                 \ (X key code: {keyCodeTo}) by {keyName}... |]
+        (isPressed ? pressKey $ releaseKey) keyCodeTo
 
       off :: KeyName -> IO ()
       off keyName =
@@ -164,15 +179,6 @@ handleKeyboard ctVars opts keyMap _ fd =
     state
       & State.pressedKeys' .~ foldr Set.delete pressed toDelete
       & toggleAlternative
-
-  -- Alternative mode keys handling
-  | state ^. State.alternative' && isJust alternative -> do
-    let Just (keyNameTo, keyCodeTo) = alternative
-    noise [qm| Triggering {isPressed ? "pressing" $ "releasing"}
-             \ of alternative {keyNameTo}
-             \ (X key code: {keyCodeTo}) by {keyName}... |]
-    (isPressed ? pressKey $ releaseKey) keyCodeTo
-    return state
 
   -- Hadling `FNKey` pressing on apple keyboard
   | keyName == Keys.FNKey ->
@@ -314,10 +320,10 @@ handleKeyboard ctVars opts keyMap _ fd =
         -- additional control, so we just remove this key from
         -- list of keys that pressed before additional control.
         | not isPressed && (keyName `Set.member` pressedBeforeList) ->
-          (state & pressedBeforeLens %~ Set.delete keyName) <$ justTrigger
+          (state & pressedBeforeLens %~ Set.delete keyName) <$ smartTrigger
 
         -- When pressing of Control already triggered
-        | state ^. withCombosFlagLens -> state <$ justTrigger
+        | state ^. withCombosFlagLens -> state <$ smartTrigger
 
         -- `CapsLockKey` or `EnterKey` pressed with combo,
         -- it means it should be interpreted as Control key.
@@ -326,8 +332,8 @@ handleKeyboard ctVars opts keyMap _ fd =
           noise [qm| {mainKeyName} pressed with combo,
                    \ triggering {controlKeyName}
                    \ (X key code: {keyCode})... |]
-          pressKey keyCode
-          justTrigger
+          pressKey keyCode -- Press Control before current key
+          smartTrigger
           return (state & withCombosFlagLens .~ True)
 
   -- When Caps Lock remapped as Escape key.
@@ -339,7 +345,7 @@ handleKeyboard ctVars opts keyMap _ fd =
        else state <$ justAsTrigger
 
   -- Usual key handling
-  | otherwise -> state <$ justTrigger
+  | otherwise -> state <$ smartTrigger
 
   where
 

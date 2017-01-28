@@ -52,7 +52,7 @@ main = do
       `catch` \MortifyThreadException -> terminate
 
   let catch sig = installHandler sig (Catch termHook) Nothing
-      timeout   = threadDelay (5000 * 1000)
+      timeout   = threadDelay $ 5000 * 1000
       termHook  = do throwTo threadId MortifyThreadException
                      timeout >> terminate
    in mapM_ catch [sigINT, sigTERM]
