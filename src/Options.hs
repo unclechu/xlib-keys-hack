@@ -28,9 +28,9 @@ import "data-default" Data.Default (Default, def)
 
 -- local imports
 
-import Utils.Sugar ((&), (.>))
 import Utils.Instances ()
-import Utils (makeApoClassy)
+import Utils.Sugar ((&), (.>))
+import Utils.Lens (makeApoClassy)
 
 
 data Options =

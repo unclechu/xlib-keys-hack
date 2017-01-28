@@ -58,16 +58,12 @@ import "data-default" Data.Default (def)
 
 -- local imports
 
-import "xlib-keys-hack" Utils ( errPutStrLn
-                              , dieWith
-                              , updateState'
-                              , updateStateM'
-                              , modifyState
-                              , modifyStateM
-                              , writeToFd
-                              )
-import "xlib-keys-hack" Utils.Sugar ((&), (<&>), (.>), (|?|))
 import "xlib-keys-hack" Utils.String (qm)
+import "xlib-keys-hack" Utils.Sugar ((&), (<&>), (.>), (|?|))
+import "xlib-keys-hack" Utils (errPutStrLn, dieWith, writeToFd)
+import "xlib-keys-hack" Utils.StateMonad ( updateState', updateStateM'
+                                         , modifyState, modifyStateM
+                                         )
 import "xlib-keys-hack" Bindings.Xkb ( xkbGetDescPtr
                                      , xkbFetchControls
                                      , xkbGetGroupsCount

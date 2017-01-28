@@ -28,7 +28,7 @@ import "X11" Graphics.X11.Types (Window)
 
 -- local imports
 
-import Utils (makeApoClassy)
+import Utils.Lens (makeApoClassy)
 import Utils.Instances ()
 import Actions.Types (ActionType, Action, KeyAction)
 import Keys (KeyName)

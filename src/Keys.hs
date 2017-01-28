@@ -46,7 +46,7 @@ import "base" Data.Word (Word16)
 
 import Utils.String (qm)
 import Utils.Sugar ((&), (<&>), (?))
-import Utils (makeApoClassy)
+import Utils.Lens (makeApoClassy)
 import qualified Options as O
 
 

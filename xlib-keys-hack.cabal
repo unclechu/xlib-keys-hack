@@ -31,9 +31,12 @@ library
                      , XInput
                      , Utils
                      , Utils.X
+                     , Utils.Lens
                      , Utils.Sugar
                      , Utils.String
                      , Utils.Instances
+                     , Utils.StateMonad
+                     , Utils.BreakableMonad
                      , Keys
 
   build-depends:       base

@@ -34,7 +34,7 @@ import "X11" Graphics.X11.Types (Window)
 
 -- local imports
 
-import Utils (EitherStateT, modifyState, modifyStateM)
+import Utils.StateMonad (EitherStateT, modifyState, modifyStateM)
 import Utils.Sugar ((&), (.>), (|?|), (?))
 import Utils.String (qm)
 import qualified Options as O

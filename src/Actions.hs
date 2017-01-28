@@ -28,7 +28,7 @@ import "base" Data.Maybe (isJust)
 
 -- local imports
 
-import Utils (makeApoClassy)
+import Utils.Lens (makeApoClassy)
 import qualified Options as O
 import qualified State
 

@@ -28,7 +28,8 @@ import "containers" Data.Set (toList, fromList, insert, difference)
 -- local imports
 
 import qualified Options as O
-import Utils (errPutStrLn, errPutStr, dieWith, updateState')
+import Utils (errPutStrLn, errPutStr, dieWith)
+import Utils.StateMonad (updateState')
 import Utils.Sugar ((&), (.>), (<&>))
 import Utils.String (qm)
 

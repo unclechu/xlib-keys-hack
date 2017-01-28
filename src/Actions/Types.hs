@@ -14,7 +14,7 @@ import "X11" Graphics.X11.Xlib (KeyCode)
 
 -- local imports
 
-import Utils (makeApoClassy)
+import Utils.Lens (makeApoClassy)
 
 
 data ActionType a = Single    a

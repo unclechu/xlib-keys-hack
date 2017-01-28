@@ -52,11 +52,9 @@ import "X11" Graphics.X11.Xlib.Types (Display)
 
 -- local imports
 
-import Utils ( dieWith
-             , writeToFd
-             , modifyState, modifyStateM
-             , continueIf, continueUnless
-             )
+import Utils (dieWith, writeToFd)
+import Utils.StateMonad (modifyState, modifyStateM)
+import Utils.BreakableMonad (continueIf, continueUnless)
 import Utils.X (nextEvent')
 import Utils.Sugar ((&), (.>), (?), (|?|))
 import Utils.String (qm)

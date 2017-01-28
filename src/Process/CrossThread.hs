@@ -46,11 +46,10 @@ import "base" Data.Maybe (fromJust, isJust)
 
 -- local imports
 
-import Utils ( modifyState, modifyStateM
-             , continueIf, continueUnless
-             , dieWith
-             )
+import Utils (dieWith)
 import Utils.String (qm)
+import Utils.StateMonad (modifyState, modifyStateM)
+import Utils.BreakableMonad (continueIf, continueUnless)
 import Utils.Sugar ((?), (|?|), (&), (.>))
 import Bindings.XTest (fakeKeyCodeEvent)
 import Bindings.MoreXlib (getLeds)
