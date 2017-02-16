@@ -16,7 +16,7 @@ import "base" Foreign
 import "base" Foreign.Storable as Storable
 import qualified "base" Foreign.C.Types as CTypes
 
-import "X11" Graphics.X11.Xlib.Types (Display(Display))
+import "X11" Graphics.X11.Xlib.Types (Display)
 
 
 #include <X11/XKBlib.h>

@@ -9,7 +9,7 @@ module Utils.BreakableMonad
   ) where
 
 import "either" Control.Monad.Trans.Either (EitherT, left, right)
-import "transformers" Control.Monad.Trans.Maybe (MaybeT(MaybeT))
+import "transformers" Control.Monad.Trans.Maybe (MaybeT)
 
 -- local imports
 

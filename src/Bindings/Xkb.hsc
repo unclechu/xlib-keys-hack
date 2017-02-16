@@ -17,16 +17,14 @@ module Bindings.Xkb
   ) where
 
 import "base" Foreign
-import "base" Foreign.Ptr (nullPtr)
 import qualified "base" Foreign.Marshal.Alloc as MAlloc
 import qualified "base" Foreign.C.Types as CTypes
 
-import "base" Control.Monad (when, unless)
+import "base" Control.Monad (unless)
 
 import qualified "base" Data.Either as Either
 
 import "X11" Graphics.X11.Xlib (Display(Display), sync)
-import qualified "X11" Graphics.X11.Types as XTypes
 
 -- local imports
 
@@ -147,10 +145,11 @@ foreign import ccall unsafe "X11/XKBlib.h XkbGetState"
 -- abstract
 xkbGetCurrentLayout :: Display -> IO Int
 xkbGetCurrentLayout dpy = alloca $ \stRecPtr -> do
-  xkbGetState dpy (#const XkbUseCoreKbd) stRecPtr -- Status is ignored here.
-                                                  -- For some reason it returns
-                                                  -- 0 (zero) that means error
-                                                  -- but it works okay.
+
+  -- Status is ignored here.
+  -- For some reason it returns 0 (zero) that means error but it works okay.
+  _ <- xkbGetState dpy (#const XkbUseCoreKbd) stRecPtr
+
   fromIntegral . XkbTypes.group <$> peek stRecPtr
 
 

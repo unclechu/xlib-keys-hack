@@ -24,8 +24,6 @@ import "base" Control.Concurrent.Chan (Chan)
 import "data-default" Data.Default (Default, def)
 import qualified "containers" Data.Set as Set
 
-import "X11" Graphics.X11.Types (Window)
-
 -- local imports
 
 import Utils.Lens (makeApoClassy)

@@ -18,12 +18,12 @@ import "process" System.Process (readProcessWithExitCode)
 
 import "base" Control.Monad (when, unless, forM_)
 import "mtl" Control.Monad.State (execStateT, StateT)
-import qualified "mtl" Control.Monad.State as St (get, put)
+import qualified "mtl" Control.Monad.State as St (get)
 import "mtl" Control.Monad.State.Class (MonadState)
 import "transformers" Control.Monad.Trans.Class (lift)
-import "lens" Control.Lens ((.~), (%~), (^.), set, over, view)
+import "lens" Control.Lens (set, view)
 
-import "containers" Data.Set (toList, fromList, insert, difference)
+import "containers" Data.Set (toList, fromList, difference)
 import "base" Data.List (elemIndex, find)
 import "base" Data.Maybe (isJust)
 
@@ -32,7 +32,7 @@ import "base" Data.Maybe (isJust)
 import qualified Options as O
 import Utils (errPutStrLn, errPutStr, dieWith)
 import Utils.StateMonad (updateState')
-import Utils.Sugar ((&), (.>), (<&>))
+import Utils.Sugar ((.>), (<&>))
 import Utils.String (qm)
 
 
@@ -52,7 +52,7 @@ getAvailable = execStateT $
 
     -- Extract ids from names.
     >>  lift (fromProc "xinput" ["list", "--short"])
-    >>= return . filter (\(id, name) -> id /= 0 && name /= "")
+    >>= return . filter (\(_id, name) -> _id /= 0 && name /= "")
                . map extractIdNamePair
     >>= getAvailableIdsFromNames
 
@@ -63,8 +63,8 @@ getAvailable = execStateT $
   where -- Filters only available devices ids.
         filterAvailableDeviceId :: (MonadState s m, O.HasOptions s, Functor m)
                                 => [Int] -> m [Int]
-        filterAvailableDeviceId all = fmap f St.get
-          where f = view O.disableXInputDeviceId' .> filter (`elem` all)
+        filterAvailableDeviceId allDevs = fmap f St.get
+          where f = view O.disableXInputDeviceId' .> filter (`elem` allDevs)
 
         -- All explicit devices ids from arguments
         -- must be available! Check if it's true.
@@ -95,24 +95,25 @@ getAvailable = execStateT $
                 reducer (_, "")
                         ((hasNameSymbols -> False):xs) = reducer (0, "") xs
                 -- Got id, end of recursion.
-                reducer (_, name) ((getId -> Just id):xs)
+                reducer (_, name) ((getId -> Just _id):xs)
                   -- invalid line (no name) or it's not a keyboard (pointer)
                   | name == "" || not (isKeyboard xs) = (0, "")
                   -- got id and name, done
-                  | otherwise = (id, name)
+                  | otherwise = (_id, name)
                 -- Extracting name.
                 reducer (_, name) (x:xs)
                   | name == "" = reducer (0, x) xs -- first word of name
                   | otherwise  = reducer (0, name ++ " " ++ x) xs -- another word
+                reducer _ _ = error "unexpected behavior"
 
                 getId :: String -> Maybe Int
-                getId ('i':'d':'=':(read -> id :: Int)) = Just id
+                getId ('i':'d':'=':(read -> _id :: Int)) = Just _id
                 getId _ = Nothing
 
                 isKeyboard :: [String] -> Bool
                 isKeyboard (unwords -> x) = isJust $
                   elemIndex '[' x <&> (+1) <&> flip drop x
-                    >>= \x -> elemIndex ']' x <&> flip take x <&> words
+                    >>= \y -> elemIndex ']' y <&> flip take y <&> words
                     >>= find (== "keyboard")
 
                 hasNameSymbols :: String -> Bool
@@ -148,11 +149,11 @@ getAvailable = execStateT $
 
 disable :: Options -> IO ()
 disable opts = forM_ (O.availableXInputDevices opts) off
-  where off id = fromProc "xinput" ["disable", show id]
+  where off _id = fromProc "xinput" ["disable", show _id]
 
 enable :: Options -> IO ()
 enable opts = forM_ (O.availableXInputDevices opts) on
-  where on id = fromProc "xinput" ["enable", show id]
+  where on _id = fromProc "xinput" ["enable", show _id]
 
 
 rmTabs :: Char -> Char

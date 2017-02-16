@@ -12,7 +12,7 @@
 
 module Main (main) where
 
-import "base" System.Exit (ExitCode(ExitFailure), exitFailure, exitSuccess)
+import "base" System.Exit (ExitCode(ExitFailure), exitSuccess)
 import "base" System.Environment (getArgs)
 import "directory" System.Directory (doesFileExist)
 import "unix" System.Posix.Signals ( installHandler
@@ -27,19 +27,18 @@ import "process" System.Process (terminateProcess, waitForProcess)
 
 import qualified "X11" Graphics.X11.Types      as XTypes
 import qualified "X11" Graphics.X11.ExtraTypes as XTypes
-import "X11" Graphics.X11.Types (Window)
 import "X11" Graphics.X11.Xlib.Types (Display)
 import "X11" Graphics.X11.Xlib.Display (closeDisplay)
 import "X11" Graphics.X11.Xlib.Misc (keysymToKeycode)
 
 import "deepseq" Control.DeepSeq (deepseq, force)
-import qualified "mtl" Control.Monad.State as St (get, put)
+import qualified "mtl" Control.Monad.State as St (get)
 import "mtl" Control.Monad.State (StateT, execStateT, evalStateT)
 import "either" Control.Monad.Trans.Either (runEitherT, left, right)
 import "transformers" Control.Monad.IO.Class (liftIO)
 import "transformers" Control.Monad.Trans.Class (lift)
 import "base" Control.Monad (when, unless, filterM, forever, forM_, void)
-import "lens" Control.Lens ((.~), (%~), (^.), set, over, view)
+import "lens" Control.Lens ((.~), (^.), set)
 import "base" Control.Concurrent ( forkIO
                                  , forkFinally
                                  , throwTo
@@ -69,7 +68,7 @@ import "xlib-keys-hack" Bindings.Xkb ( xkbGetDescPtr
                                      , xkbGetGroupsCount
                                      , xkbGetDisplay
                                      )
-import "xlib-keys-hack" Bindings.MoreXlib (initThreads)
+-- import "xlib-keys-hack" Bindings.MoreXlib (initThreads)
 import "xlib-keys-hack" Process ( initReset
                                 , watchLeds
                                 , handleKeyboard
@@ -85,7 +84,7 @@ import "xlib-keys-hack" State ( CrossThreadVars ( CrossThreadVars
                                                 , keysActionsChan
                                                 )
                               , State(isTerminating, windowFocusProc)
-                              , HasState(isTerminating', windowFocusProc')
+                              , HasState(isTerminating')
                               )
 import qualified "xlib-keys-hack" Actions
 import "xlib-keys-hack" Actions (ActionType, Action, KeyAction)
@@ -93,7 +92,6 @@ import qualified "xlib-keys-hack" Keys
 
 
 type Options = O.Options
-type KeyMap  = Keys.KeyMap
 type KeyName = Keys.KeyName
 type KeyCode = XTypes.KeyCode
 
@@ -211,10 +209,10 @@ main = flip evalStateT ([] :: ThreadsState) $ do
   noise "Starting device handle threads (one thread per device)..."
   (devicesDisplays :: [Display]) <-
     let m fd = do noise [qm|Getting own X Display for thread of device: {fd}|]
-                  dpy <- liftIO xkbInit
+                  _dpy <- liftIO xkbInit
                   noise [qm|Starting handle thread for device: {fd}|]
-                  runThread $ withData dpy handleKeyboard fd
-                  return dpy
+                  runThread $ withData _dpy handleKeyboard fd
+                  return _dpy
      in mapM m $ O.handleDeviceFd opts
 
   modifyState reverse
@@ -234,11 +232,11 @@ main = flip evalStateT ([] :: ThreadsState) $ do
 
         m (Actions.NotifyXmobar msg) =
           let pipeFd = opts ^. O.xmobarPipeFd'
-              log :: String -> String
-              log (reverse -> '\n':(reverse -> msg)) = msg
-              log msg = msg
+              forLog :: String -> String
+              forLog (reverse -> '\n':(reverse -> x)) = x
+              forLog x = x
            in when (isJust pipeFd) $ do
-              noise [qm|Notifying xmobar with message '{log msg}'...|]
+              noise [qm|Notifying xmobar with message '{forLog msg}'...|]
               let xmobarFd = fromJust pipeFd
                in liftIO $ writeToFd xmobarFd msg
 
@@ -302,16 +300,16 @@ main = flip evalStateT ([] :: ThreadsState) $ do
 
             liftIO $ tryTakeMVar (State.stateMVar ctVars)
                       <&> fmap State.windowFocusProc
-              >>= let f (fromJust -> Just (execFilePath, procH, outH)) = do
-                        noise [qm| Terminating of window focus events watcher
-                                 \ '{execFilePath}' subprocess...|]
-                        liftIO $ SysIO.hClose outH
-                        liftIO $ terminateProcess procH
-                        exitCode <- liftIO $ waitForProcess procH
-                        noise [qm| Subprocess '{execFilePath}' terminated
-                                 \ with exit code: {exitCode} |]
-                      f _ = return ()
-                   in f
+              >>= let fm (fromJust -> Just (execFilePath, procH, outH)) = do
+                         noise [qm| Terminating of window focus events watcher
+                                  \ '{execFilePath}' subprocess...|]
+                         liftIO $ SysIO.hClose outH
+                         liftIO $ terminateProcess procH
+                         exitCode <- liftIO $ waitForProcess procH
+                         noise [qm| Subprocess '{execFilePath}' terminated
+                                  \ with exit code: {exitCode} |]
+                      fm _ = return ()
+                   in fm
 
           noise "Enabling disabled before XInput devices back..."
           liftIO $ XInput.enable opts

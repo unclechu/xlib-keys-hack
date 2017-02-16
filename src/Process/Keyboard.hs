@@ -18,10 +18,8 @@ import qualified "linux-evdev" System.Linux.Input.Event as EvdevEvent
 
 import "transformers" Control.Monad.Trans.Class (lift)
 import "base" Control.Monad ((>=>), when, unless, forM_, forever)
-import "lens" Control.Lens ((.~), (%~), (^.), set, over, view, Lens', mapped)
-import "base" Control.Concurrent.MVar (MVar, modifyMVar_)
-import "base" Control.Concurrent.Chan (Chan)
-import "transformers" Control.Monad.IO.Class (liftIO)
+import "lens" Control.Lens ((.~), (%~), (^.), set, Lens', mapped)
+import "base" Control.Concurrent.MVar (modifyMVar_)
 import "transformers" Control.Monad.Trans.State (execStateT)
 import "either" Control.Monad.Trans.Either (EitherT, runEitherT, left, right)
 
@@ -29,15 +27,13 @@ import "base" Data.Maybe (fromJust, isJust)
 import qualified "containers" Data.Set as Set
 import "base" Data.Function (fix)
 
-import qualified "X11" Graphics.X11.Types      as XTypes
-import qualified "X11" Graphics.X11.ExtraTypes as XTypes
+import qualified "X11" Graphics.X11.Types as XTypes
 import "X11" Graphics.X11.Xlib.Types (Display)
-import "X11" Graphics.X11.Types (Window)
 
 -- local imports
 
-import Utils.StateMonad (EitherStateT, modifyState, modifyStateM)
-import Utils.Sugar ((&), (.>), (|?|), (?))
+import Utils.StateMonad (EitherStateT)
+import Utils.Sugar ((&), (?))
 import Utils.String (qm)
 import qualified Options as O
 import qualified Actions
@@ -89,8 +85,8 @@ handleKeyboard ctVars opts keyMap _ fd =
       onOnlyBothAltsPressed :: Bool
       onOnlyBothAltsPressed =
         O.alternativeMode opts &&
-        let set = Set.fromList [Keys.AltLeftKey, Keys.AltRightKey]
-         in keyName `Set.member` set && pressed == set
+        let altsSet = Set.fromList [Keys.AltLeftKey, Keys.AltRightKey]
+         in keyName `Set.member` altsSet && pressed == altsSet
 
       -- When Alternative mode is on and current key has alternative map
       onAlternativeKey :: Bool
@@ -182,9 +178,9 @@ handleKeyboard ctVars opts keyMap _ fd =
         (isPressed ? pressKey $ releaseKey) keyCodeTo
 
       off :: KeyName -> IO ()
-      off keyName =
-        when (keyName `Set.member` pressed) $
-          trigger keyName (fromJust $ getKeyCodeByName keyName) False
+      off keyNameToOff =
+        when (keyNameToOff `Set.member` pressed) $
+          trigger keyNameToOff (fromJust $ getKeyCodeByName keyNameToOff) False
 
   in
   if
@@ -350,6 +346,9 @@ handleKeyboard ctVars opts keyMap _ fd =
                  , State.comboState' . State.keysPressedBeforeEnter'
                  , Keys.ControlRightKey
                  )
+               _ -> error [qm| Got unexpected key, it supposed to be only
+                             \ {Keys.CapsLockKey} or {Keys.EnterKey} |]
+
           :: (Lens' State Bool, Lens' State (Set KeyName), KeyName)
      in if
 
@@ -369,8 +368,8 @@ handleKeyboard ctVars opts keyMap _ fd =
         -- `CapsLockKey` or `EnterKey` with combo (see below)
         -- it triggers Control pressing.
         | state ^. withCombosFlagLens -> do
-          let keyCode = fromJust $ getKeyCodeByName controlKeyName
-          noise' [ [qm| {keyName} released after pressed with combos,
+          let ctrlKeyCode = fromJust $ getKeyCodeByName controlKeyName
+          noise' [ [qm| {ctrlKeyCode} released after pressed with combos,
                       \ it means it was interpreted as {controlKeyName} |]
                  , [qm| Triggering releasing of {controlKeyName}
                       \ (X key code: {keyCode})... |]
@@ -412,11 +411,17 @@ handleKeyboard ctVars opts keyMap _ fd =
              , State.comboState' . State.keysPressedBeforeEnter'
              , Keys.ControlRightKey
              )
+           | otherwise =
+             error [qm| Got unexpected key, it supposed to be only
+                      \ {Keys.CapsLockKey} or {Keys.EnterKey} |]
+
         ( mainKeyName,
           withCombosFlagLens,
           pressedBeforeLens,
           controlKeyName ) = _f
+
         pressedBeforeList = state ^. pressedBeforeLens
+
      in if
 
         -- Some key is released and this key was pressed before
@@ -431,11 +436,11 @@ handleKeyboard ctVars opts keyMap _ fd =
         -- `CapsLockKey` or `EnterKey` pressed with combo,
         -- it means it should be interpreted as Control key.
         | otherwise -> do
-          let keyCode = fromJust $ getKeyCodeByName controlKeyName
+          let ctrlKeyCode = fromJust $ getKeyCodeByName controlKeyName
           noise [qm| {mainKeyName} pressed with combo,
                    \ triggering {controlKeyName}
-                   \ (X key code: {keyCode})... |]
-          pressKey keyCode -- Press Control before current key
+                   \ (X key code: {ctrlKeyCode})... |]
+          pressKey ctrlKeyCode -- Press Control before current key
           smartTrigger
           return (state & withCombosFlagLens .~ True)
 
@@ -466,9 +471,6 @@ handleKeyboard ctVars opts keyMap _ fd =
   getKeyCodeByName :: KeyName -> Maybe KeyCode
   getKeyCodeByName = Keys.getKeyCodeByName keyMap
 
-  getRealKeyCodeByName :: KeyName -> Maybe KeyCode
-  getRealKeyCodeByName = Keys.getRealKeyCodeByName keyMap
-
   -- isAlternative = Keys.isAlternative keyMap :: KeyName -> Bool
   getAlternative :: KeyName -> Maybe (KeyName, KeyCode)
   getAlternative = Keys.getAlternative keyMap
@@ -480,14 +482,14 @@ handleKeyboard ctVars opts keyMap _ fd =
   getExtraKeys = Keys.getExtraKeys keyMap :: KeyName -> Set KeyName
 
   toggleCapsLock :: State -> IO State
-  toggleCapsLock = CrossThread.toggleCapsLock ctVars noise' keyMap
+  toggleCapsLock = CrossThread.toggleCapsLock ctVars noise'
 
   toggleAlternative :: State -> IO State
   toggleAlternative = CrossThread.toggleAlternative noise' notify'
 
   handleCapsLockModeChange :: State -> IO State
   handleCapsLockModeChange =
-    CrossThread.handleCapsLockModeChange ctVars noise' keyMap
+    CrossThread.handleCapsLockModeChange ctVars noise'
 
   handleAlternativeModeChange :: State -> IO State
   handleAlternativeModeChange =
@@ -499,7 +501,7 @@ handleKeyboard ctVars opts keyMap _ fd =
   handleResetKbdLayout = CrossThread.handleResetKbdLayout ctVars noise'
 
   resetAll :: EitherStateT State () IO ()
-  resetAll = CrossThread.resetAll opts ctVars noise' notify' keyMap
+  resetAll = CrossThread.resetAll opts ctVars noise' notify'
 
   -- Wait and extract event, make preparations and call handler
   onEv :: (KeyName -> KeyCode -> Bool -> State -> IO State) -> IO ()

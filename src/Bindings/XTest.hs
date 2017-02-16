@@ -33,5 +33,5 @@ fakeKeyEvent dpy keySym state = do
 
 fakeKeyCodeEvent :: Display -> KeyCode -> Bool -> IO ()
 fakeKeyCodeEvent dpy keyCode state = do
-  xFakeKeyEvent dpy keyCode state 0
+  _ <- xFakeKeyEvent dpy keyCode state 0
   sync dpy False

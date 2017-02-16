@@ -48,14 +48,15 @@ main = do
   let terminate = closeDisplay dpy >> putMVar mVar ()
 
   threadId <- forkIO $
-    (allocaXEvent $ \evPtr -> forever $ waitForEvent dpy evPtr)
+    allocaXEvent (forever . waitForEvent dpy)
       `catch` \MortifyThreadException -> terminate
 
-  let catch sig = installHandler sig (Catch termHook) Nothing
-      timeout   = threadDelay $ 5000 * 1000
-      termHook  = do throwTo threadId MortifyThreadException
-                     timeout >> terminate
-   in mapM_ catch [sigINT, sigTERM]
+  let handle sig = installHandler sig (Catch termHook) Nothing
+      timeout    = threadDelay $ 5000 * 1000
+      termHook   = do throwTo threadId MortifyThreadException
+                      timeout >> terminate
+
+   in mapM_ handle [sigINT, sigTERM]
 
   takeMVar mVar
   exitSuccess

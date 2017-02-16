@@ -11,11 +11,11 @@ module Process.KeysActions
   ) where
 
 import "base" Control.Concurrent.Chan (readChan)
-import "base" Control.Monad (when, unless, forever)
+import "base" Control.Monad (unless, forever)
 
 import "base" Data.Maybe (fromJust)
 
-import "X11" Graphics.X11.Xlib (Display, Window)
+import "X11" Graphics.X11.Xlib (Display)
 
 -- local imports
 
@@ -33,7 +33,7 @@ import Actions ( ActionType(Single, Sequence)
 import Options (Options)
 import Keys (KeyMap)
 import qualified Keys
-import Bindings.Xkb (xkbSetGroup, xkbGetCurrentLayout)
+import Bindings.Xkb (xkbSetGroup)
 import State (CrossThreadVars, keysActionsChan)
 import qualified State
 
@@ -53,7 +53,7 @@ processKeysActions ctVars _ keyMap dpy = forever $ do
 
   where f :: (KeyAction -> IO ()) -> ActionType KeyAction -> IO ()
         f m (Actions.Single a) = m a
-        f m (Actions.Sequence []) = return ()
+        f _ (Actions.Sequence []) = return ()
         f m (Actions.seqHead -> (x, xs)) = m x >> f m xs
 
         press   keyCode = fakeKeyCodeEvent dpy keyCode True

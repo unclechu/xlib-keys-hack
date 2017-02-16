@@ -48,7 +48,7 @@ import "base" Data.Tuple (swap)
 -- local imports
 
 import Utils.String (qm)
-import Utils.Sugar ((&), (<&>), (.>), (?), applyIf, dupe)
+import Utils.Sugar ((&), (<&>), applyIf, dupe)
 import Utils.Lens (makeApoClassy)
 import qualified Options as O
 

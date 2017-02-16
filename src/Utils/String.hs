@@ -20,12 +20,10 @@ import qualified "template-haskell" Language.Haskell.TH as TH
 import "template-haskell" Language.Haskell.TH.Quote
 import "haskell-src-meta" Language.Haskell.Meta.Parse
 import "base" GHC.Exts (IsString(..))
-import "base" Data.Monoid (Monoid(..))
 import "bytestring" Data.ByteString.Char8 as Strict (ByteString, unpack)
 import "bytestring" Data.ByteString.Lazy.Char8 as Lazy (ByteString, unpack)
 import "text" Data.Text as T (Text, unpack)
 import "text" Data.Text.Lazy as LazyT(Text, unpack)
-import "base" Data.Char (isAlpha, isAlphaNum)
 
 -- local imports
 
@@ -70,12 +68,14 @@ instance (ShowQ a, IsString s) => QQ a s where
 data StringPart = Literal String | AntiQuote String deriving Show
 
 
+unQM :: String -> String -> [StringPart]
 unQM a []          = [Literal (reverse a)]
 unQM a ('\\':x:xs) = unQM (x:a) xs
 unQM a ("\\")      = unQM ('\\':a) []
 unQM a ('}':xs)    = AntiQuote (reverse a) : parseQM [] xs
 unQM a (x:xs)      = unQM (x:a) xs
 
+parseQM :: String -> String -> [StringPart]
 parseQM a []             = [Literal (reverse a)]
 parseQM a ('\\':'\\':xs) = parseQM ('\\':a) xs
 parseQM a ('\\':'{':xs)  = parseQM ('{':a) xs
@@ -93,17 +93,17 @@ clearIndentTillEOF :: String -> Maybe String
 clearIndentTillEOF str@((ifMaybe (`elem` "\t ") -> Just _) : _) = cutOff str
   where cutOff :: String -> Maybe String
         cutOff ""            = Just ""
-        cutOff eof@('\n':xs) = Just eof
+        cutOff eof@('\n':_) = Just eof
         cutOff ((ifMaybe (`elem` "\t ") -> Just _) : xs) = cutOff xs
         cutOff _ = Nothing
 clearIndentTillEOF _ = Nothing
 
 clearIndentAtSOF :: String -> Maybe String
-clearIndentAtSOF str@('\n' : xs) = if result /= xs
-                                      then Just $ '\n' : cutOff xs
-                                      else Nothing
+clearIndentAtSOF ('\n' : xs) = if result /= xs
+                                  then Just $ '\n' : cutOff xs
+                                  else Nothing
   where cutOff :: String -> String
-        cutOff ((ifMaybe (`elem` "\t ") -> Just _) : xs) = cutOff xs
+        cutOff ((ifMaybe (`elem` "\t ") -> Just _) : ys) = cutOff ys
         cutOff s = s
         result = cutOff xs
 clearIndentAtSOF _ = Nothing
@@ -114,15 +114,17 @@ clearIndentAtStart ((ifMaybe (`elem` "\t ") -> Just _) : xs) =
 clearIndentAtStart s = s
 
 
+makeExpr :: [StringPart] -> TH.ExpQ
 makeExpr [] = [| mempty |]
 makeExpr (Literal a : xs) =
   TH.appE [| mappend (fromString a) |]    $ makeExpr xs
 makeExpr (AntiQuote a : xs) =
   TH.appE [| mappend (toQQ $(reify a)) |] $ makeExpr xs
 
+reify :: String -> TH.Q TH.Exp
 reify s =
   case parseExp s of
-       Left s  -> TH.reportError s >> [| mempty |]
+       Left  e -> TH.reportError e >> [| mempty |]
        Right e -> return e
 
 

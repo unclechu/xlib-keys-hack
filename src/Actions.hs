@@ -20,15 +20,14 @@ module Actions
 
 import "X11" Graphics.X11.Xlib (KeyCode)
 
-import "base" Control.Monad (when, unless)
+import "base" Control.Monad (when)
 import "base" Control.Concurrent.Chan (writeChan)
-import "lens" Control.Lens ((.~), (%~), (^.), set, over, view)
+import "lens" Control.Lens ((^.))
 
 import "base" Data.Maybe (isJust)
 
 -- local imports
 
-import Utils.Lens (makeApoClassy)
 import qualified Options as O
 import qualified State
 
@@ -41,6 +40,7 @@ import Actions.Types ( ActionType(..)
 -- Takes head from actions sequence and returns it with wrapped tail.
 seqHead :: ActionType a -> (a, ActionType a)
 seqHead (Sequence (x:xs)) = (x, Sequence xs)
+seqHead _ = error "cannot get head of empty list of actions sequence"
 
 
 -- Checks if verbose mode is enabled and only then adds actions to queue.

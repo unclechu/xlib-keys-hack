@@ -1,6 +1,7 @@
 -- Author: Viacheslav Lotsmanov
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
+{-# OPTIONS_GHC -fno-warn-unused-binds #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE PackageImports #-}
@@ -19,13 +20,11 @@ import qualified "base" Foreign.Marshal.Alloc as MAlloc
 
 import "X11" Graphics.X11.Xlib.Types (Display(Display))
 
-import "base" Control.Monad (when, unless)
-
-import "base" Data.Bits ((.&.))
+import "base" Control.Monad (when)
 
 -- local imports
 
-import Utils.Sugar ((&), (.>))
+import Utils.Sugar ((&))
 import Utils (dieWith)
 import State (LedModes(..))
 

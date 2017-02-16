@@ -20,16 +20,16 @@ import "base" GHC.Generics (Generic)
 import "base" System.IO (Handle)
 import qualified "base" System.Console.GetOpt as GetOpt
 
-import "lens" Control.Lens ((.~), (%~), (^.), set, over, view)
+import "lens" Control.Lens ((.~), (%~), (^.), set)
 import "deepseq" Control.DeepSeq (NFData, rnf, deepseq)
 
-import "base" Data.Maybe (fromJust, fromMaybe)
+import "base" Data.Maybe (fromJust)
 import "data-default" Data.Default (Default, def)
 
 -- local imports
 
 import Utils.Instances ()
-import Utils.Sugar ((&), (.>))
+import Utils.Sugar ((&))
 import Utils.Lens (makeApoClassy)
 
 

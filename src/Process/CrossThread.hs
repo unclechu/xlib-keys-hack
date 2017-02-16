@@ -31,14 +31,13 @@ module Process.CrossThread
   , resetAll
   ) where
 
-import "X11" Graphics.X11.Xlib (Display, KeyCode)
+import "X11" Graphics.X11.Xlib (Display)
 
-import "base" Control.Monad (unless, when)
-import "transformers" Control.Monad.Trans.Class (lift)
-import "lens" Control.Lens ((.~), (%~), (^.), set, over, view, Lens')
-import "either" Control.Monad.Trans.Either (EitherT, runEitherT, left, right)
-import "transformers" Control.Monad.Trans.State (StateT, evalStateT, execStateT)
-import qualified "mtl" Control.Monad.State.Class as St (MonadState(get, put))
+import "base" Control.Monad (when)
+import "lens" Control.Lens ((.~), (^.), view, Lens')
+import "either" Control.Monad.Trans.Either (runEitherT, left, right)
+import "transformers" Control.Monad.Trans.State (execStateT)
+import qualified "mtl" Control.Monad.State.Class as St (MonadState)
 import "transformers" Control.Monad.IO.Class (MonadIO, liftIO)
 
 import qualified "containers" Data.Set as Set (null)
@@ -46,11 +45,10 @@ import "base" Data.Maybe (fromJust, isJust)
 
 -- local imports
 
-import Utils (dieWith)
 import Utils.String (qm)
 import Utils.StateMonad (modifyState, modifyStateM)
-import Utils.BreakableMonad (continueIf, continueUnless)
-import Utils.Sugar ((?), (|?|), (&), (.>))
+import Utils.BreakableMonad (continueIf)
+import Utils.Sugar ((?), (|?|), (.>))
 import Bindings.XTest (fakeKeyCodeEvent)
 import Bindings.MoreXlib (getLeds)
 import qualified Options
@@ -112,9 +110,8 @@ handleModeChange mcLens (doingItMsg, alreadyMsg) doHandle isNowOn
 
 
 -- Handle delayed Caps Lock mode change
-handleCapsLockModeChange :: CrossThreadVars -> Noiser -> KeyMap -> State
-                         -> IO State
-handleCapsLockModeChange ctVars noise' keyMap state =
+handleCapsLockModeChange :: CrossThreadVars -> Noiser -> State -> IO State
+handleCapsLockModeChange ctVars noise' state =
 
   handleModeChange mcLens (doingItMsg, alreadyMsg) handler isNowOn
                    noise' state
@@ -211,8 +208,8 @@ turnMode mcLens (immediatelyMsgs, laterMsgs) already nowHandle toOn
 
 
 
-toggleCapsLock :: CrossThreadVars -> Noiser -> KeyMap -> State -> IO State
-toggleCapsLock ctVars noise' keyMap state =
+toggleCapsLock :: CrossThreadVars -> Noiser -> State -> IO State
+toggleCapsLock ctVars noise' state =
 
   turnMode mcLens ([immediatelyMsg], laterMsgs) Nothing handler toOn
            noise' state
@@ -269,9 +266,8 @@ toggleAlternative noise' notify' state =
 
 
 
-turnCapsLockMode :: CrossThreadVars -> Noiser -> KeyMap -> State -> Bool
-                 -> IO State
-turnCapsLockMode ctVars noise' keyMap state toOn =
+turnCapsLockMode :: CrossThreadVars -> Noiser -> State -> Bool -> IO State
+turnCapsLockMode ctVars noise' state toOn =
 
   turnMode mcLens ([immediatelyMsg], laterMsgs) already handler toOn
            noise' state
@@ -398,11 +394,11 @@ resetKbdLayout ctVars noise' state = flip execStateT state . runEitherT $ do
 
 
 resetAll :: (St.MonadState State m, MonadIO m)
-         => Options -> CrossThreadVars -> Noiser -> Notifier -> KeyMap -> m ()
-resetAll opts ctVars noise' notify' keyMap = do
+         => Options -> CrossThreadVars -> Noiser -> Notifier -> m ()
+resetAll opts ctVars noise' notify' = do
 
   liftIO $ noise' ["Resetting keyboard layout..."]
-  modifyStateM $ liftIO . resetKbdLayout
+  modifyStateM $ liftIO . _resetKbdLayout
 
   liftIO $ noise' ["Resetting Caps Lock mode..."]
   modifyStateM $ liftIO . turnCapsLockModeOff
@@ -411,8 +407,8 @@ resetAll opts ctVars noise' notify' keyMap = do
     liftIO $ noise' ["Resetting Alternative mode..."]
     modifyStateM $ liftIO . turnAlternativeModeOff
 
-  where resetKbdLayout = Process.CrossThread.resetKbdLayout ctVars noise'
-        turnCapsLockModeOff = flip (turnCapsLockMode ctVars noise' keyMap) False
+  where _resetKbdLayout = Process.CrossThread.resetKbdLayout ctVars noise'
+        turnCapsLockModeOff = flip (turnCapsLockMode ctVars noise') False
         turnAlternativeModeOff = flip (turnAlternativeMode noise' notify') False
 
 
@@ -422,10 +418,12 @@ resetAll opts ctVars noise' notify' keyMap = do
 justTurnCapsLockMode :: Display -> (String -> IO ()) -> KeyMap -> Bool -> IO ()
 justTurnCapsLockMode dpy noise keyMap isOn =
 
-  let log = noise [qm| Turning Caps Lock mode {onOrOff isOn}
-                     \ (by pressing and releasing {keyName})... |]
+  let logIt = noise [qm| Turning Caps Lock mode {onOrOff isOn}
+                       \ (by pressing and releasing {keyName})... |]
+
       f = fakeKeyCodeEvent dpy keyCode
       toggle = f True >> f False
+
       -- Sometimes for some reason Caps Lock mode led returns True
       -- at initialization step even if Caps Lock mode is disabled,
       -- let's bang Caps Lock key until it is really disabled.
@@ -433,9 +431,10 @@ justTurnCapsLockMode dpy noise keyMap isOn =
         toggle
         (view State.capsLockLed' -> isReallyOn) <- getLeds dpy
         isReallyOn /= isOn ? recur $ return ()
-   in log >> recur
 
-  `or`
+   in logIt >> recur
+
+  `orIfAlreadyOn`
 
   noise [qm| Attempt to turn Caps Lock mode {onOrOff isOn},
            \ it's already done, skipping... |]
@@ -443,8 +442,8 @@ justTurnCapsLockMode dpy noise keyMap isOn =
   where keyName = Keys.RealCapsLockKey
         keyCode = fromJust $ Keys.getRealKeyCodeByName keyMap keyName
 
-        or :: IO () -> IO () -> IO ()
-        a `or` b = do
+        orIfAlreadyOn :: IO () -> IO () -> IO ()
+        a `orIfAlreadyOn` b = do
           (view State.capsLockLed' -> isOnAlready) <- getLeds dpy
           isOn /= isOnAlready ? a $ b
 

@@ -36,12 +36,11 @@ import "process" System.Process ( CreateProcess(std_in, std_out, std_err)
                                 )
 
 import "base" Control.Monad (when, unless, forever)
-import "lens" Control.Lens ((.~), (%~), (^.), set, over, view)
+import "lens" Control.Lens ((.~), (^.), view)
 import "base" Control.Concurrent (threadDelay)
 import "base" Control.Concurrent.MVar (modifyMVar_)
-import "transformers" Control.Monad.IO.Class (liftIO)
-import "transformers" Control.Monad.Trans.State (StateT, execStateT)
-import "base" Control.Exception (Exception(fromException), throw, catch)
+import "transformers" Control.Monad.Trans.State (execStateT)
+import "base" Control.Exception (Exception, throw, catch)
 
 import "base" Data.Maybe (fromJust, isJust)
 import "base" Data.Typeable (Typeable)
@@ -53,10 +52,8 @@ import "X11" Graphics.X11.Xlib.Types (Display)
 -- local imports
 
 import Utils (dieWith, writeToFd)
-import Utils.StateMonad (modifyState, modifyStateM)
-import Utils.BreakableMonad (continueIf, continueUnless)
 import Utils.X (nextEvent')
-import Utils.Sugar ((&), (.>), (?), (|?|))
+import Utils.Sugar ((&), (?), (|?|))
 import Utils.String (qm)
 import Bindings.Xkb ( xkbSetGroup
                     , xkbListenForKeyboardStateEvents
@@ -103,15 +100,15 @@ initReset opts keyMap dpy = do
           CrossThread.justTurnCapsLockMode dpy noise keyMap
 
         initialResetKbdLayout :: Display -> IO ()
-        initialResetKbdLayout dpy =
-          xkbSetGroup dpy 0 >>= flip unless (dieWith "xkbSetGroup error")
+        initialResetKbdLayout _dpy =
+          xkbSetGroup _dpy 0 >>= flip unless (dieWith "xkbSetGroup error")
 
 
 data IsEOFException = IsEOFException deriving (Show, Typeable)
 instance Exception IsEOFException
 
 processWindowFocus :: CrossThreadVars -> Options -> KeyMap -> Display -> IO ()
-processWindowFocus ctVars opts keyMap _ = forever $ do
+processWindowFocus ctVars opts _ _ = forever $ do
 
   noise [qm| Spawning subprocess of '{appExecPath}'
            \ to get window focus events... |]
@@ -141,10 +138,10 @@ processWindowFocus ctVars opts keyMap _ = forever $ do
         handle outH = do
           noise [qm| Got new window focus event
                    \ from '{appExecPath}' subprocess |]
-          hGetLine outH
+          _ <- hGetLine outH
           when (O.resetByWindowFocusEvent opts) $
             modifyMVar_ (State.stateMVar ctVars) $ execStateT $
-              CrossThread.resetAll opts ctVars noise' notify' keyMap
+              CrossThread.resetAll opts ctVars noise' notify'
 
         appExecPath :: FilePath
         appExecPath = "xlib-keys-hack-watch-for-window-focus-events"
@@ -212,7 +209,7 @@ processKeyboardState ctVars opts _ dpy = do
   XEvent.allocaXEvent $ \evPtr -> forever $ do
     noise "Waiting for next X event about new keyboard layout state..."
     nextEvent' dpy evPtr
-    XExtras.getEvent evPtr
+    _ <- XExtras.getEvent evPtr
     layoutNum <- xkbGetCurrentLayout dpy
     noise [qm| Keyboard layout switched to: {layoutNum} |]
     modifyMVar_ (State.stateMVar ctVars) $

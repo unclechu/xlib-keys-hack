@@ -11,8 +11,6 @@ import "base" System.Posix.Types (Fd(Fd))
 
 import "base" Control.Concurrent (threadWaitRead)
 
-import "base" Data.Bool (bool)
-
 import "X11" Graphics.X11.Xlib (pending)
 import "X11" Graphics.X11.Xlib.Types (Display)
 import qualified "X11" Graphics.X11.Xlib.Event as XEvent (XEventPtr, nextEvent)
