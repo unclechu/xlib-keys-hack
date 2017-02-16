@@ -5,6 +5,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Keys
   ( KeyName(..)
@@ -24,6 +25,7 @@ module Keys
 
   , getAsName
   , getRemappedByName
+  , getExtraKeys
   ) where
 
 import Prelude hiding (lookup)
@@ -41,11 +43,12 @@ import "containers" Data.Map.Strict ( Map, (!), fromList, toList
 import qualified "containers" Data.Map.Strict as Map
 import qualified "containers" Data.Set as Set
 import "base" Data.Word (Word16)
+import "base" Data.Tuple (swap)
 
 -- local imports
 
 import Utils.String (qm)
-import Utils.Sugar ((&), (<&>), (?))
+import Utils.Sugar ((&), (<&>), (.>), (?), applyIf, dupe)
 import Utils.Lens (makeApoClassy)
 import qualified Options as O
 
@@ -116,6 +119,9 @@ instance NFData KeyName
 
 type KeyAlias = (KeyName, Word16, KeyCode)
 
+-- Mappings between keys names and device key codes
+-- and X key codes to trigger them.
+-- Also with custom remaps for specific keys.
 defaultKeyAliases :: [KeyAlias]
 defaultKeyAliases =
   [ (EscapeKey,       1,   9)
@@ -297,6 +303,8 @@ defaultKeyAliases =
   ]
 
 
+-- Real standard keys aliases to X key-codes to trigger them
+-- if they were remapped to another keys.
 realKeys :: [(KeyName, KeyCode)]
 realKeys =
   [ (RealMenuKey,     135)
@@ -304,6 +312,7 @@ realKeys =
   ]
 
 
+-- Remapping for keys when Alternative mode is turned on
 alternativeModeRemaps :: [(KeyName, KeyName)]
 alternativeModeRemaps =
   [ (HKey,            ArrowLeftKey)
@@ -325,6 +334,7 @@ alternativeModeRemaps =
   ]
 
 
+-- Aliases for media keys
 mediaDevNums :: [(KeyName, Word16)]
 mediaDevNums =
   [ (MCalculatorKey,        140)
@@ -344,6 +354,10 @@ mediaDevNums =
   ]
 
 
+-- Aliases that indicates that specific key remapped to another.
+-- If you want for example get all Shift keys you must also check this mapping
+-- for alias, because for example `LessKey` is remapped to `ShiftLeftKey`,
+-- to `LessKey` is Shift key too.
 asNames :: [(KeyName, KeyName)]
 asNames =
   [ (FNKey,       InsertKey)
@@ -353,10 +367,12 @@ asNames =
   ]
 
 
+-- Returns Map of aliases list using key name as a Map key
 getByNameMap :: [KeyAlias] -> Map KeyName KeyAlias
 getByNameMap keyMap = fromList $ map f keyMap
   where f (name, devNum, xNum) = (name, (name, devNum, xNum))
 
+-- Returns Map of aliases list using device key code as a Map key
 getByDevNumMap :: [KeyAlias] -> Map Word16 KeyAlias
 getByDevNumMap keyMap = fromList $ map f keyMap
   where f (name, devNum, xNum) = (devNum, (name, devNum, xNum))
@@ -369,6 +385,7 @@ data KeyMap =
          , byNameMediaMap       :: Map KeyName KeyCode
          , byNameRealMap        :: Map KeyName KeyCode
          , asNamesMap           :: Map KeyName KeyName
+         , extraByRemaps        :: [(KeyName, KeyName)]
          }
   deriving (Show, Eq, Generic)
 
@@ -380,6 +397,7 @@ instance NFData KeyMap where
     byNameMediaMap       x `deepseq`
     byNameRealMap        x `deepseq`
     asNamesMap           x `deepseq`
+    extraByRemaps        x `deepseq`
       ()
 
 
@@ -392,6 +410,7 @@ getKeyMap opts mediaKeyAliases =
          , byNameMediaMap       = byNameMediaAliasesMap
          , byNameRealMap        = realMap
          , asNamesMap           = _asNamesMap
+         , extraByRemaps        = map swap _asNames
          }
 
   where keyAliases :: [KeyAlias]
@@ -409,11 +428,10 @@ getKeyMap opts mediaKeyAliases =
 
         isCapsLockReal = O.realCapsLock opts :: Bool
 
-        _asNamesMap :: Map KeyName KeyName
-        _asNamesMap = fromList asNames
-                    & if isCapsLockReal
-                         then insert CapsLockKey CapsLockKey
-                         else id
+        _asNamesMap = fromList _asNames :: Map KeyName KeyName
+
+        _asNames :: [(KeyName, KeyName)]
+        _asNames = asNames & (dupe CapsLockKey :) `applyIf` isCapsLockReal
 
         byNameMediaAliasesMap :: Map KeyName KeyCode
         byNameMediaAliasesMap =
@@ -457,6 +475,20 @@ getRemappedByName :: KeyMap -> KeyName -> Set.Set KeyName
 getRemappedByName keyMap keyName =
   Map.filter (== keyName) (asNamesMap keyMap)
     & toList & map fst & Set.fromList
+
+-- Gets specific key and returns a Set that contains extra keys
+-- aliased as this specific key (you get a Set of extra synonyms keys).
+-- For example `LessKey` remapped as `ShiftLeftKey` and if you need to
+-- handle in some way `ShiftLeftKey` you should also handle `LessKey`
+-- same way, because they're same keys, they're kinda synonyms,
+-- so, you could try this:
+--   `getExtraKeys keyMap ShiftLeftKey`
+-- and then you get a Set of extra aliases for this key like this:
+--   `Set.fromList [LessKey]`
+-- (this Set can contaion more than one aliases).
+getExtraKeys :: KeyMap -> KeyName -> Set.Set KeyName
+getExtraKeys (extraByRemaps -> extra) keyName =
+  Set.fromList . map snd . filter ((== keyName) . fst) $ extra
 
 
 -- Check if key is media key

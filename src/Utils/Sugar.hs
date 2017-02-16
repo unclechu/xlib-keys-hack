@@ -8,6 +8,9 @@ module Utils.Sugar
   , (?), (|?|)       -- conditions helpers
 
   , ifMaybe
+  , applyIf
+  , applyUnless
+  , dupe
   ) where
 
 import "base" Data.Bool (bool)
@@ -59,6 +62,18 @@ infixl 2 |?|
 infixl 1 ?
 
 
--- Same as 'partial' from 'Control-Monad-Plus'
+-- Same as 'partial' from 'Control-Monad-Plus'.
+-- Returns given value inside Just only if it passses a predicate.
 ifMaybe :: (a -> Bool) -> a -> Maybe a
-ifMaybe f x = if f x then Just x else Nothing
+ifMaybe f x = f x ? Just x $ Nothing
+
+
+applyIf :: (a -> a) -> Bool -> a -> a
+applyIf = (|?| id)
+
+applyUnless :: (a -> a) -> Bool -> a -> a
+applyUnless = (id |?|)
+
+
+dupe :: a -> (a, a)
+dupe x = (x, x)

@@ -99,10 +99,16 @@ data ComboState =
              -- For fast-typing cases
              , keysPressedBeforeEnter :: Set.Set KeyName
 
-             -- When Enter wors as additional Control
-             -- and pressed with modifiers like for example
-             -- Shift+Enter or Alt+Enter.
-             , isEnterPressedWithMods :: Bool
+             -- What Just or Nothing indicates:
+             --   If Enter key works as additional Control
+             --   and it pressed with modifiers like for example
+             --   Shift+Enter or Alt+Enter.
+             -- About value inside Just:
+             --   Modifiers keys Set that was pressed before Enter key
+             --   to check if for example modifier key was released
+             --   before Enter key and it means that we need to trigger
+             --   Enter key before release this modifier.
+             , isEnterPressedWithMods :: Maybe (Set.Set KeyName)
 
              -- Modes that will be changed to specified state
              -- after all currently pressed keys will be released.
@@ -136,13 +142,17 @@ instance Default ComboState where
   def = ComboState
     { appleMediaPressed         = False
 
+    -- TODO wrap `isCapsLockUsedWithCombos` to `Maybe`
+    --      and remvoe `keysPressedBeforeCapsLock`.
     , isCapsLockUsedWithCombos  = False
     , keysPressedBeforeCapsLock = Set.empty
 
+    -- TODO wrap `isEnterUsedWithCombos` to `Maybe`
+    --      and remvoe `keysPressedBeforeEnter`.
     , isEnterUsedWithCombos     = False
     , keysPressedBeforeEnter    = Set.empty
 
-    , isEnterPressedWithMods    = False
+    , isEnterPressedWithMods    = Nothing
 
     , capsLockModeChange        = Nothing
     , alternativeModeChange     = Nothing

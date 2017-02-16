@@ -7,6 +7,7 @@
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 
 module Process.Keyboard
   ( handleKeyboard
@@ -17,7 +18,7 @@ import qualified "linux-evdev" System.Linux.Input.Event as EvdevEvent
 
 import "transformers" Control.Monad.Trans.Class (lift)
 import "base" Control.Monad (when, unless, forM_, forever)
-import "lens" Control.Lens ((.~), (%~), (^.), set, over, view, Lens')
+import "lens" Control.Lens ((.~), (%~), (^.), set, over, view, Lens', mapped)
 import "base" Control.Concurrent.MVar (MVar, modifyMVar_)
 import "base" Control.Concurrent.Chan (Chan)
 import "transformers" Control.Monad.IO.Class (liftIO)
@@ -26,6 +27,7 @@ import "either" Control.Monad.Trans.Either (EitherT, runEitherT, left, right)
 
 import "base" Data.Maybe (fromJust, isJust)
 import qualified "containers" Data.Set as Set
+import "base" Data.Function (fix)
 
 import qualified "X11" Graphics.X11.Types      as XTypes
 import qualified "X11" Graphics.X11.ExtraTypes as XTypes
@@ -70,9 +72,18 @@ type CrossThreadVars = State.CrossThreadVars
 handleKeyboard :: CrossThreadVars -> Options -> KeyMap -> Display -> Handle
                -> IO ()
 handleKeyboard ctVars opts keyMap _ fd =
-  onEv $ \keyName keyCode isPressed state ->
+  onEv $ fix $ \again keyName keyCode isPressed state ->
 
-  let pressed     = State.pressedKeys state
+  let pressed, otherPressed :: Set KeyName
+      -- All pressed keys at this time.
+      -- Curretly pressed or released key (`keyName`) automatically
+      -- added to (or removed from) this Set at the same time.
+      pressed = State.pressedKeys state
+      -- All pressed keys at this time excluding currently pressed key
+      otherPressed = Set.delete keyName pressed
+
+      -- Alternative version of currently pressed or released key
+      alternative :: Maybe (KeyName, KeyCode)
       alternative = O.alternativeMode opts ? getAlternative keyName $ Nothing
 
       onOnlyBothAltsPressed :: Bool
@@ -80,6 +91,10 @@ handleKeyboard ctVars opts keyMap _ fd =
         O.alternativeMode opts &&
         let set = Set.fromList [Keys.AltLeftKey, Keys.AltRightKey]
          in keyName `Set.member` set && pressed == set
+
+      -- When Alternative mode is on and current key has alternative map
+      onAlternativeKey :: Bool
+      onAlternativeKey = State.alternative state && isJust alternative
 
       onAppleMediaPressed :: Bool
       onAppleMediaPressed = Keys.FNKey `Set.member` pressed && isMedia keyName
@@ -99,7 +114,7 @@ handleKeyboard ctVars opts keyMap _ fd =
         keyName `elem` [Keys.CapsLockKey, Keys.EnterKey] &&
         not (
           keyName == Keys.EnterKey &&
-          state ^. State.comboState' . State.isEnterPressedWithMods'
+          isJust (state ^. State.comboState' . State.isEnterPressedWithMods')
         )
 
       -- Caps Lock or Enter pressed (previously pressed)
@@ -111,49 +126,54 @@ handleKeyboard ctVars opts keyMap _ fd =
         not (
           Keys.EnterKey `Set.member` pressed &&
           Keys.CapsLockKey `Set.notMember` pressed &&
-          state ^. State.comboState' . State.isEnterPressedWithMods'
+          isJust (state ^. State.comboState' . State.isEnterPressedWithMods')
         )
 
+      -- Only for additional controls.
+      -- Enter key just pressed after some modifiers (only) was pressed before.
+      -- Or Enter key just released after pressed with some modes keys.
       onEnterOnlyWithMods :: Bool
       onEnterOnlyWithMods =
         O.additionalControls opts &&
         keyName == Keys.EnterKey &&
-        let mods :: Set KeyName
-            mods = Set.fromList
-              [ Keys.ControlLeftKey, Keys.ControlRightKey
-              , Keys.ShiftLeftKey,   Keys.ShiftRightKey
-              , Keys.AltLeftKey,     Keys.AltRightKey
-              , Keys.SuperLeftKey,   Keys.SuperRightKey
-              , Keys.CapsLockKey
-              ]
-            remappedMods :: Set KeyName
-            remappedMods =
-              Set.foldr (Set.union . getRemappedByName) Set.empty mods
 
-            allMods = mods `Set.union` remappedMods
-            otherPressed = Set.delete Keys.EnterKey pressed
-
+        let -- When Enter key just pressed
+            -- after some modifiers pressed before.
             pressedCase =
               isPressed &&
-              not (Set.null otherPressed) &&
-              Set.null (Set.foldr Set.delete otherPressed allMods)
+              not (Set.null otherPressed) && -- Have some keys pressed
+                                             -- along with Enter key.
+              -- Enter key was pressed with modifiers only,
+              -- not any other key was pressed before.
+              Set.null (Set.foldr Set.delete otherPressed allModifiersKeys)
+
+            -- When Enter key is just released
+            -- and before it was pressed only with modifiers.
             releasedCase =
               not isPressed &&
-              state ^. State.comboState' . State.isEnterPressedWithMods'
+              isJust (state ^. State.comboState' . State.isEnterPressedWithMods')
 
          in pressedCase || releasedCase
 
-      -- When Alternative mode is on and current key has alternative map
-      onAlternativeKey :: Bool
-      onAlternativeKey = State.alternative state && isJust alternative
+      -- When Enter pressed with only modifiers before and not released yet
+      onEnterWithModsOnlyInProgress :: Bool
+      onEnterWithModsOnlyInProgress =
 
-      justTrigger   = trigger   keyName keyCode isPressed :: IO ()
-      justAsTrigger = asTrigger keyName keyCode isPressed :: IO ()
+        let lens = State.comboState' . State.isEnterPressedWithMods'
+            mods = state ^. lens
 
-      smartTrigger :: IO ()
-      smartTrigger = onAlternativeKey ? alternativeTrigger $ justTrigger
+         in O.additionalControls opts &&
+            isJust mods &&
+            keyName /= Keys.EnterKey &&
 
-      alternativeTrigger :: IO ()
+            -- Preventing infinite loop, it's already stored in state,
+            -- so we're just going to handle it recursively again.
+            not (isPressed && keyName `Set.member` fromJust mods)
+
+      justTrigger, justAsTrigger, smartTrigger, alternativeTrigger :: IO ()
+      justTrigger        = trigger   keyName keyCode isPressed
+      justAsTrigger      = asTrigger keyName keyCode isPressed
+      smartTrigger       = onAlternativeKey ? alternativeTrigger $ justTrigger
       alternativeTrigger = do
         let Just (keyNameTo, keyCodeTo) = alternative
         noise [qm| Triggering {isPressed ? "pressing" $ "releasing"}
@@ -168,6 +188,74 @@ handleKeyboard ctVars opts keyMap _ fd =
 
   in
   if
+
+  | onEnterWithModsOnlyInProgress ->
+
+    let lens = State.comboState' . State.isEnterPressedWithMods'
+        Just pressedModifiers = state ^. lens
+        rehandle = again keyName keyCode isPressed
+
+     in if -- When Enter had been pressed only with modifiers
+           -- and one of the modifiers released erlier than Enter.
+           | not isPressed && keyName `Set.member` pressedModifiers -> do
+
+             noise' [ [qm| In sequence of 'modifier(s) + Enter' combo
+                         \ modifier ({keyName}) was released before Enter,
+                         \ we're about to take it as 'modifier(s) + Enter'
+                         \ ({Set.toList pressedModifiers} + {Keys.EnterKey}) |]
+
+                    , [qm| Triggering pressing and releasing {Keys.EnterKey}
+                         \ right now and
+                         \ recursively calling handler again to release
+                         \ modifier ({keyName})... |]
+                    ]
+
+             -- Triggering Enter pressing and releasing first
+             let enterKeyCode = fromJust $ getKeyCodeByName Keys.EnterKey
+
+                 -- Handle it recursively again (without flag in state)
+                 -- to press modifier befure triggering Enter.
+              in pressRelease Keys.EnterKey enterKeyCode
+
+             -- Triggering releasing of modifier
+             -- and flush modifiers for enter list in state.
+             state
+               & lens .~ Nothing
+               & State.pressedKeys' %~ (Set.delete Keys.EnterKey)
+               & rehandle
+
+           -- Another modifier pressed, adding it to stored list
+           | isPressed && keyName `Set.member` allModifiersKeys -> do
+
+             noise' [ [qm| In sequence of 'modifiers + Enter' combo
+                         \ another modifier ({keyName}) was pressed,
+                         \ adding this modifier to state... |]
+
+                    , [qm| Calling handler recursively again
+                         \ to trigger modifier ({keyName}) key... |]
+                    ]
+
+             -- Let's trigger this modifier key by recursively handle it again
+             state & lens . mapped %~ Set.insert keyName & rehandle
+
+           -- Another key event, it's not 'Enter with modifiers only' anymore,
+           -- it should be handled as additional control in this case.
+           | otherwise -> do
+
+             noise' [ [qm| In sequence of 'modifier(s) + Enter' combo
+                         \ ({Set.toList pressedModifiers} + {Keys.EnterKey})
+                         \ some another key was detected
+                         \ ({keyName} was {isPressed ? "pressed" $ "released"}),
+                         \ so it means it's not that kind of combo anymore,
+                         \ Enter key will be interpreted as additional control
+                         \ (it could be Ctrl+Shift+C for example) |]
+
+                    , "Removing 'modifier(s) + Enter' flag from state\
+                      \ and calling handler recursively again\
+                      \ to handle Enter as additional control..."
+                    ]
+
+             state & lens .~ Nothing & rehandle
 
   -- Alternative mode on/off by Alts handling
   | onOnlyBothAltsPressed -> do
@@ -204,7 +292,7 @@ handleKeyboard ctVars opts keyMap _ fd =
   | onAppleMediaPressed -> do
     noise [qm| Apple media key pressed, preventing triggering
              \ {Keys.FNKey} as {Keys.InsertKey}... |]
-    justTrigger
+    smartTrigger
     return (state & State.comboState' . State.appleMediaPressed' .~ True)
 
   | onOnlyTwoControlsPressed -> do
@@ -219,15 +307,32 @@ handleKeyboard ctVars opts keyMap _ fd =
                            then [Keys.CapsLockKey, Keys.EnterKey]
                            else []
      in state
-      & State.pressedKeys' .~ foldr Set.delete pressed toDelete
-      & toggleCapsLock
+          & State.pressedKeys' .~ foldr Set.delete pressed toDelete
+          & toggleCapsLock
 
   -- Ability to press combos like Shift+Enter, Alt+Enter, etc.
-  | onEnterOnlyWithMods -> do
-    when isPressed $ noise [qm|{keyName} pressed only with modifiers|]
-    justTrigger
-    let lens = State.comboState' . State.isEnterPressedWithMods'
-     in return (state & lens .~ isPressed)
+  | onEnterOnlyWithMods ->
+
+    let lens      = State.comboState' . State.isEnterPressedWithMods'
+        Just mods = state ^. lens
+
+     in if isPressed
+
+           -- On Enter key pressed.
+           -- Storing pressed modifiers in state.
+           then set lens (Just otherPressed) state
+                <$ noise [qm| {keyName} pressed only with modifiers for now,
+                            \ storing these modifiers list in state... |]
+
+           -- On Enter key released.
+           -- Triggering Enter key pressing+releasing
+           -- (with triggered modifiers before),
+           -- so it means we're triggering modifier + Enter combo
+           -- (like Shift+Enter, Ctrl+Enter, etc.).
+           else do noise [qm| {keyName} released and had pressed before
+                            \ only with modifiers, triggering it as
+                            \ {Set.toList mods} + {keyName}... |]
+                   set lens Nothing state <$ pressRelease keyName keyCode
 
   -- Handling of additional controls by `CapsLockKey` and `EnterKey`.
   -- They can't be pressed both in the same time here, it handled above.
@@ -251,15 +356,14 @@ handleKeyboard ctVars opts keyMap _ fd =
         -- Prevent triggering when just pressed.
         -- But store keys that hadn't released in time.
         | isPressed -> do
-          let onlyAnother = pressed & Set.delete keyName
-          unless (Set.null onlyAnother) $
+          unless (Set.null otherPressed) $
             noise' [ [qm| {keyName} was pressed with some another keys
                         \ that hadn't be released in time, these another keys
                         \ WONT be taken as combo with additional control |]
                    , [qm| Storing keys was pressed before {keyName}:
-                        \ {Set.toList onlyAnother}... |]
+                        \ {Set.toList otherPressed}... |]
                    ]
-          return (state & pressedBeforeLens .~ onlyAnother)
+          return (state & pressedBeforeLens .~ otherPressed)
 
         -- Trigger Control releasing because when you press
         -- `CapsLockKey` or `EnterKey` with combo (see below)
@@ -372,9 +476,8 @@ handleKeyboard ctVars opts keyMap _ fd =
   isMedia  = Keys.isMedia keyMap  :: KeyName -> Bool
   getMedia = Keys.getMedia keyMap :: KeyName -> Maybe KeyCode
 
-  getAsName = Keys.getAsName keyMap :: KeyName -> KeyName
-  getRemappedByName :: KeyName -> Set KeyName
-  getRemappedByName = Keys.getRemappedByName keyMap
+  getAsName    = Keys.getAsName keyMap    :: KeyName -> KeyName
+  getExtraKeys = Keys.getExtraKeys keyMap :: KeyName -> Set KeyName
 
   toggleCapsLock :: State -> IO State
   toggleCapsLock = CrossThread.toggleCapsLock ctVars noise' keyMap
@@ -436,7 +539,7 @@ handleKeyboard ctVars opts keyMap _ fd =
     where -- Prevent doing anything when key state is the same
           ignoreDuplicates :: State -> EitherT State IO State
           ignoreDuplicates state =
-            let pressed     = state ^. State.pressedKeys'
+            let pressed     = State.pressedKeys state
                 isMember    = keyName `Set.member` pressed
                 isDuplicate = isPressed == isMember
              in (isDuplicate ? left $ right) state
@@ -519,6 +622,20 @@ handleKeyboard ctVars opts keyMap _ fd =
              \ (X key code: {keyCode})... |]
     pressReleaseKey keyCode
 
-
-onOff :: Bool -> String
-onOff = "On" |?| "Off"
+  -- Union of all modifiers keys
+  allModifiersKeys :: Set KeyName
+  allModifiersKeys = mods `Set.union` remappedMods
+    where -- Just Set of modifiers keys
+          mods :: Set KeyName
+          mods = Set.fromList
+            [ Keys.ControlLeftKey, Keys.ControlRightKey
+            , Keys.SuperLeftKey,   Keys.SuperRightKey
+            , Keys.AltLeftKey,     Keys.AltRightKey
+            , Keys.ShiftLeftKey,   Keys.ShiftRightKey
+            ]
+          -- Other keys that was remapped as modifiers keys,
+          -- that means they're modifiers too.
+          -- For example `LessKey` is remapped to `ShiftLeftKey`,
+          -- so it means that this key is modifier too.
+          remappedMods :: Set KeyName
+          remappedMods = Set.foldr (Set.union . getExtraKeys) Set.empty mods
