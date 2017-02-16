@@ -17,7 +17,7 @@ import qualified "base" GHC.IO.Handle as IOHandle
 import qualified "linux-evdev" System.Linux.Input.Event as EvdevEvent
 
 import "transformers" Control.Monad.Trans.Class (lift)
-import "base" Control.Monad (when, unless, forM_, forever)
+import "base" Control.Monad ((>=>), when, unless, forM_, forever)
 import "lens" Control.Lens ((.~), (%~), (^.), set, over, view, Lens', mapped)
 import "base" Control.Concurrent.MVar (MVar, modifyMVar_)
 import "base" Control.Concurrent.Chan (Chan)
@@ -525,16 +525,18 @@ handleKeyboard ctVars opts keyMap _ fd =
     -- Log key user pressed (even if it's ignored or replaced)
     noise [qm| {keyName} is {isPressed ? "pressed" $ "released"} |]
 
-    let f :: State -> IO State
-        f = ignoreDuplicates
-         .> (>>= storeKey)
-         .> (>>= lift . handleM)
-         .> (>>= lift . handleResetKbdLayout)
-         .> (>>= lift . handleCapsLockModeChange)
-         .> (>>= lift . handleAlternativeModeChange)
-         .> runEitherT
-         .> fmap (either id id)
-     in modifyMVar_ (State.stateMVar ctVars) f
+    let mapState :: State -> IO State
+        mapState = fmap (either id id) . runEitherT . _chain
+
+        _chain :: State -> EitherT State IO State
+        _chain = ignoreDuplicates
+                   >=> storeKey
+                   >=> lift . handleM
+                   >=> lift . handleResetKbdLayout
+                   >=> lift . handleCapsLockModeChange
+                   >=> lift . handleAlternativeModeChange
+
+     in modifyMVar_ (State.stateMVar ctVars) mapState
 
     where -- Prevent doing anything when key state is the same
           ignoreDuplicates :: State -> EitherT State IO State
