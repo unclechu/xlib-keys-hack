@@ -372,9 +372,9 @@ handleKeyboard ctVars opts keyMap _ fd =
           noise' [ [qm| {ctrlKeyCode} released after pressed with combos,
                       \ it means it was interpreted as {controlKeyName} |]
                  , [qm| Triggering releasing of {controlKeyName}
-                      \ (X key code: {keyCode})... |]
+                      \ (X key code: {ctrlKeyCode})... |]
                  ]
-          releaseKey keyCode
+          releaseKey ctrlKeyCode
           return (state & withCombosFlagLens .~ False)
 
         -- Just triggering default aliased key code
