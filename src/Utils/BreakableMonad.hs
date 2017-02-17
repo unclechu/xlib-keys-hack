@@ -3,6 +3,7 @@
 
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
 
 module Utils.BreakableMonad
   ( BreakableMonad(continueIf, continueUnless)
@@ -20,10 +21,12 @@ class Monad m => BreakableMonad m where
   continueIf     :: Bool -> m ()
   continueUnless :: Bool -> m ()
 
-instance BreakableMonad (Either ()) where
+instance a ~ () => BreakableMonad (Either a) where
   continueIf     cond = cond ? Right () $ Left  ()
   continueUnless cond = cond ? Left  () $ Right ()
-instance Monad t => BreakableMonad (EitherT () t) where
+-- Type equality to void type constraint
+-- helps ghc with deducing void from monad (when it's ambiguous).
+instance (Monad t, a ~ ()) => BreakableMonad (EitherT a t) where
   continueIf     cond = cond ? right () $ left  ()
   continueUnless cond = cond ? left  () $ right ()
 
