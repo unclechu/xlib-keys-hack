@@ -10,8 +10,10 @@ import "hspec" Test.Hspec (hspec, describe)
 -- local imports
 
 import qualified Utils.BreakableMonad
+import qualified Utils.StateMonad
 
 
 main :: IO ()
-main = hspec $
+main = hspec $ do
   describe "BreakableMonad" Utils.BreakableMonad.spec
+  describe "State monad helpers" Utils.StateMonad.spec

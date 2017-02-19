@@ -103,11 +103,13 @@ test-suite xlib-keys-hack-utils-test
   main-is:             UtilsSpec.hs
 
   other-modules:       Utils.BreakableMonad
+                     , Utils.StateMonad
 
   build-depends:       base
                      , hspec
                      , either
                      , transformers
+                     , mtl
 
                      , xlib-keys-hack
 

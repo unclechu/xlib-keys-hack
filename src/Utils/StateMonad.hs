@@ -28,7 +28,7 @@ updateState :: (St.MonadState s m) => ((s, a) -> s) -> a -> m a
 updateState f x = St.state $ \s -> (x, f (s, x))
 
 -- Alternative version of `updateState` that call `f` function
--- with two arguments instead of touple.
+-- with two arguments instead of tuple.
 updateState' :: (St.MonadState s m) => (s -> a -> s) -> a -> m a
 updateState' f x = St.state $ \s -> (x, f s x)
 
