@@ -5,35 +5,13 @@
 
 module Main (main) where
 
-import "HUnit" Test.HUnit ( Test(TestList, TestCase)
-                          , runTestTT
-                          , assertEqual
-                          , assertBool
-                          )
-import "either" Control.Monad.Trans.Either (runEitherT)
+import "hspec" Test.Hspec (hspec, describe)
 
 -- local imports
 
-import "xlib-keys-hack" Utils.BreakableMonad
-  (BreakableMonad(continueIf, continueUnless))
+import qualified Utils.BreakableMonad
 
 
 main :: IO ()
-main = () <$ runTestTT tests
-
-tests :: Test
-tests = TestList [ breakableMonadTests
-                 ]
-
-
-breakableMonadTests :: Test
-breakableMonadTests = TestList [ testBreakableMonadDeducingVoidTypeEquality
-                               ]
-
--- It's supposed to fail only at compilation time
-testBreakableMonadDeducingVoidTypeEquality :: Test
-testBreakableMonadDeducingVoidTypeEquality = TestCase $ do
-  either (const ()) (const ()) <$> runEitherT (continueIf True)
-  either (const ()) (const ()) <$> runEitherT (continueIf False)
-  either (const ()) (const ()) <$> runEitherT (continueUnless True)
-  either (const ()) (const ()) <$> runEitherT (continueUnless False)
+main = hspec $
+  describe "BreakableMonad" Utils.BreakableMonad.spec

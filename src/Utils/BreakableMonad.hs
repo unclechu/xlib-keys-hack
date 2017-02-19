@@ -34,5 +34,5 @@ instance BreakableMonad Maybe where
   continueIf     cond = cond ? Just () $ Nothing
   continueUnless cond = cond ? Nothing $ Just ()
 instance Monad t => BreakableMonad (MaybeT t) where
-  continueIf     cond = cond ? return () $ fail undefined
-  continueUnless cond = cond ? return () $ fail undefined
+  continueIf     cond = cond ? return ()      $ fail undefined
+  continueUnless cond = cond ? fail undefined $ return ()

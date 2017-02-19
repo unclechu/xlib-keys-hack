@@ -102,9 +102,12 @@ test-suite xlib-keys-hack-utils-test
   hs-source-dirs:      test
   main-is:             UtilsSpec.hs
 
+  other-modules:       Utils.BreakableMonad
+
   build-depends:       base
-                     , HUnit
+                     , hspec
                      , either
+                     , transformers
 
                      , xlib-keys-hack
 
