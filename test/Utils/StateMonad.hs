@@ -6,17 +6,23 @@
 module Utils.StateMonad (spec) where
 
 import "base" Data.Maybe (fromJust)
+
+import "base" Control.Monad ((>=>))
 import "mtl" Control.Monad.State (execState)
-import "transformers" Control.Monad.Trans.State (execStateT, put)
+import "transformers" Control.Monad.Trans.State (execStateT, put, get)
 import "transformers" Control.Monad.Trans.Class (lift)
 
 import "hspec" Test.Hspec (Spec, describe, it, shouldBe)
 
 -- local imports
 
-import "xlib-keys-hack" Utils.StateMonad ( modifyState, modifyStateM
+import "xlib-keys-hack" Utils.StateMonad ( modifyState,  modifyStateM
+                                         , updateState,  updateState'
+                                         , updateStateM, updateStateM'
                                          )
 
+mShouldBe :: (Eq a, Show a) => a -> a -> IO a
+mShouldBe x a = a <$ shouldBe a x
 
 spec :: Spec
 spec = do
@@ -53,8 +59,53 @@ spec = do
       in
         v `shouldBe` 33
 
-  -- describe "updateState (for chaining using (>>=) bind operator)" $ do
+  describe "updateState (for chaining using (>>=) bind operator)" $ do
 
-  --   it "updateState" $
-  --     -- TODO
-  --     True `shouldBe` True
+    -- Check value equals specific value before and after 'm' monad
+    let mShouldKeepValue x m = lift . mShouldBe x >=> m >=> lift . mShouldBe x
+
+    it "updateState" $ (>>= (`shouldBe` 20)) $ flip execStateT (10 :: Int) $
+      return "foo"
+        >>= mShouldKeepValue "foo" (updateState $ (+10) . fst)
+        >>  (get >>= lift . mShouldBe 20)
+
+    it "updateState (modification based on value and state both)" $
+      (>>= (`shouldBe` 120)) $ flip execStateT (10 :: Int) $
+        return 100
+          >>= mShouldKeepValue 100 (updateState $ \(s, a) -> s + a + 10)
+          >>  (get >>= lift . mShouldBe 120)
+
+    it "updateState'" $ (>>= (`shouldBe` 20)) $ flip execStateT (10 :: Int) $
+      return "foo"
+        >>= mShouldKeepValue "foo" (updateState' $ \s _ -> s + 10)
+        >>  (get >>= lift . mShouldBe 20)
+
+    it "updateState' (modification based on value and state both)" $
+      (>>= (`shouldBe` 120)) $ flip execStateT (10 :: Int) $
+        return 100
+          >>= mShouldKeepValue 100 (updateState' $ \s a -> s + a + 10)
+          >>  (get >>= lift . mShouldBe 120)
+
+    it "updateState & updateState' together" $
+      (>>= (`shouldBe` 340)) $ flip execStateT (10 :: Int) $
+        return 100
+          >>= mShouldKeepValue 100 (updateState $ \(s, a) -> s + a + 10)
+          >>= (\x -> x <$ (get >>= lift . mShouldBe 120))
+          >>= return . (+ 100)
+          >>= mShouldKeepValue 200 (updateState' $ \s a -> s + a + 20)
+          >>  (get >>= lift . mShouldBe 340)
+
+    -- TODO
+    it "updateStateM" $ (>>= (`shouldBe` 120)) $ flip execStateT (10 :: Int) $
+      return 100
+        >>= mShouldKeepValue 100 (updateStateM fm)
+        >>  (get >>= lift . mShouldBe 120)
+
+        where fm (s, a) = do lift $ a `shouldBe` 100
+                             lift $ s `shouldBe` 10
+                             let x = s + a + 10
+                             lift $ x `shouldBe` 120
+                             return x
+
+    -- TODO updateStateM'
+    -- TODO all in one
