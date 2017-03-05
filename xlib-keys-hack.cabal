@@ -104,6 +104,7 @@ test-suite xlib-keys-hack-utils-test
 
   other-modules:       Utils.BreakableMonad
                      , Utils.StateMonad
+                     , Utils.Sugar
 
   build-depends:       base
                      , hspec
