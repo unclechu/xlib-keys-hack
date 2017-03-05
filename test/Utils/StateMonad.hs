@@ -95,17 +95,51 @@ spec = do
           >>= mShouldKeepValue 200 (updateState' $ \s a -> s + a + 20)
           >>  (get >>= lift . mShouldBe 340)
 
-    -- TODO
-    it "updateStateM" $ (>>= (`shouldBe` 120)) $ flip execStateT (10 :: Int) $
-      return 100
-        >>= mShouldKeepValue 100 (updateStateM fm)
-        >>  (get >>= lift . mShouldBe 120)
+    it "updateStateM" $ (>>= (`shouldBe` 260)) $ flip execStateT (10 :: Int) $
+      let
+        fm (s, a) = do a `shouldBe` 100 ; s `shouldBe` 10
+                       let x = s + a + 10 in x <$ (x `shouldBe` 120)
 
-        where fm (s, a) = do lift $ a `shouldBe` 100
-                             lift $ s `shouldBe` 10
-                             let x = s + a + 10
-                             lift $ x `shouldBe` 120
-                             return x
+        fm2 (s, a) = do a `shouldBe` 120 ; s `shouldBe` 120
+                        let x = s + a + 20 in x <$ (x `shouldBe` 260)
+      in
+        return 100
+          >>= mShouldKeepValue 100 (updateStateM $ lift . fm)
+          >>  (get >>= lift . mShouldBe 120)
+          >>= mShouldKeepValue 120 (updateStateM $ lift . fm2)
+          >>  (get >>= lift . mShouldBe 260)
 
-    -- TODO updateStateM'
-    -- TODO all in one
+
+    it "updateStateM'" $ (>>= (`shouldBe` 260)) $ flip execStateT (10 :: Int) $
+      let
+        fm s a = do lift (a `shouldBe` 100) ; lift (s `shouldBe` 10)
+                    let x = s + a + 10 in x <$ lift (x `shouldBe` 120)
+
+        fm2 s a = do lift (a `shouldBe` 120) ; lift (s `shouldBe` 120)
+                     let x = s + a + 20 in x <$ lift (x `shouldBe` 260)
+      in
+        return 100
+          >>= mShouldKeepValue 100 (updateStateM' fm)
+          >>  (get >>= lift . mShouldBe 120)
+          >>= mShouldKeepValue 120 (updateStateM' fm2)
+          >>  (get >>= lift . mShouldBe 260)
+
+
+    it "updateState & updateState' & updateStateM & updateStateM' together" $
+      (>>= (`shouldBe` 1080)) $ flip execStateT (10 :: Int) $
+        return (120 :: Int)
+          >>= mShouldKeepValue 120 (updateState $ \(s, a) -> subtract 2 $ s + a)
+          >>  (get >>= lift . mShouldBe 128)
+          >>= return . (+ 11)
+          >>= mShouldKeepValue 139 (updateState' $ \s a -> subtract 3 $ s + a)
+          >>  (get >>= lift . mShouldBe 264)
+          >>= return . (+ 12)
+          >>= mShouldKeepValue 276
+                (updateStateM $ \(s, a) ->
+                  let x = subtract 4 (s + a) in x <$ lift (x `shouldBe` 536))
+          >>  (get >>= lift . mShouldBe 536)
+          >>= return . (+ 13)
+          >>= mShouldKeepValue 549
+                (updateStateM' $ \s a ->
+                  let x = subtract 5 (s + a) in x <$ lift (x `shouldBe` 1080))
+          >>  (get >>= lift . mShouldBe 1080)
