@@ -98,10 +98,10 @@ spec = do
     it "updateStateM" $ (>>= (`shouldBe` 260)) $ flip execStateT (10 :: Int) $
       let
         fm (s, a) = do a `shouldBe` 100 ; s `shouldBe` 10
-                       let x = s + a + 10 in x <$ (x `shouldBe` 120)
+                       let x = s + a + 10 in x `mShouldBe` 120
 
         fm2 (s, a) = do a `shouldBe` 120 ; s `shouldBe` 120
-                        let x = s + a + 20 in x <$ (x `shouldBe` 260)
+                        let x = s + a + 20 in x `mShouldBe` 260
       in
         return 100
           >>= mShouldKeepValue 100 (updateStateM $ lift . fm)
@@ -113,10 +113,10 @@ spec = do
     it "updateStateM'" $ (>>= (`shouldBe` 260)) $ flip execStateT (10 :: Int) $
       let
         fm s a = do lift (a `shouldBe` 100) ; lift (s `shouldBe` 10)
-                    let x = s + a + 10 in x <$ lift (x `shouldBe` 120)
+                    let x = s + a + 10 in lift (x `mShouldBe` 120)
 
         fm2 s a = do lift (a `shouldBe` 120) ; lift (s `shouldBe` 120)
-                     let x = s + a + 20 in x <$ lift (x `shouldBe` 260)
+                     let x = s + a + 20 in lift (x `mShouldBe` 260)
       in
         return 100
           >>= mShouldKeepValue 100 (updateStateM' fm)
@@ -136,10 +136,10 @@ spec = do
           >>= return . (+ 12)
           >>= mShouldKeepValue 276
                 (updateStateM $ \(s, a) ->
-                  let x = subtract 4 (s + a) in x <$ lift (x `shouldBe` 536))
+                  let x = subtract 4 (s + a) in lift (x `mShouldBe` 536))
           >>  (get >>= lift . mShouldBe 536)
           >>= return . (+ 13)
           >>= mShouldKeepValue 549
                 (updateStateM' $ \s a ->
-                  let x = subtract 5 (s + a) in x <$ lift (x `shouldBe` 1080))
+                  let x = subtract 5 (s + a) in lift (x `mShouldBe` 1080))
           >>  (get >>= lift . mShouldBe 1080)
