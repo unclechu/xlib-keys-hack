@@ -63,7 +63,7 @@ infixl 1 ?
 
 
 -- Same as 'partial' from 'Control-Monad-Plus'.
--- Returns given value inside Just only if it passses a predicate.
+-- Returns given value inside Just only if it passes a predicate.
 ifMaybe :: (a -> Bool) -> a -> Maybe a
 ifMaybe f x = f x ? Just x $ Nothing
 
