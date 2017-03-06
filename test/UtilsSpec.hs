@@ -12,6 +12,7 @@ import "hspec" Test.Hspec (hspec, describe)
 import qualified Utils.BreakableMonad
 import qualified Utils.StateMonad
 import qualified Utils.Sugar
+import qualified Utils.Lens
 
 
 main :: IO ()
@@ -19,3 +20,4 @@ main = hspec $ do
   describe "BreakableMonad" Utils.BreakableMonad.spec
   describe "State monad helpers" Utils.StateMonad.spec
   describe "Sugar operators" Utils.Sugar.spec
+  describe "Lenses helpers" Utils.Lens.spec

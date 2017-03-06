@@ -105,12 +105,14 @@ test-suite xlib-keys-hack-utils-test
   other-modules:       Utils.BreakableMonad
                      , Utils.StateMonad
                      , Utils.Sugar
+                     , Utils.Lens
 
   build-depends:       base
                      , hspec
                      , either
                      , transformers
                      , mtl
+                     , lens
 
                      , xlib-keys-hack
 
