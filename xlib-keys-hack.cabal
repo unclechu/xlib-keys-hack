@@ -35,7 +35,6 @@ library
                      , Utils.X
                      , Utils.Lens
                      , Utils.Sugar
-                     , Utils.String
                      , Utils.Instances
                      , Utils.StateMonad
                      , Utils.BreakableMonad
@@ -54,13 +53,7 @@ library
                      , data-default
                      , either
                      , transformers
-
-                       -- required by Utils.String
-                     , haskell-src-meta
-                       -- required by Utils.String
-                     , bytestring
-                       -- required by Utils.String
-                     , text
+                     , qm-interpolated-string
 
 executable xlib-keys-hack
   default-language:    Haskell2010
@@ -80,6 +73,7 @@ executable xlib-keys-hack
                      , transformers
                      , lens
                      , data-default
+                     , qm-interpolated-string
 
                      , xlib-keys-hack
 

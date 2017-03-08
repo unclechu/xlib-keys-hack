@@ -44,6 +44,7 @@ import "base" Control.Exception (Exception, throw, catch)
 
 import "base" Data.Maybe (fromJust, isJust)
 import "base" Data.Typeable (Typeable)
+import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
 
 import qualified "X11" Graphics.X11.Xlib.Event  as XEvent
 import qualified "X11" Graphics.X11.Xlib.Extras as XExtras
@@ -54,7 +55,6 @@ import "X11" Graphics.X11.Xlib.Types (Display)
 import Utils (dieWith, writeToFd)
 import Utils.X (nextEvent')
 import Utils.Sugar ((&), (?), (|?|))
-import Utils.String (qm)
 import Bindings.Xkb ( xkbSetGroup
                     , xkbListenForKeyboardStateEvents
                     , xkbGetCurrentLayout

@@ -26,6 +26,7 @@ import "lens" Control.Lens (set, view)
 import "containers" Data.Set (toList, fromList, difference)
 import "base" Data.List (elemIndex, find)
 import "base" Data.Maybe (isJust)
+import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
 
 -- local imports
 
@@ -33,7 +34,6 @@ import qualified Options as O
 import Utils (errPutStrLn, errPutStr, dieWith)
 import Utils.StateMonad (updateState')
 import Utils.Sugar ((.>), (<&>))
-import Utils.String (qm)
 
 
 type Options = O.Options

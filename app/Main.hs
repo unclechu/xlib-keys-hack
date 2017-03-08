@@ -54,10 +54,10 @@ import "base" Control.Arrow ((&&&))
 import "base" Data.Maybe (fromJust, isJust)
 import "base" Data.Typeable (Typeable)
 import "data-default" Data.Default (def)
+import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
 
 -- local imports
 
-import "xlib-keys-hack" Utils.String (qm)
 import "xlib-keys-hack" Utils.Sugar ((&), (<&>), (.>), (|?|))
 import "xlib-keys-hack" Utils (errPutStrLn, dieWith, writeToFd)
 import "xlib-keys-hack" Utils.StateMonad ( updateState', updateStateM'

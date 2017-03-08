@@ -44,10 +44,10 @@ import qualified "containers" Data.Map.Strict as Map
 import qualified "containers" Data.Set as Set
 import "base" Data.Word (Word16)
 import "base" Data.Tuple (swap)
+import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
 
 -- local imports
 
-import Utils.String (qm)
 import Utils.Sugar ((&), (<&>), applyIf, dupe)
 import Utils.Lens (makeApoClassy)
 import qualified Options as O

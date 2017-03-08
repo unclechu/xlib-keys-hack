@@ -26,6 +26,7 @@ import "either" Control.Monad.Trans.Either (EitherT, runEitherT, left, right)
 import "base" Data.Maybe (fromJust, isJust)
 import qualified "containers" Data.Set as Set
 import "base" Data.Function (fix)
+import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
 
 import qualified "X11" Graphics.X11.Types as XTypes
 import "X11" Graphics.X11.Xlib.Types (Display)
@@ -34,7 +35,6 @@ import "X11" Graphics.X11.Xlib.Types (Display)
 
 import Utils.StateMonad (EitherStateT)
 import Utils.Sugar ((&), (?))
-import Utils.String (qm)
 import qualified Options as O
 import qualified Actions
 import qualified State

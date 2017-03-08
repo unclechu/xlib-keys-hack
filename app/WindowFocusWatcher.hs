@@ -35,6 +35,8 @@ import "X11" Graphics.X11.Xlib.Extras (xSetErrorHandler)
 import "X11" Graphics.X11.Xlib.Misc (getInputFocus)
 import "X11" Graphics.X11.Types (noEventMask, focusChangeMask)
 
+-- local imports
+
 import "xlib-keys-hack" Utils.X (nextEvent')
 
 

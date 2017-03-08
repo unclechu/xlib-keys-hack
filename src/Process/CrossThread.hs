@@ -42,10 +42,10 @@ import "transformers" Control.Monad.IO.Class (MonadIO, liftIO)
 
 import qualified "containers" Data.Set as Set (null)
 import "base" Data.Maybe (fromJust, isJust)
+import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
 
 -- local imports
 
-import Utils.String (qm)
 import Utils.StateMonad (modifyState, modifyStateM)
 import Utils.BreakableMonad (continueIf)
 import Utils.Sugar ((?), (|?|), (.>))
