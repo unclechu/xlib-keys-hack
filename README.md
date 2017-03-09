@@ -1,6 +1,10 @@
 xlib-keys-hack
 ==============
 
+**TODO** Replace to `master` branch after first release.
+
+`haskell-version` branch: [![Build Status](https://api.travis-ci.org/unclechu/xlib-keys-hack.svg?branch=haskell-version)](https://travis-ci.org/unclechu/xlib-keys-hack)
+
 This tool supposed to be used with
 [these hacked keyboard layouts](https://github.com/unclechu/X11-my-custom-layouts).
 
