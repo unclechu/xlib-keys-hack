@@ -10,11 +10,11 @@ matrix:
   include:
     - env: BUILD=stack STACK_YAML=stack.yaml
       compiler: ": #stack 7.8.4"
-      addons: {apt: {packages: [ghc-7.8.4], sources: [hvr-ghc]}}
+      addons: {apt: {packages: [libx11-dev,libxtst-dev,libxrandr-dev,ghc-7.8.4], sources: [hvr-ghc]}}
 
     - env: BUILD=stack STACK_YAML=stack.yaml
       compiler: ": #stack 7.10.3"
-      addons: {apt: {packages: [ghc-7.10.3], sources: [hvr-ghc]}}
+      addons: {apt: {packages: [libx11-dev,libxtst-dev,libxrandr-dev,ghc-7.10.3], sources: [hvr-ghc]}}
 
 # Note: the distinction between `before_install` and `install` is not important.
 # - in before_install we install build tools
@@ -28,7 +28,7 @@ before_install:
     esac
   - mkdir -p $HOME/.local/bin
   - curl -sL https://www.stackage.org/stack/linux-x86_64 |
-      tar xz --wildcards --strip-components=1 -C $HOME/.local/bin '*/stack';
+      tar xz --wildcards --strip-components=1 -C $HOME/.local/bin '*/stack'
 
 install:
   - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
