@@ -9,12 +9,8 @@ matrix:
   fast_finish: true
   include:
     - env: BUILD=stack STACK_YAML=stack.yaml
-      compiler: ": #stack 7.8.4"
-      addons: {apt: {packages: [libx11-dev,libxtst-dev,libxrandr-dev,ghc-7.8.4], sources: [hvr-ghc]}}
-
-    - env: BUILD=stack STACK_YAML=stack.yaml
-      compiler: ": #stack 7.10.3"
-      addons: {apt: {packages: [libx11-dev,libxtst-dev,libxrandr-dev,ghc-7.10.3], sources: [hvr-ghc]}}
+      compiler: ": #stack"
+      addons: {apt: {packages: [libx11-dev,libxtst-dev,libxrandr-dev], sources: [hvr-ghc]}}
 
 # Note: the distinction between `before_install` and `install` is not important.
 # - in before_install we install build tools
@@ -24,7 +20,7 @@ before_install:
   - unset CC
   - case "$BUILD" in
       stack)
-        export PATH=$HOME/.local/bin:/opt/ghc/$GHCVER/bin:$PATH;;
+        export PATH=$HOME/.local/bin:$PATH;;
     esac
   - mkdir -p $HOME/.local/bin
   - curl -sL https://www.stackage.org/stack/linux-x86_64 |
