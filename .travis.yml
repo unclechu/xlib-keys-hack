@@ -10,7 +10,7 @@ matrix:
   include:
     - env: BUILD=stack STACK_YAML=stack.yaml
       compiler: ": #stack"
-      addons: {apt: {packages: [libx11-dev,libxtst-dev,libxrandr-dev,libgmp10], sources: [hvr-ghc]}}
+      addons: {apt: {packages: [libx11-dev,libxtst-dev,libxrandr-dev,libgmp-dev], sources: [hvr-ghc]}}
 
 # Note: the distinction between `before_install` and `install` is not important.
 # - in before_install we install build tools
