@@ -26,7 +26,7 @@ before_install:
       stack)
         export PATH=$HOME/.local/bin:/opt/ghc/$GHCVER/bin:$PATH;;
     esac
-  - ./.travis-setup.sh
+  - curl -sL https://www.stackage.org/stack/linux-x86_64 | tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack';
 
 install:
   - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
