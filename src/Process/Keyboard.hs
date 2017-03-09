@@ -274,10 +274,9 @@ handleKeyboard ctVars opts keyMap _ fd =
     -- When releasing `FNKey` after some media keys pressed
     | state ^. State.comboState' . State.appleMediaPressed' -> do
       restPressed <- releaseAppleMedia $ State.pressedKeys state
-      state
+      return $ state
         & State.comboState' . State.appleMediaPressed' .~ False
         & State.pressedKeys' .~ restPressed
-        & return
 
     -- As `InsertKey` (because no media pressed)
     | otherwise -> do
@@ -289,7 +288,7 @@ handleKeyboard ctVars opts keyMap _ fd =
     noise [qm| Apple media key pressed, preventing triggering
              \ {Keys.FNKey} as {Keys.InsertKey}... |]
     smartTrigger
-    return (state & State.comboState' . State.appleMediaPressed' .~ True)
+    return $ state & State.comboState' . State.appleMediaPressed' .~ True
 
   | onOnlyTwoControlsPressed -> do
 
@@ -362,7 +361,7 @@ handleKeyboard ctVars opts keyMap _ fd =
                    , [qm| Storing keys was pressed before {keyName}:
                         \ {Set.toList otherPressed}... |]
                    ]
-          return (state & pressedBeforeLens .~ otherPressed)
+          return $ state & pressedBeforeLens .~ otherPressed
 
         -- Trigger Control releasing because when you press
         -- `CapsLockKey` or `EnterKey` with combo (see below)
@@ -375,7 +374,7 @@ handleKeyboard ctVars opts keyMap _ fd =
                       \ (X key code: {ctrlKeyCode})... |]
                  ]
           releaseKey ctrlKeyCode
-          return (state & withCombosFlagLens .~ False)
+          return $ state & withCombosFlagLens .~ False
 
         -- Just triggering default aliased key code
         -- to `CapsLockKey` or `EnterKey`.
@@ -442,7 +441,7 @@ handleKeyboard ctVars opts keyMap _ fd =
                    \ (X key code: {ctrlKeyCode})... |]
           pressKey ctrlKeyCode -- Press Control before current key
           smartTrigger
-          return (state & withCombosFlagLens .~ True)
+          return $ state & withCombosFlagLens .~ True
 
   -- When Caps Lock remapped as Escape key.
   -- Resetting stuff (if it's enabled)
@@ -552,7 +551,7 @@ handleKeyboard ctVars opts keyMap _ fd =
           storeKey :: State -> EitherT State IO State
           storeKey state =
             let action = isPressed ? Set.insert $ Set.delete
-             in return (state & State.pressedKeys' %~ action keyName)
+             in return $ state & State.pressedKeys' %~ action keyName
 
   abstractRelease :: String -- `releaseMsg`
                   -> (KeyName -> String) -- `releaseItemMsgMask`

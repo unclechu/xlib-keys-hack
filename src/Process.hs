@@ -190,7 +190,7 @@ watchLeds ctVars opts _ dpy = forever $ f $ \leds prevState -> do
       notify [qm| numlock:{ newNumLock ? "on" $ "off" }\n |]
       noise  [qm| Num Lock is {newNumLock ? "On" $ "Off"} |]
 
-  return (prevState & State.leds' .~ leds)
+  return $ prevState & State.leds' .~ leds
 
   where noise  = Actions.noise opts ctVars        :: String -> IO ()
         notify = Actions.notifyXmobar opts ctVars :: String -> IO ()

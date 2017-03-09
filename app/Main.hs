@@ -363,7 +363,7 @@ main = flip evalStateT ([] :: ThreadsState) $ do
                   let devicesList = foldr (("\n  " ++) .> (++)) "" files
                       title = "Devices that will be handled:"
                    in lift $ noise $ title ++ devicesList
-                  return (state & O.availableDevices' .~ files)
+                  return $ state & O.availableDevices' .~ files
 
                 -- Checks if we have at least one available device
                 -- and gets files list back.
@@ -380,7 +380,7 @@ main = flip evalStateT ([] :: ThreadsState) $ do
           whenHasFile (opts ^. O.xmobarPipeFile') $ \file -> do
             noise "Opening xmobar pipe file for writing..."
             fd <- IOHandleFD.openFile file SysIO.WriteMode
-            return (opts & O.xmobarPipeFd' .~ Just fd)
+            return $ opts & O.xmobarPipeFd' .~ Just fd
 
           where noise = O.noise opts
 

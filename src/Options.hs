@@ -181,7 +181,7 @@ extractOptions :: [String] -> Either ErrorMessage Options
 extractOptions argv =
   case GetOpt.getOpt GetOpt.Permute options argv of
     (o, n, []) ->
-      Right (foldl (flip id) def o & handleDevicePath' %~ (++ n))
+      Right $ foldl (flip id) def o & handleDevicePath' %~ (++ n)
     (_, _, errs) ->
       Left $ case concat errs of
                   (reverse -> '\n':xs) -> reverse xs

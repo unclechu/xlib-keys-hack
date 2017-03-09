@@ -23,7 +23,7 @@ import "base" Data.Bool (bool)
 -- http://hackage.haskell.org/package/base-4.9.0.0/docs/Data-Function.html#v:-38-
 (&) :: a -> (a -> b) -> b
 (&) = flip ($)
-infixl 0 &
+infixl 1 &
 
 
 -- Pipe composition operator.
