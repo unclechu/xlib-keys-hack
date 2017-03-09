@@ -249,7 +249,7 @@ main = flip evalStateT ([] :: ThreadsState) $ do
                  $ execStateT . runEitherT $ do
 
             -- Check if termination process already initialized
-            not . State.isTerminating <$> St.get
+            St.get <&> not . State.isTerminating
               >>= right () |?| let msg = "Attempt to initialize application\
                                          \ termination process when it's\
                                          \ already initialized was skipped"

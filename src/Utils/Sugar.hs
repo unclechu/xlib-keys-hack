@@ -37,7 +37,7 @@ infixl 9 .>
 -- Pipe version of `fmap` operator.
 (<&>) :: Functor f => f a -> (a -> b) -> f b
 (<&>) = flip (<$>)
-infixr 4 <&>
+infixr 5 <&>
 
 
 -- Makes function from then-else values that takes an expression.
