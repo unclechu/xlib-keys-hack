@@ -31,11 +31,14 @@ __**TODO**__
 - Development files of `libgmp` (for some dependencies)
 - Superuser access (for handling keyboard device file descriptor)
 
-## Build and install (to `$HOME` directory)
+## Build and install
 
 ```bash
 $ make --always-make
 ```
+
+`stack` should install application binaries to `$HOME/.local/bin` directory,
+make sure you have this directory in your `$PATH` environment variable.
 
 ## Run (as daemon)
 
