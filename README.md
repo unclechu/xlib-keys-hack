@@ -37,8 +37,8 @@ __**TODO**__
 $ make --always-make
 ```
 
-`stack` should install application binaries to `$HOME/.local/bin` directory,
-make sure you have this directory in your `$PATH` environment variable.
+Application binaries supposed to be installed by `stack` to `$HOME/.local/bin`
+directory, make sure you have this directory in your `$PATH` environment variable.
 
 ## Run (as daemon)
 
