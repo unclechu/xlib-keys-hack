@@ -59,6 +59,11 @@ spec = do
       in
         v `shouldBe` 33
 
+    it "modifyState replaces value to void" $
+      (>>= (`shouldBe` 20)) $
+        flip execStateT (10 :: Int) $
+          do x <- modifyState (+10) ; lift (x `shouldBe` ())
+
   describe "updateState (for chaining using (>>=) bind operator)" $ do
 
     -- Check value equals specific value before and after 'm' monad

@@ -52,6 +52,15 @@ spec = do
         m1 `shouldBe` Just 10
         m2 `shouldBe` Just 20
 
+    it "`continueIf` and `continueUnless` returns void" $
+      let
+        m1, m2 :: Maybe ()
+        m1 = continueIf True
+        m2 = continueUnless False
+      in do
+        m1 `shouldBe` Just ()
+        m2 `shouldBe` Just ()
+
   describe "MaybeT" $ do
 
     it "Correctly breaks" $
@@ -71,6 +80,15 @@ spec = do
       in do
         runIdentity (runMaybeT m1) `shouldBe` Just 10
         runIdentity (runMaybeT m2) `shouldBe` Just 20
+
+    it "`continueIf` and `continueUnless` returns void" $
+      let
+        m1, m2 :: MaybeT Identity ()
+        m1 = continueIf True
+        m2 = continueUnless False
+      in do
+        runIdentity (runMaybeT m1) `shouldBe` Just ()
+        runIdentity (runMaybeT m2) `shouldBe` Just ()
 
   describe "Either" $ do
 

@@ -1,13 +1,11 @@
-xlib-keys-hack
-==============
+# xlib-keys-hack
 
-**TODO** Replace to `master` branch after first release.
-
+__**TODO**__ Replace Travis shield branch to `master` after first release.<br>
 `haskell-version` branch: [![Build Status](https://api.travis-ci.org/unclechu/xlib-keys-hack.svg?branch=haskell-version)](https://travis-ci.org/unclechu/xlib-keys-hack)
 
-This tool supposed to be used with
-[these hacked keyboard layouts](https://github.com/unclechu/X11-my-custom-layouts).
+Keyboard behavior customization utility.
 
+__**TODO**__
 - Simulation of pressing `Escape` key when press `Caps Lock` key without any combos;
 - Simulation of pressing and holding third-level modificator by `Left Alt + Caps Lock`
   and simulation of releasing this key by `Right Alt`;
@@ -26,26 +24,35 @@ This tool supposed to be used with
   state to make indicators of these on panel
   ([see here for more details](https://github.com/unclechu/xmonadrc/blob/master/xmobar-cmd.sh)).
 
-Build
------
+## Requirements
+
+- [Haskell Tool Stack](https://haskellstack.org/)
+- Development files of `libX11`, `libXtst` and `libXrandr`
+- Development files of `libgmp` (for some dependencies)
+- Superuser access (for handling keyboard device file descriptor)
+
+## Build and install (to `$HOME` directory)
 
 ```bash
-$ make
+$ make --always-make
 ```
 
-Run (as daemon)
----------------
+## Run (as daemon)
 
-```bash
-$ ./build/xlib-keys-hack
+__**TODO**__
+
+## More info
+
+### Generating coverage report
+
+``` bash
+$ stack test --ghc-options=-fhpc --coverage
 ```
 
-Author
-------
+## Author
 
 [Viacheslav Lotsmanov](https://github.com/unclechu)
 
-License
--------
+## License
 
 [GNU/GPLv3](./LICENSE)

@@ -5,6 +5,9 @@ cabal.sandbox.config
 .cabal-sandbox
 .stack-work
 
+.hpc
+*.tix
+
 tags
 
 .lvimrc
