@@ -59,12 +59,11 @@ openIPC dpyName opts = connectSession <&> \dbusSession ->
             , xmobarBus = busName_ $
                 fromMaybe (xmobarBusNamePfx ++ encodeDpyName dpyName) $
                 O.xmobarIndicatorsBusName opts
-            , xmobarInterface = fromMaybe xmobarInterface $
+            , xmobarInterface = fromMaybe "com.github.unclechu.xmonadrc" $
                 O.xmobarIndicatorsIface opts <&> interfaceName_
             }
 
   where xmobarBusNamePfx = "com.github.unclechu.xmonadrc."
-        xmobarInterface = "com.github.unclechu.xmonadrc"
         encodeDpyName = map f where f ':' = '_'; f '.' = '_'; f x = x
 
 
