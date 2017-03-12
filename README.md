@@ -113,9 +113,22 @@ directory, make sure you have this directory in your `$PATH` environment variabl
 
    ``` bash
    $ xlib-keys-hack -v \
-     /dev/input/by-id/usb-1d57_2.4G_Receiver-event-kbd \
-     /dev/input/by-id/usb-1d57_2.4G_Receiver-event-if02 \
-     --disable-xinput-device-name='2.4G Receiver'
+        /dev/input/by-id/usb-1d57_2.4G_Receiver-event-kbd \
+        /dev/input/by-id/usb-1d57_2.4G_Receiver-event-if02 \
+        --disable-xinput-device-name='2.4G Receiver'
+   ```
+
+   You could use more than one keyboard, here is an example:
+
+   ``` bash
+   $ xlib-keys-hack -v \
+        /dev/input/by-id/usb-1d57_2.4G_Receiver-event-kbd \
+        /dev/input/by-id/usb-1d57_2.4G_Receiver-event-if02 \
+        --disable-xinput-device-name='2.4G Receiver' \
+        /dev/input/by-id/usb-04b4_6018-event-kbd \
+        /dev/input/by-id/usb-04b4_6018-if01-event-mouse \
+        /dev/input/by-id/usb-04b4_6018-if01-mouse \
+        --disable-xinput-device-name='HID 04b4:6018'
    ```
 
    P.S. `-v` provides verbose debug information to stdout,
