@@ -162,7 +162,7 @@ main = flip evalStateT ([] :: ThreadsState) $ do
 
   ipcHandle <- ifMaybeM' (O.xmobarIndicators opts) $ do
     noise "Opening DBus connection for xmobar indicators state updating..."
-    lift $ openIPC $ displayString dpy
+    lift $ openIPC (displayString dpy) opts
 
 
   noise "Initial resetting..."

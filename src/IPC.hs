@@ -11,10 +11,14 @@ module IPC
   , setIndicatorState
   ) where
 
+import "base" Data.Maybe (fromMaybe)
+
 import "dbus" DBus ( ObjectPath
+                   , objectPath_
                    , BusName
                    , busName_
                    , InterfaceName
+                   , interfaceName_
                    , signal
                    , signalBody
                    , signalDestination
@@ -29,11 +33,14 @@ import "dbus" DBus.Client ( Client
 -- local imports
 
 import Utils.Sugar ((<&>))
+import qualified Options as O
 import Actions ( XmobarFlag ( XmobarNumLockFlag
                             , XmobarCapsLockFlag
                             , XmobarAlternativeFlag
                             )
                )
+
+type Options = O.Options
 
 
 data IPCHandle = IPCHandle { dbusClient       :: Client
@@ -43,17 +50,21 @@ data IPCHandle = IPCHandle { dbusClient       :: Client
                            }
 
 
-openIPC :: String -> IO IPCHandle
-openIPC dpyName = connectSession <&> \dbusSession ->
+openIPC :: String -> Options -> IO IPCHandle
+openIPC dpyName opts = connectSession <&> \dbusSession ->
 
   IPCHandle { dbusClient = dbusSession
-            , xmobarObjectPath = "/"
-            , xmobarBus = busName_ $ xmobarBusNamePfx ++ encodeDpyName dpyName
-            , xmobarInterface = xmobarInterfaceName
+            , xmobarObjectPath = fromMaybe "/" $
+                O.xmobarIndicatorsObjPath opts <&> objectPath_
+            , xmobarBus = busName_ $
+                fromMaybe (xmobarBusNamePfx ++ encodeDpyName dpyName) $
+                O.xmobarIndicatorsBusName opts
+            , xmobarInterface = fromMaybe xmobarInterface $
+                O.xmobarIndicatorsIface opts <&> interfaceName_
             }
 
   where xmobarBusNamePfx = "com.github.unclechu.xmonadrc."
-        xmobarInterfaceName = "com.github.unclechu.xmonadrc"
+        xmobarInterface = "com.github.unclechu.xmonadrc"
         encodeDpyName = map f where f ':' = '_'; f '.' = '_'; f x = x
 
 

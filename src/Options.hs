@@ -7,6 +7,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 module Options
   ( Options(..)
@@ -20,11 +21,12 @@ import "base" GHC.Generics (Generic)
 import "base" System.IO (Handle)
 import qualified "base" System.Console.GetOpt as GetOpt
 
-import "lens" Control.Lens ((.~), (%~))
+import "lens" Control.Lens ((.~), (%~), set)
 import "deepseq" Control.DeepSeq (NFData, rnf, deepseq)
 
 import "base" Data.Maybe (fromJust)
 import "data-default" Data.Default (Default, def)
+import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
 
 -- local imports
 
@@ -46,7 +48,11 @@ data Options =
           , disableXInputDeviceName :: [String]
           , disableXInputDeviceId   :: [Int]
           , handleDevicePath        :: [FilePath]
+
           , xmobarIndicators        :: Bool
+          , xmobarIndicatorsObjPath :: Maybe String
+          , xmobarIndicatorsBusName :: Maybe String
+          , xmobarIndicatorsIface   :: Maybe String
 
           , handleDeviceFd          :: [Handle]
           , availableDevices        :: [FilePath]
@@ -68,7 +74,11 @@ instance NFData Options where
     disableXInputDeviceName opts `deepseq`
     disableXInputDeviceId   opts `deepseq`
     handleDevicePath        opts `deepseq`
+
     xmobarIndicators        opts `deepseq`
+    xmobarIndicatorsObjPath opts `deepseq`
+    xmobarIndicatorsBusName opts `deepseq`
+    xmobarIndicatorsIface   opts `deepseq`
 
     handleDeviceFd          opts `deepseq`
     availableDevices        opts `deepseq`
@@ -91,8 +101,11 @@ instance Default Options where
     , disableXInputDeviceName = []
     , disableXInputDeviceId   = []
     , handleDevicePath        = []
-    , xmobarIndicators        = False
 
+    , xmobarIndicators        = False
+    , xmobarIndicatorsObjPath = Nothing
+    , xmobarIndicatorsBusName = Nothing
+    , xmobarIndicatorsIface   = Nothing
 
     -- Will be extracted from `handleDevicePath`
     -- and will be reduced with only available
@@ -164,11 +177,31 @@ options =
         (\x -> handleDevicePath' %~ (++ [fromJust x]))
         "FDPATH")
       "Path to device file descriptor to get events from"
+
   , GetOpt.Option  [ ]  ["xmobar-indicators"]
       (GetOpt.NoArg $ xmobarIndicators' .~ True)
       "Enable notifying xmobar indicators process about indicators\
       \ (num lock, caps lock and alternative mode)\
       \ state changes by DBus (see also https://github.com/unclechu/xmonadrc)"
+  , GetOpt.Option  [ ]  ["xmobar-indicators-dbus-path"]
+      (GetOpt.OptArg (set xmobarIndicatorsObjPath') "PATH")
+      "DBus object path for xmobar indicators (default is: '/',\
+      \ this option makes sense only with --xmobar-indicators)"
+  , GetOpt.Option  [ ]  ["xmobar-indicators-dbus-bus"]
+      (GetOpt.OptArg (set xmobarIndicatorsBusName') "BUS")
+      [qm| DBus bus name for xmobar indicators
+         \ (default is: 'com.github.unclechu.xmonadrc.%DISPLAY%' where
+           \ '%DISPLAY%' is view of $DISPLAY environment variable where
+           \ non-letter symbols are replaced to underscore '_',
+           \ for example if we have $DISPLAY as ':1' bus name will be
+           \ 'com.github.unclechu.xmonadrc._1',
+           \ this option makes sense only with --xmobar-indicators)
+         |]
+  , GetOpt.Option  [ ]  ["xmobar-indicators-dbus-interface"]
+      (GetOpt.OptArg (set xmobarIndicatorsIface') "INTERFACE")
+      "DBus interface for xmobar indicators\
+      \ (default is: 'com.github.unclechu.xmonadrc',\
+      \ this option makes sense only with --xmobar-indicators)"
   ]
 
 
