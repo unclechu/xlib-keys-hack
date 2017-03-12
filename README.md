@@ -54,12 +54,12 @@ directory, make sure you have this directory in your `$PATH` environment variabl
    You could easily do it for all input devices by this command:
 
    ```bash
-   $ sudo setfacl -m 'u:$(whoami):r' /dev/input/by-id/*
+   $ sudo setfacl -m "u:$(whoami):r" /dev/input/by-id/*
    ```
 
    Keep in mind that after reboot or physically replug of your keyboard
-   this permission will be reset (it's planned to describe solution to
-   write some systemd service to automate this).
+   this permission will be reset (it's planned to describe solution about
+   writing own systemd service to automate this).
 
 2. For example you could have one keyboard and two file descriptors of device:
 
@@ -71,7 +71,7 @@ directory, make sure you have this directory in your `$PATH` environment variabl
    First for usual keys events and second for FN keys
    (like media keys, audio-player play/pause, increase/decrease volume, etc).
 
-   And you need to know your keyboard name in `xinput` to disable it,
+   You have to know your keyboard name in `xinput` to disable it,
    because this utility will read bare events behind X server and trigger
    specific fake X events, like simulating pressing keys, that's how it works.
 
@@ -90,10 +90,10 @@ directory, make sure you have this directory in your `$PATH` environment variabl
    Will get us (if we really have this device):
 
    ```text
-   ⎜   ↳ 2.4G Receiver                             id=10   [slave  pointer  (2)]
-   ⎜   ↳ 2.4G Receiver                             id=11   [slave  pointer  (2)]
-       ↳ 2.4G Receiver                             id=18   [slave  keyboard (3)]
-       ↳ 2.4G Receiver                             id=9    [slave  keyboard (3)]
+   ↳ 2.4G Receiver  id=10  [slave  pointer  (2)]
+   ↳ 2.4G Receiver  id=11  [slave  pointer  (2)]
+   ↳ 2.4G Receiver  id=18  [slave  keyboard (3)]
+   ↳ 2.4G Receiver  id=9   [slave  keyboard (3)]
    ```
 
    At this step we just found out our device `xinput` name that is:
@@ -112,7 +112,7 @@ directory, make sure you have this directory in your `$PATH` environment variabl
 3. Now you could start this utility daemon:
 
    ```bash
-   xlib-keys-hack -v \
+   $ xlib-keys-hack -v \
      /dev/input/by-id/usb-1d57_2.4G_Receiver-event-kbd \
      /dev/input/by-id/usb-1d57_2.4G_Receiver-event-if02 \
      --disable-xinput-device-name='2.4G Receiver'
