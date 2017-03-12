@@ -7,6 +7,7 @@
 module Actions.Types
   ( ActionType(..)
   , Action(..),     HasAction(..)
+  , XmobarFlag(..), HasXmobarFlag(..)
   , KeyAction(..),  HasKeyAction(..)
   ) where
 
@@ -24,13 +25,19 @@ data ActionType a = Single    a
 
 data Action = Noise        String
             | PanicNoise   String
-            | NotifyXmobar String
+            | NotifyXmobar XmobarFlag
 
             -- Parts of application termination process
             | InitTerminate
             | ThreadIsDead Int
             | JustDie -- Ask main thread to die
               deriving (Show, Eq)
+
+
+data XmobarFlag = XmobarNumLockFlag     Bool
+                | XmobarCapsLockFlag    Bool
+                | XmobarAlternativeFlag Bool
+                  deriving (Show, Eq)
 
 
 data KeyAction = KeyCodePress   KeyCode
@@ -42,3 +49,4 @@ data KeyAction = KeyCodePress   KeyCode
 
 makeApoClassy ''Action
 makeApoClassy ''KeyAction
+makeApoClassy ''XmobarFlag

@@ -458,7 +458,7 @@ handleKeyboard ctVars opts keyMap _ fd =
 
   noise   = Actions.noise         opts ctVars ::  String  -> IO ()
   noise'  = Actions.noise'        opts ctVars :: [String] -> IO ()
-  notify' = Actions.notifyXmobar' opts ctVars :: [String] -> IO ()
+  notify' = Actions.notifyXmobar' opts ctVars :: [Actions.XmobarFlag] -> IO ()
 
   pressKey        = Actions.pressKey        ctVars :: KeyCode -> IO ()
   releaseKey      = Actions.releaseKey      ctVars :: KeyCode -> IO ()

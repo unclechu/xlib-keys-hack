@@ -42,7 +42,6 @@ import "base" Control.Concurrent.MVar (modifyMVar_)
 import "transformers" Control.Monad.Trans.State (execStateT)
 import "base" Control.Exception (Exception, throw, catch)
 
-import "base" Data.Maybe (fromJust, isJust)
 import "base" Data.Typeable (Typeable)
 import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
 
@@ -52,7 +51,7 @@ import "X11" Graphics.X11.Xlib.Types (Display)
 
 -- local imports
 
-import Utils (dieWith, writeToFd)
+import Utils (dieWith)
 import Utils.X (nextEvent')
 import Utils.Sugar ((&), (?), (|?|))
 import Bindings.Xkb ( xkbSetGroup
@@ -87,13 +86,14 @@ initReset opts keyMap dpy = do
   noise "Initial resetting Caps Lock mode..."
   justTurnCapsLockMode False
 
-  let xmobarFd = opts ^. O.xmobarPipeFd'
-  when (isJust xmobarFd) $ do
-    noise "Initial resetting of xmobar leds..."
-    let fd = fromJust xmobarFd
-    writeToFd fd "capslock:off\n"
-    writeToFd fd "numlock:off\n"
-    writeToFd fd "alternative:off\n"
+  -- TODO reset by dbus
+  -- let xmobarFd = opts ^. O.xmobarPipeFd'
+  -- when (isJust xmobarFd) $ do
+  --   noise "Initial resetting of xmobar leds..."
+  --   let fd = fromJust xmobarFd
+  --   writeToFd fd "capslock:off\n"
+  --   writeToFd fd "numlock:off\n"
+  --   writeToFd fd "alternative:off\n"
 
   where noise = O.noise opts
         justTurnCapsLockMode =
@@ -166,7 +166,9 @@ processWindowFocus ctVars opts _ _ = forever $ do
         noise   = Actions.noise  opts ctVars        ::  String  -> IO ()
         noise'  = Actions.noise' opts ctVars        :: [String] -> IO ()
         scream  = Actions.panicNoise ctVars         ::  String  -> IO ()
-        notify' = Actions.notifyXmobar' opts ctVars :: [String] -> IO ()
+
+        notify' :: [Actions.XmobarFlag] -> IO ()
+        notify' = Actions.notifyXmobar' opts ctVars
 
 
 -- FIXME waiting in blocking-mode for new leds event
@@ -183,17 +185,17 @@ watchLeds ctVars opts _ dpy = forever $ f $ \leds prevState -> do
   when (view State.leds' prevState /= leds) $ do
 
     when (prevCapsLock /= newCapsLock) $ do
-      notify [qm| capslock:{ newCapsLock ? "on" $ "off" }\n |]
+      notify $ Actions.XmobarCapsLockFlag newCapsLock
       noise  [qm| Caps Lock is {newCapsLock ? "On" $ "Off"} |]
 
     when (prevNumLock /= newNumLock) $ do
-      notify [qm| numlock:{ newNumLock ? "on" $ "off" }\n |]
+      notify $ Actions.XmobarNumLockFlag newNumLock
       noise  [qm| Num Lock is {newNumLock ? "On" $ "Off"} |]
 
   return $ prevState & State.leds' .~ leds
 
   where noise  = Actions.noise opts ctVars        :: String -> IO ()
-        notify = Actions.notifyXmobar opts ctVars :: String -> IO ()
+        notify = Actions.notifyXmobar opts ctVars :: Actions.XmobarFlag -> IO ()
 
         f :: (LedModes -> State -> IO State) -> IO ()
         f m = do

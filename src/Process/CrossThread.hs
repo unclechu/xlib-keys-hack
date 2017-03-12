@@ -62,7 +62,7 @@ type Options         = Options.Options
 type State           = State.State
 type CrossThreadVars = State.CrossThreadVars
 type Noiser          = [String] -> IO ()
-type Notifier        = [String] -> IO ()
+type Notifier        = [Actions.XmobarFlag] -> IO ()
 type KeyMap          = Keys.KeyMap
 
 type ModeChangeLens = Lens' State (Maybe Bool)
@@ -457,8 +457,7 @@ changeAlternativeMode toOn = State.alternative' .~ toOn
 -- Notify xmobar about Alternative mode state
 notifyAboutAlternative :: Notifier -> State -> IO ()
 notifyAboutAlternative notify' state =
-  notify' [msg $ state ^. State.alternative']
-  where msg = "alternative:on\n" |?| "alternative:off\n"
+  notify' [Actions.XmobarAlternativeFlag $ State.alternative state]
 
 
 onOrOff :: Bool -> String

@@ -20,7 +20,7 @@ import "base" GHC.Generics (Generic)
 import "base" System.IO (Handle)
 import qualified "base" System.Console.GetOpt as GetOpt
 
-import "lens" Control.Lens ((.~), (%~), (^.), set)
+import "lens" Control.Lens ((.~), (%~))
 import "deepseq" Control.DeepSeq (NFData, rnf, deepseq)
 
 import "base" Data.Maybe (fromJust)
@@ -46,12 +46,11 @@ data Options =
           , disableXInputDeviceName :: [String]
           , disableXInputDeviceId   :: [Int]
           , handleDevicePath        :: [FilePath]
-          , xmobarPipeFile          :: Maybe FilePath
+          , xmobarIndicators        :: Bool
 
           , handleDeviceFd          :: [Handle]
           , availableDevices        :: [FilePath]
           , availableXInputDevices  :: [Int]
-          , xmobarPipeFd            :: Maybe Handle
           }
   deriving (Show, Eq, Generic)
 
@@ -69,12 +68,11 @@ instance NFData Options where
     disableXInputDeviceName opts `deepseq`
     disableXInputDeviceId   opts `deepseq`
     handleDevicePath        opts `deepseq`
-    xmobarPipeFile          opts `deepseq`
+    xmobarIndicators        opts `deepseq`
 
     handleDeviceFd          opts `deepseq`
     availableDevices        opts `deepseq`
     availableXInputDevices  opts `deepseq`
-    xmobarPipeFd            opts `deepseq`
       ()
 
 instance Default Options where
@@ -93,7 +91,7 @@ instance Default Options where
     , disableXInputDeviceName = []
     , disableXInputDeviceId   = []
     , handleDevicePath        = []
-    , xmobarPipeFile          = Nothing
+    , xmobarIndicators        = False
 
 
     -- Will be extracted from `handleDevicePath`
@@ -111,10 +109,6 @@ instance Default Options where
     -- and from `disableXInputDeviceId` and filtered
     -- with only available devices.
     , availableXInputDevices  = []
-
-    -- Pipe file handler.
-    -- Will be extracted at initialization step.
-    , xmobarPipeFd            = Nothing
     }
 
 makeApoClassy ''Options
@@ -170,9 +164,11 @@ options =
         (\x -> handleDevicePath' %~ (++ [fromJust x]))
         "FDPATH")
       "Path to device file descriptor to get events from"
-  , GetOpt.Option  [ ]  ["xmobar-pipe"]
-      (GetOpt.OptArg (set xmobarPipeFile') "FILE")
-      "Path to pipe file of xmobar to notify it about modes"
+  , GetOpt.Option  [ ]  ["xmobar-indicators"]
+      (GetOpt.NoArg $ xmobarIndicators' .~ True)
+      "Enable notifying xmobar indicators process about indicators\
+      \ (num lock, caps lock and alternative mode)\
+      \ state changes by DBus (see also https://github.com/unclechu/xmonadrc)"
   ]
 
 
@@ -194,5 +190,5 @@ usageInfo = '\n' : GetOpt.usageInfo header options
 
 
 noise :: Options -> String -> IO ()
-noise ((^. verboseMode') -> True) msg = putStrLn msg
+noise (verboseMode -> True) msg = putStrLn msg
 noise _ _ = return ()

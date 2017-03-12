@@ -30,6 +30,7 @@ import qualified "X11" Graphics.X11.ExtraTypes as XTypes
 import "X11" Graphics.X11.Xlib.Types (Display)
 import "X11" Graphics.X11.Xlib.Display (closeDisplay)
 import "X11" Graphics.X11.Xlib.Misc (keysymToKeycode)
+import "X11" Graphics.X11.Xlib (displayString)
 
 import "deepseq" Control.DeepSeq (deepseq, force)
 import qualified "mtl" Control.Monad.State as St (get)
@@ -51,17 +52,17 @@ import "base" Control.Concurrent.Chan (Chan, newChan, readChan)
 import "base" Control.Exception (Exception(fromException))
 import "base" Control.Arrow ((&&&))
 
-import "base" Data.Maybe (fromJust, isJust)
+import "base" Data.Maybe (fromJust)
 import "base" Data.Typeable (Typeable)
 import "data-default" Data.Default (def)
 import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
 
 -- local imports
 
-import "xlib-keys-hack" Utils.Sugar ((&), (<&>), (.>), (|?|))
-import "xlib-keys-hack" Utils (errPutStrLn, dieWith, writeToFd)
+import "xlib-keys-hack" Utils.Sugar ((&), (<&>), (.>), (|?|), (?), ifMaybeM')
+import "xlib-keys-hack" Utils (errPutStrLn, dieWith)
 import "xlib-keys-hack" Utils.StateMonad ( updateState', updateStateM'
-                                         , modifyState, modifyStateM
+                                         , modifyState,  modifyStateM
                                          )
 import "xlib-keys-hack" Bindings.Xkb ( xkbGetDescPtr
                                      , xkbFetchControls
@@ -78,6 +79,7 @@ import "xlib-keys-hack" Process ( initReset
                                 )
 import qualified "xlib-keys-hack" Options as O
 import qualified "xlib-keys-hack" XInput
+import "xlib-keys-hack" IPC (openIPC, closeIPC, setIndicatorState)
 import "xlib-keys-hack" State ( CrossThreadVars ( CrossThreadVars
                                                 , stateMVar
                                                 , actionsChan
@@ -158,6 +160,11 @@ main = flip evalStateT ([] :: ThreadsState) $ do
   keyMap `deepseq` return ()
 
 
+  ipcHandle <- ifMaybeM' (O.xmobarIndicators opts) $ do
+    noise "Opening DBus connection for xmobar indicators state updating..."
+    lift $ openIPC $ displayString dpy
+
+
   noise "Initial resetting..."
   liftIO $ initReset opts keyMap dpy
 
@@ -230,15 +237,21 @@ main = flip evalStateT ([] :: ThreadsState) $ do
         m (Actions.Noise msg) = noise msg
         m (Actions.PanicNoise msg) = liftIO $ errPutStrLn msg
 
-        m (Actions.NotifyXmobar msg) =
-          let pipeFd = opts ^. O.xmobarPipeFd'
-              forLog :: String -> String
-              forLog (reverse -> '\n':(reverse -> x)) = x
-              forLog x = x
-           in when (isJust pipeFd) $ do
-              noise [qm|Notifying xmobar with message '{forLog msg}'...|]
-              let xmobarFd = fromJust pipeFd
-               in liftIO $ writeToFd xmobarFd msg
+        m (Actions.NotifyXmobar x) =
+          flip (maybe $ return ()) ipcHandle $ \ipc -> do
+
+            noise [qm| Setting xmobar {title} indicator state
+                     \ {isOn ? "On" $ "Off"}... |]
+
+            lift $ setIndicatorState ipc x
+
+            where (title, isOn) = case x of
+                                       Actions.XmobarNumLockFlag flag ->
+                                         ("Num Lock", flag)
+                                       Actions.XmobarCapsLockFlag flag ->
+                                         ("Caps Lock", flag)
+                                       Actions.XmobarAlternativeFlag flag ->
+                                         ("Alternative Mode", flag)
 
         m Actions.InitTerminate = do
 
@@ -283,10 +296,8 @@ main = flip evalStateT ([] :: ThreadsState) $ do
             noise [qm|Closing device file descriptor: {fd}...|]
             liftIO $ SysIO.hClose fd
 
-          when (isJust $ O.xmobarPipeFd opts) $ do
-            let Just fd = O.xmobarPipeFd opts
-            noise [qm|Closing XMobar pipe file descriptor: {fd}...|]
-            liftIO $ SysIO.hClose fd
+          let close h = noise "Closing DBus connection..." >> lift (closeIPC h)
+           in maybe (return ()) close ipcHandle
 
           noise "Closing X Display descriptors..."
           liftIO $ mapM_ closeDisplay $ dpy
@@ -327,11 +338,11 @@ main = flip evalStateT ([] :: ThreadsState) $ do
           Left err -> errPutStrLn O.usageInfo >> dieWith err
           Right opts -> do
 
-            when (opts ^. O.showHelp') $ do
+            when (O.showHelp opts) $ do
               putStrLn O.usageInfo
               exitSuccess
 
-            opts ^. O.handleDevicePath' & length & (> 0) &
+            O.handleDevicePath opts & length & (> 0) &
               \x -> unless x $ do
                 errPutStrLn O.usageInfo
                 dieWith "At least one device fd path must be specified!"
@@ -374,22 +385,6 @@ main = flip evalStateT ([] :: ThreadsState) $ do
                             \is unavailable!"
                   return files
 
-        -- Opens xmobar pipe file descriptor for writing
-        extractPipeFd :: Options -> IO Options
-        extractPipeFd opts =
-          whenHasFile (opts ^. O.xmobarPipeFile') $ \file -> do
-            noise "Opening xmobar pipe file for writing..."
-            fd <- IOHandleFD.openFile file SysIO.WriteMode
-            return $ opts & O.xmobarPipeFd' .~ Just fd
-
-          where noise = O.noise opts
-
-                whenHasFile :: Maybe FilePath
-                            -> (FilePath -> IO Options)
-                            -> IO Options
-                whenHasFile (Just file) m = m file
-                whenHasFile Nothing     _ = return opts
-
         -- Lift up a monad and return back original value
         liftBetween :: Monad m => m () -> a -> StateT s m a
         liftBetween monad x = x <$ lift monad
@@ -403,7 +398,6 @@ main = flip evalStateT ([] :: ThreadsState) $ do
             >>= XInput.getAvailable
             >>= (\opts -> opts <$ XInput.disable opts)
             >>= logDisabled
-            >>= extractPipeFd
 
           where logDisabled :: Options -> IO Options
                 logDisabled opts = opts ^. O.availableXInputDevices'

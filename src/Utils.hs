@@ -7,17 +7,9 @@ module Utils
   ( errPutStrLn
   , errPutStr
   , dieWith
-
-  , writeToFd
   ) where
 
-import "base" GHC.IO.Handle (hFlushAll)
-import "base" System.IO
-  (Handle, stderr, hPutStrLn, hPutStr, hIsWritable, hPutStr)
-
--- local imports
-
-import Utils.Sugar ((|?|))
+import "base" System.IO (stderr, hPutStrLn, hPutStr, hPutStr)
 
 
 errPutStrLn :: String -> IO ()
@@ -28,9 +20,3 @@ errPutStr = hPutStr stderr
 
 dieWith :: String -> IO a
 dieWith = ioError . userError
-
-
-writeToFd :: Handle -> String -> IO ()
-writeToFd fd chunk = hIsWritable fd >>= write |?| tryAgain
-  where write = hPutStr fd chunk >> hFlushAll fd
-        tryAgain = writeToFd fd chunk

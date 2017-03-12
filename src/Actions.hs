@@ -5,8 +5,9 @@
 
 module Actions
   ( ActionType(..)
-  , Action(..),    HasAction(..)
-  , KeyAction(..), HasKeyAction(..)
+  , Action(..),     HasAction(..)
+  , XmobarFlag(..), HasXmobarFlag(..)
+  , KeyAction(..),  HasKeyAction(..)
 
   , seqHead
   , noise,         noise'
@@ -22,9 +23,6 @@ import "X11" Graphics.X11.Xlib (KeyCode)
 
 import "base" Control.Monad (when)
 import "base" Control.Concurrent.Chan (writeChan)
-import "lens" Control.Lens ((^.))
-
-import "base" Data.Maybe (isJust)
 
 -- local imports
 
@@ -32,8 +30,9 @@ import qualified Options as O
 import qualified State
 
 import Actions.Types ( ActionType(..)
-                     , Action(..),    HasAction(..)
-                     , KeyAction(..), HasKeyAction(..)
+                     , Action(..),     HasAction(..)
+                     , XmobarFlag(..), HasXmobarFlag(..)
+                     , KeyAction(..),  HasKeyAction(..)
                      )
 
 
@@ -62,16 +61,16 @@ panicNoise' ctVars =
   writeChan (State.actionsChan ctVars) . Sequence . map PanicNoise
 
 
--- Checks if we have xmobar pipe file descriptor
--- and only then adds actions to queue.
-notifyXmobar :: O.Options -> State.CrossThreadVars -> String -> IO ()
-notifyXmobar opts ctVars msg = when (isJust $ opts ^. O.xmobarPipeFd') $
-  writeChan (State.actionsChan ctVars) $ Single $ NotifyXmobar msg
+-- Checks if xmobar indicators notifying is enabled
+-- and only then adds actions to the queue.
+notifyXmobar :: O.Options -> State.CrossThreadVars -> XmobarFlag -> IO ()
+notifyXmobar opts ctVars flag = when (O.xmobarIndicators opts) $
+  writeChan (State.actionsChan ctVars) $ Single $ NotifyXmobar flag
 
 -- Multiple version of `notifyXmobar`.
-notifyXmobar' :: O.Options -> State.CrossThreadVars -> [String] -> IO ()
-notifyXmobar' opts ctVars msgs = when (isJust $ opts ^. O.xmobarPipeFd') $
-  writeChan (State.actionsChan ctVars) $ Sequence $ map NotifyXmobar msgs
+notifyXmobar' :: O.Options -> State.CrossThreadVars -> [XmobarFlag] -> IO ()
+notifyXmobar' opts ctVars flags = when (O.xmobarIndicators opts) $
+  writeChan (State.actionsChan ctVars) $ Sequence $ map NotifyXmobar flags
 
 
 -- Initiates termination process of whole application

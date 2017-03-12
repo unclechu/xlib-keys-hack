@@ -31,6 +31,7 @@ library
                      , Actions.Types
                      , State
                      , XInput
+                     , IPC
                      , Utils
                      , Utils.X
                      , Utils.Lens
@@ -47,6 +48,7 @@ library
                      , linux-evdev
                      , unix
                      , process
+                     , dbus
                      , mtl
                      , containers
                      , deepseq

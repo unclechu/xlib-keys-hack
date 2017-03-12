@@ -7,9 +7,8 @@ module Utils.Sugar
   ( (&), (.>), (<&>) -- pipes
   , (?), (|?|)       -- conditions helpers
 
-  , ifMaybe
-  , applyIf
-  , applyUnless
+  , ifMaybe, ifMaybeM, ifMaybeM'
+  , applyIf, applyUnless
   , dupe
   ) where
 
@@ -66,6 +65,15 @@ infixl 1 ?
 -- Returns given value inside Just only if it passes a predicate.
 ifMaybe :: (a -> Bool) -> a -> Maybe a
 ifMaybe f x = f x ? Just x $ Nothing
+
+-- Monadic version of `ifMaybe`
+ifMaybeM :: Monad m => (a -> Bool) -> m a -> m (Maybe a)
+ifMaybeM f m = m >>= \x -> return $ f x ? Just x $ Nothing
+
+-- Like `ifMaybeM` but instead of predicate uses just Bool,
+-- also doesn't executes monad if Bool is False
+ifMaybeM' :: Monad m => Bool -> m a -> m (Maybe a)
+ifMaybeM' condition m = condition ? (Just <$> m) $ return Nothing
 
 
 applyIf :: (a -> a) -> Bool -> a -> a
