@@ -39,7 +39,7 @@ __**TODO**__ This description isn't complete yet,
 
 ## Build and install
 
-```bash
+``` bash
 $ make --always-make
 ```
 
@@ -53,7 +53,7 @@ directory, make sure you have this directory in your `$PATH` environment variabl
 
    You could easily do it for all input devices by this command:
 
-   ```bash
+   ``` bash
    $ sudo setfacl -m "u:$(whoami):r" /dev/input/by-id/*
    ```
 
@@ -63,7 +63,7 @@ directory, make sure you have this directory in your `$PATH` environment variabl
 
 2. For example you could have one keyboard and two file descriptors of device:
 
-   ```text
+   ``` text
    /dev/input/by-id/usb-1d57_2.4G_Receiver-event-kbd
    /dev/input/by-id/usb-1d57_2.4G_Receiver-event-if02
    ```
@@ -77,19 +77,19 @@ directory, make sure you have this directory in your `$PATH` environment variabl
 
    You could get all names of your `xinput` devices by this command:
 
-   ```bash
+   ``` bash
    $ xinput list
    ```
 
    Keyboard name in our example case is `2.4G Receiver`, let's check it:
 
-   ```bash
+   ``` bash
    $ xinput list | grep -F '2.4G Receiver'
    ```
 
    Will get us (if we really have this device):
 
-   ```text
+   ``` text
    ↳ 2.4G Receiver  id=10  [slave  pointer  (2)]
    ↳ 2.4G Receiver  id=11  [slave  pointer  (2)]
    ↳ 2.4G Receiver  id=18  [slave  keyboard (3)]
@@ -98,20 +98,20 @@ directory, make sure you have this directory in your `$PATH` environment variabl
 
    At this step we just found out our device `xinput` name that is:
 
-   ```text
+   ``` text
    2.4G Receiver
    ```
 
    And our device file descriptors:
 
-   ```text
+   ``` text
    /dev/input/by-id/usb-1d57_2.4G_Receiver-event-kbd
    /dev/input/by-id/usb-1d57_2.4G_Receiver-event-if02
    ```
 
 3. Now you could start this utility daemon:
 
-   ```bash
+   ``` bash
    $ xlib-keys-hack -v \
      /dev/input/by-id/usb-1d57_2.4G_Receiver-event-kbd \
      /dev/input/by-id/usb-1d57_2.4G_Receiver-event-if02 \
@@ -131,6 +131,29 @@ directory, make sure you have this directory in your `$PATH` environment variabl
 4. Enjoy your hacked keyboard.
 
 ## More info
+
+### --help
+
+``` text
+Usage: xlib-keys-hack [OPTION...] DEVICES-FD-PATHS...
+  -h  --help                                          Show this usage info
+  -v  --verbose                                       Start in verbose-mode
+      --real-capslock                                 Use real Caps Lock instead of remapping it to Escape
+      --no-alternative-mode                           Disable Alternative mode feature
+      --no-additional-controls                        Disable additional controls behavior for Caps Lock and Enter keys
+                                                      (could be comfortable for playing some video games)
+      --disable-reset-by-escape-on-capslock           Disable resetting Caps Lock mode, Alternative mode and keyboard layout by Escape that triggered by Caps Lock key
+                                                      (only when it's remapped, no need to use this option if you already used --real-capslock)
+      --disable-reset-by-window-focus-event           Disable resetting Caps Lock mode, Alternative mode and keyboard layout by switching between windows.
+                                                      WARNING! If you don't disable this feature you should ensure that you have directory that contains 'xlib-keys-hack-watch-for-window-focus-events' executable in your 'PATH' environment variable!
+      --disable-xinput-device-name[=NAME]             Name of device to disable using 'xinput' tool
+      --disable-xinput-device-id[=ID]                 Id of device to disable using 'xinput' tool
+      --device-fd-path[=FDPATH]                       Path to device file descriptor to get events from
+      --xmobar-indicators                             Enable notifying xmobar indicators process about indicators (num lock, caps lock and alternative mode) state changes by DBus (see also https://github.com/unclechu/xmonadrc)
+      --xmobar-indicators-dbus-path[=PATH]            DBus object path for xmobar indicators (default is: '/', this option makes sense only with --xmobar-indicators)
+      --xmobar-indicators-dbus-bus[=BUS]              DBus bus name for xmobar indicators (default is: 'com.github.unclechu.xmonadrc.%DISPLAY%' where '%DISPLAY%' is view of $DISPLAY environment variable where non-letter symbols are replaced to underscore '_', for example if we have $DISPLAY as ':1' bus name will be 'com.github.unclechu.xmonadrc._1', this option makes sense only with --xmobar-indicators)
+      --xmobar-indicators-dbus-interface[=INTERFACE]  DBus interface for xmobar indicators (default is: 'com.github.unclechu.xmonadrc', this option makes sense only with --xmobar-indicators)
+```
 
 ### Generating coverage report
 

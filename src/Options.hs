@@ -219,7 +219,7 @@ extractOptions argv =
 
 usageInfo :: String
 usageInfo = '\n' : GetOpt.usageInfo header options
-  where header = "Usage: xlib-keys-hack [OPTION...] devices fd paths..."
+  where header = "Usage: xlib-keys-hack [OPTION...] DEVICES-FD-PATHS..."
 
 
 noise :: Options -> String -> IO ()
