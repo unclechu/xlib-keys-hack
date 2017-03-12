@@ -59,6 +59,7 @@ import Bindings.Xkb ( xkbSetGroup
                     , xkbGetCurrentLayout
                     )
 import Bindings.MoreXlib (getLeds)
+import IPC (IPCHandle, setIndicatorState)
 import qualified Options as O
 import qualified Actions
 import qualified State
@@ -77,8 +78,8 @@ type LedModes        = State.LedModes
 type CrossThreadVars = State.CrossThreadVars
 
 
-initReset :: Options -> KeyMap -> Display -> IO ()
-initReset opts keyMap dpy = do
+initReset :: Options -> Maybe IPCHandle -> KeyMap -> Display -> IO ()
+initReset opts ipcHandle keyMap dpy = do
 
   noise "Initial resetting of keyboard layout..."
   initialResetKbdLayout dpy
@@ -86,14 +87,12 @@ initReset opts keyMap dpy = do
   noise "Initial resetting Caps Lock mode..."
   justTurnCapsLockMode False
 
-  -- TODO reset by dbus
-  -- let xmobarFd = opts ^. O.xmobarPipeFd'
-  -- when (isJust xmobarFd) $ do
-  --   noise "Initial resetting of xmobar leds..."
-  --   let fd = fromJust xmobarFd
-  --   writeToFd fd "capslock:off\n"
-  --   writeToFd fd "numlock:off\n"
-  --   writeToFd fd "alternative:off\n"
+  when (O.xmobarIndicators opts) $ do
+    noise "Initial resetting of xmobar indicators..."
+    flip (maybe $ return ()) ipcHandle $ \ipc -> do
+      setIndicatorState ipc (Actions.XmobarNumLockFlag     False)
+      setIndicatorState ipc (Actions.XmobarCapsLockFlag    False)
+      setIndicatorState ipc (Actions.XmobarAlternativeFlag False)
 
   where noise = O.noise opts
         justTurnCapsLockMode =

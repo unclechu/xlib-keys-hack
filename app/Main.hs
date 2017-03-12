@@ -166,7 +166,7 @@ main = flip evalStateT ([] :: ThreadsState) $ do
 
 
   noise "Initial resetting..."
-  liftIO $ initReset opts keyMap dpy
+  liftIO $ initReset opts ipcHandle keyMap dpy
 
   noise "Making cross-thread variables..."
   ctVars <- liftIO $ do
