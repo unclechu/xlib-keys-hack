@@ -3,7 +3,6 @@
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE PackageImports #-}
 
 module Utils.Instances () where
 

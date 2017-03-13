@@ -3,7 +3,6 @@
 
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE PackageImports #-}
 
 module Bindings.Xkb
   ( xkbGetDescPtr

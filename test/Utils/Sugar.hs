@@ -1,8 +1,6 @@
 -- Author: Viacheslav Lotsmanov
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
-{-# LANGUAGE PackageImports #-}
-
 module Utils.Sugar (spec) where
 
 import "base" Control.Concurrent.MVar (newEmptyMVar, putMVar, tryTakeMVar)

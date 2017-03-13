@@ -2,7 +2,6 @@
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE PackageImports #-}
 
 module Actions.Types
   ( ActionType(..)

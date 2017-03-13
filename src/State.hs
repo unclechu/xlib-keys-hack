@@ -3,7 +3,6 @@
 
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE PackageImports #-}
 
 module State
   ( State(..),      HasState(..)

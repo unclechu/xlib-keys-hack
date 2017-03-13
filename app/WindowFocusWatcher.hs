@@ -7,8 +7,6 @@
 -- I separated this code from main process, so I just can respawn
 -- it and prevent main application from falling down.
 
-{-# LANGUAGE PackageImports #-}
-
 module Main (main) where
 
 import "base" System.IO (stdout, hFlush)
