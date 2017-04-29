@@ -197,7 +197,8 @@ options =
            \ ':' and '.' symbols are replaced to underscore '_',
            \ for example if we have $DISPLAY as ':1' bus name will be
            \ 'com.github.unclechu.xmonadrc._1',
-           \ this option makes sense only with --xmobar-indicators)
+           \ this option makes sense only with --xmobar-indicators),
+           \ use --xmobar-indicators-dbus-bus=any to broadcast to everyone
          |]
   , GetOpt.Option  [ ]  ["xmobar-indicators-dbus-interface"]
       (GetOpt.OptArg (set xmobarIndicatorsIface') "INTERFACE")

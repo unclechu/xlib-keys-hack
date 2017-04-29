@@ -57,8 +57,9 @@ type Options = O.Options
 
 data IPCHandle = IPCHandle { dbusClient            :: Client
                            , xmobarObjectPath      :: ObjectPath
-                           , xmobarBus             :: BusName
+                           , xmobarBus             :: Maybe BusName
                            , xmobarInterface       :: InterfaceName
+                           , xmobarFlushObjectPath :: ObjectPath
                            , xmobarFlushSigHandler :: SignalHandler
                            }
 
@@ -71,9 +72,10 @@ openIPC dpyName opts flushAllCallback = do
   let path  = fromMaybe "/"
             $ O.xmobarIndicatorsObjPath opts <&> objectPath_
 
-      bus   = busName_
-            $ fromMaybe xmobarBusNameDef
-            $ O.xmobarIndicatorsBusName opts
+      bus   = let opt = O.xmobarIndicatorsBusName opts
+               in if opt == Just "any"
+                     then Nothing
+                     else Just $ busName_ $ fromMaybe xmobarBusNameDef opt
 
       iface = fromMaybe "com.github.unclechu.xmonadrc"
             $ O.xmobarIndicatorsIface opts <&> interfaceName_
@@ -95,6 +97,7 @@ openIPC dpyName opts flushAllCallback = do
                    , xmobarObjectPath      = path
                    , xmobarBus             = bus
                    , xmobarInterface       = iface
+                   , xmobarFlushObjectPath = flushObjPath
                    , xmobarFlushSigHandler = sigHandler
                    }
 
@@ -123,7 +126,7 @@ setIndicatorState IPCHandle { dbusClient = c
                   flag =
 
   emit c (signal path iface member)
-           { signalDestination = Just bus
+           { signalDestination = bus
            , signalBody        = [toVariant isOn]
            }
 
