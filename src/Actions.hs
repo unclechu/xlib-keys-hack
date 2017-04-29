@@ -10,7 +10,7 @@ module Actions
   , seqHead
   , noise,         noise'
   , panicNoise,    panicNoise'
-  , notifyXmobar,  notifyXmobar'
+  , notifyXmobar,  notifyXmobar', flushXmobar
   , initTerminate, threadIsDeath, overthrow
   , pressKey,      releaseKey,    pressReleaseKey
   , resetKeyboardLayout
@@ -69,6 +69,10 @@ notifyXmobar opts ctVars flag = when (O.xmobarIndicators opts) $
 notifyXmobar' :: O.Options -> State.CrossThreadVars -> [XmobarFlag] -> IO ()
 notifyXmobar' opts ctVars flags = when (O.xmobarIndicators opts) $
   writeChan (State.actionsChan ctVars) $ Sequence $ map NotifyXmobar flags
+
+flushXmobar :: O.Options -> State.CrossThreadVars -> IO ()
+flushXmobar opts ctVars = when (O.xmobarIndicators opts) $
+  writeChan (State.actionsChan ctVars) $ Single $ NotifyXmobar XmobarFlushAll
 
 
 -- Initiates termination process of whole application

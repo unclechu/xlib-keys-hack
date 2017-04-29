@@ -76,6 +76,7 @@ executable xlib-keys-hack
                      , either
                      , transformers
                      , lens
+                     , extra
                      , data-default
                      , qm-interpolated-string
 

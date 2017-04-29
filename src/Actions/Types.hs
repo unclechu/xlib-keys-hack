@@ -36,6 +36,7 @@ data Action = Noise        String
 data XmobarFlag = XmobarNumLockFlag     Bool
                 | XmobarCapsLockFlag    Bool
                 | XmobarAlternativeFlag Bool
+                | XmobarFlushAll
                   deriving (Show, Eq)
 
 

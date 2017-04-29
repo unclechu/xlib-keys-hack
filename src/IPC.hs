@@ -2,6 +2,7 @@
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module IPC
   ( IPCHandle
@@ -19,14 +20,25 @@ import "dbus" DBus ( ObjectPath
                    , InterfaceName
                    , interfaceName_
                    , signal
-                   , signalBody
                    , signalDestination
-                   , toVariant
+                   , IsVariant(toVariant)
+                   , Signal(signalBody)
                    )
 import "dbus" DBus.Client ( Client
                           , disconnect
                           , connectSession
                           , emit
+                          , matchAny
+                          , addMatch
+                          , removeMatch
+                          , SignalHandler
+
+                          , MatchRule ( matchPath
+                                      , matchInterface
+                                      , matchSender
+                                      , matchDestination
+                                      , matchMember
+                                      )
                           )
 
 -- local imports
@@ -36,38 +48,70 @@ import qualified Options as O
 import Actions ( XmobarFlag ( XmobarNumLockFlag
                             , XmobarCapsLockFlag
                             , XmobarAlternativeFlag
+                            , XmobarFlushAll
                             )
                )
 
 type Options = O.Options
 
 
-data IPCHandle = IPCHandle { dbusClient       :: Client
-                           , xmobarObjectPath :: ObjectPath
-                           , xmobarBus        :: BusName
-                           , xmobarInterface  :: InterfaceName
+data IPCHandle = IPCHandle { dbusClient            :: Client
+                           , xmobarObjectPath      :: ObjectPath
+                           , xmobarBus             :: BusName
+                           , xmobarInterface       :: InterfaceName
+                           , xmobarFlushSigHandler :: SignalHandler
                            }
 
 
-openIPC :: String -> Options -> IO IPCHandle
-openIPC dpyName opts = connectSession <&> \dbusSession ->
+openIPC :: String -> Options -> IO () -> IO IPCHandle
+openIPC dpyName opts flushAllCallback = do
 
-  IPCHandle { dbusClient = dbusSession
-            , xmobarObjectPath = fromMaybe "/" $
-                O.xmobarIndicatorsObjPath opts <&> objectPath_
-            , xmobarBus = busName_ $
-                fromMaybe (xmobarBusNamePfx ++ encodeDpyName dpyName) $
-                O.xmobarIndicatorsBusName opts
-            , xmobarInterface = fromMaybe "com.github.unclechu.xmonadrc" $
-                O.xmobarIndicatorsIface opts <&> interfaceName_
-            }
+  dbusSession <- connectSession
 
-  where xmobarBusNamePfx = "com.github.unclechu.xmonadrc."
-        encodeDpyName = map f where f ':' = '_'; f '.' = '_'; f x = x
+  let path  = fromMaybe "/"
+            $ O.xmobarIndicatorsObjPath opts <&> objectPath_
+
+      bus   = busName_
+            $ fromMaybe xmobarBusNameDef
+            $ O.xmobarIndicatorsBusName opts
+
+      iface = fromMaybe "com.github.unclechu.xmonadrc"
+            $ O.xmobarIndicatorsIface opts <&> interfaceName_
+
+      flushObjPath = objectPath_
+                   $ fromMaybe flushObjPathDef
+                   $ O.xmobarIndicatorsFlushObjPath opts
+
+      flushMatchRule = matchAny { matchPath        = Just flushObjPath
+                                , matchSender      = Nothing
+                                , matchDestination = Nothing
+                                , matchInterface   = Just iface
+                                , matchMember      = Just "request_flush_all"
+                                }
+
+  sigHandler <- addMatch dbusSession flushMatchRule flushHandle
+
+  return IPCHandle { dbusClient            = dbusSession
+                   , xmobarObjectPath      = path
+                   , xmobarBus             = bus
+                   , xmobarInterface       = iface
+                   , xmobarFlushSigHandler = sigHandler
+                   }
+
+  where xmobarBusNameDef = "com.github.unclechu.xmonadrc." ++ dpyView
+        flushObjPathDef = "/com/github/unclechu/xmonadrc/" ++ dpyView
+
+        dpyView = let f ':' = '_'; f '.' = '_'; f x = x
+                   in map f dpyName
+
+        flushHandle (signalBody -> []) = flushAllCallback
+        flushHandle _ = return () -- Incorrect arguments, just ignoring it
 
 
 closeIPC :: IPCHandle -> IO ()
-closeIPC = disconnect . dbusClient
+closeIPC IPCHandle { dbusClient = c
+                   , xmobarFlushSigHandler = sigH
+                   } = removeMatch c sigH >> disconnect c
 
 
 setIndicatorState :: IPCHandle -> XmobarFlag -> IO ()
@@ -84,6 +128,9 @@ setIndicatorState IPCHandle { dbusClient = c
            }
 
   where (member, isOn) = case flag of
+
                               XmobarNumLockFlag     x -> ("numlock",     x)
                               XmobarCapsLockFlag    x -> ("capslock",    x)
                               XmobarAlternativeFlag x -> ("alternative", x)
+
+                              XmobarFlushAll -> error "unexpected value"

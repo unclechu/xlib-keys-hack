@@ -35,92 +35,95 @@ import Utils.Lens (makeApoClassy)
 
 
 data Options =
-  Options { showHelp                :: Bool
-          , verboseMode             :: Bool
+  Options { showHelp                     :: Bool
+          , verboseMode                  :: Bool
 
-          , realCapsLock            :: Bool
-          , alternativeMode         :: Bool
-          , additionalControls      :: Bool
-          , resetByEscapeOnCapsLock :: Bool
-          , resetByWindowFocusEvent :: Bool
+          , realCapsLock                 :: Bool
+          , alternativeMode              :: Bool
+          , additionalControls           :: Bool
+          , resetByEscapeOnCapsLock      :: Bool
+          , resetByWindowFocusEvent      :: Bool
 
-          , disableXInputDeviceName :: [String]
-          , disableXInputDeviceId   :: [Int]
-          , handleDevicePath        :: [FilePath]
+          , disableXInputDeviceName      :: [String]
+          , disableXInputDeviceId        :: [Int]
+          , handleDevicePath             :: [FilePath]
 
-          , xmobarIndicators        :: Bool
-          , xmobarIndicatorsObjPath :: Maybe String
-          , xmobarIndicatorsBusName :: Maybe String
-          , xmobarIndicatorsIface   :: Maybe String
+          , xmobarIndicators             :: Bool
+          , xmobarIndicatorsObjPath      :: Maybe String
+          , xmobarIndicatorsBusName      :: Maybe String
+          , xmobarIndicatorsIface        :: Maybe String
+          , xmobarIndicatorsFlushObjPath :: Maybe String
 
-          , handleDeviceFd          :: [Handle]
-          , availableDevices        :: [FilePath]
-          , availableXInputDevices  :: [Int]
+          , handleDeviceFd               :: [Handle]
+          , availableDevices             :: [FilePath]
+          , availableXInputDevices       :: [Int]
           }
   deriving (Show, Eq, Generic)
 
 instance NFData Options where
   rnf opts =
-    showHelp                opts `deepseq`
-    verboseMode             opts `deepseq`
+    showHelp                     opts `deepseq`
+    verboseMode                  opts `deepseq`
 
-    realCapsLock            opts `deepseq`
-    alternativeMode         opts `deepseq`
-    additionalControls      opts `deepseq`
-    resetByEscapeOnCapsLock opts `deepseq`
-    resetByWindowFocusEvent opts `deepseq`
+    realCapsLock                 opts `deepseq`
+    alternativeMode              opts `deepseq`
+    additionalControls           opts `deepseq`
+    resetByEscapeOnCapsLock      opts `deepseq`
+    resetByWindowFocusEvent      opts `deepseq`
 
-    disableXInputDeviceName opts `deepseq`
-    disableXInputDeviceId   opts `deepseq`
-    handleDevicePath        opts `deepseq`
+    disableXInputDeviceName      opts `deepseq`
+    disableXInputDeviceId        opts `deepseq`
+    handleDevicePath             opts `deepseq`
 
-    xmobarIndicators        opts `deepseq`
-    xmobarIndicatorsObjPath opts `deepseq`
-    xmobarIndicatorsBusName opts `deepseq`
-    xmobarIndicatorsIface   opts `deepseq`
+    xmobarIndicators             opts `deepseq`
+    xmobarIndicatorsObjPath      opts `deepseq`
+    xmobarIndicatorsBusName      opts `deepseq`
+    xmobarIndicatorsIface        opts `deepseq`
+    xmobarIndicatorsFlushObjPath opts `deepseq`
 
-    handleDeviceFd          opts `deepseq`
-    availableDevices        opts `deepseq`
-    availableXInputDevices  opts `deepseq`
+    handleDeviceFd               opts `deepseq`
+    availableDevices             opts `deepseq`
+    availableXInputDevices       opts `deepseq`
       ()
 
 instance Default Options where
   def = Options
 
     -- From arguments
-    { showHelp                = False
-    , verboseMode             = False
+    { showHelp                     = False
+    , verboseMode                  = False
 
-    , realCapsLock            = False
-    , alternativeMode         = True
-    , additionalControls      = True
-    , resetByEscapeOnCapsLock = True
-    , resetByWindowFocusEvent = True
+    , realCapsLock                 = False
+    , alternativeMode              = True
+    , additionalControls           = True
+    , resetByEscapeOnCapsLock      = True
+    , resetByWindowFocusEvent      = True
 
-    , disableXInputDeviceName = []
-    , disableXInputDeviceId   = []
-    , handleDevicePath        = []
+    , disableXInputDeviceName      = []
+    , disableXInputDeviceId        = []
+    , handleDevicePath             = []
 
-    , xmobarIndicators        = False
-    , xmobarIndicatorsObjPath = Nothing
-    , xmobarIndicatorsBusName = Nothing
-    , xmobarIndicatorsIface   = Nothing
+    , xmobarIndicators             = False
+    , xmobarIndicatorsObjPath      = Nothing
+    , xmobarIndicatorsBusName      = Nothing
+    , xmobarIndicatorsIface        = Nothing
+    , xmobarIndicatorsFlushObjPath = Nothing
 
     -- Will be extracted from `handleDevicePath`
     -- and will be reduced with only available
     -- devices (that connected to pc).
-    , handleDeviceFd          = []
+    , handleDeviceFd               = []
 
     -- Same as `handleDevicePath` but contains only
     -- available devies (that exist in file system).
     -- Will be extracted at initialization step
     -- (as `handleDeviceFd`).
-    , availableDevices        = []
+    , availableDevices             = []
 
     -- Will be extracted from `disableXInputDeviceName`
     -- and from `disableXInputDeviceId` and filtered
     -- with only available devices.
-    , availableXInputDevices  = []
+    , availableXInputDevices       = []
     }
 
 makeApoClassy ''Options
@@ -191,7 +194,7 @@ options =
       [qm| DBus bus name for xmobar indicators
          \ (default is: 'com.github.unclechu.xmonadrc.%DISPLAY%' where
            \ '%DISPLAY%' is view of $DISPLAY environment variable where
-           \ non-letter symbols are replaced to underscore '_',
+           \ ':' and '.' symbols are replaced to underscore '_',
            \ for example if we have $DISPLAY as ':1' bus name will be
            \ 'com.github.unclechu.xmonadrc._1',
            \ this option makes sense only with --xmobar-indicators)
@@ -201,6 +204,16 @@ options =
       "DBus interface for xmobar indicators\
       \ (default is: 'com.github.unclechu.xmonadrc',\
       \ this option makes sense only with --xmobar-indicators)"
+  , GetOpt.Option  [ ]  ["xmobar-indicators-dbus-flush-path"]
+      (GetOpt.OptArg (set xmobarIndicatorsFlushObjPath') "PATH")
+      [qm| DBus object path for 'flush' request from xmobar indicators process
+         \ (default is: '/com/github/unclechu/xmonadrc/%DISPLAY%' where
+           \ '%DISPLAY%' is view of $DISPLAY environment variable where
+           \ ':' and '.' symbols are replaced to underscore '_',
+           \ for example if we have $DISPLAY as ':1' object path will be
+           \ '/com/github/unclechu/xmonadrc/_1',
+           \ this option makes sense only with --xmobar-indicators)
+         |]
   ]
 
 

@@ -11,6 +11,7 @@ clean:
 
 test-command:
 	sudo setfacl -m 'u:$(shell whoami):r' /dev/input/by-id/*
+
 	stack build && \
 		env PATH='$(shell stack path --local-install-root)/bin/:${PATH}' \
 		xlib-keys-hack \
@@ -20,5 +21,5 @@ test-command:
 		/dev/input/by-id/usb-Apple_Inc._Apple_Keyboard-event-if01 \
 		--disable-xinput-device-name='2.4G Receiver' \
 		--disable-xinput-device-name='Apple Inc. Apple Keyboard' \
-		--xmobar-indicators \
-		-v
+		-v \
+		--xmobar-indicators

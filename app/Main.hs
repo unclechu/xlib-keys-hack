@@ -37,7 +37,7 @@ import "either" Control.Monad.Trans.Either (runEitherT, left, right)
 import "transformers" Control.Monad.IO.Class (liftIO)
 import "transformers" Control.Monad.Trans.Class (lift)
 import "base" Control.Monad (when, unless, filterM, forever, forM_, void)
-import "lens" Control.Lens ((.~), (^.), set)
+import "lens" Control.Lens ((.~), (^.), set, view)
 import "base" Control.Concurrent ( forkIO
                                  , forkFinally
                                  , throwTo
@@ -45,10 +45,11 @@ import "base" Control.Concurrent ( forkIO
                                  , threadDelay
                                  , tryTakeMVar
                                  )
-import "base" Control.Concurrent.MVar (newMVar, modifyMVar_)
+import "base" Control.Concurrent.MVar (newMVar, modifyMVar_, readMVar)
 import "base" Control.Concurrent.Chan (Chan, newChan, readChan)
 import "base" Control.Exception (Exception(fromException))
 import "base" Control.Arrow ((&&&))
+import "extra" Control.Monad.Extra (whenJust)
 
 import "base" Data.Maybe (fromJust)
 import "base" Data.Typeable (Typeable)
@@ -83,8 +84,12 @@ import "xlib-keys-hack" State ( CrossThreadVars ( CrossThreadVars
                                                 , actionsChan
                                                 , keysActionsChan
                                                 )
-                              , State(isTerminating, windowFocusProc)
-                              , HasState(isTerminating')
+                              , State ( isTerminating
+                                      , windowFocusProc
+                                      , alternative
+                                      )
+                              , HasState(isTerminating', leds')
+                              , HasLedModes(numLockLed', capsLockLed')
                               )
 import qualified "xlib-keys-hack" Actions
 import "xlib-keys-hack" Actions (ActionType, Action, KeyAction)
@@ -118,10 +123,13 @@ main = flip evalStateT ([] :: ThreadsState) $ do
   dpyForKeysActionsHanlder <- liftIO xkbInit
 
   dpyForXWindowFocusHandler <-
+
     if O.resetByWindowFocusEvent opts
+
        then do noise "Getting additional X Display\
                      \ for window focus handler thread..."
                liftIO xkbInit
+
        else return undefined
 
   noise "Getting additional X Display for keyboard state handler thread..."
@@ -158,36 +166,46 @@ main = flip evalStateT ([] :: ThreadsState) $ do
   keyMap `deepseq` return ()
 
 
+  noise "Making cross-thread variables..."
+  ctVars <- liftIO $ do
+
+    ctState <- newMVar $ force def
+    (ctActions     :: Chan (ActionType Action))    <- newChan
+    (ctKeysActions :: Chan (ActionType KeyAction)) <- newChan
+
+    return CrossThreadVars { stateMVar       = ctState
+                           , actionsChan     = ctActions
+                           , keysActionsChan = ctKeysActions
+                           }
+
+  ctVars `deepseq` return ()
+
   ipcHandle <- ifMaybeM' (O.xmobarIndicators opts) $ do
     noise "Opening DBus connection for xmobar indicators state updating..."
-    lift $ openIPC (displayString dpy) opts
+    lift $ openIPC (displayString dpy) opts $ Actions.flushXmobar opts ctVars
 
 
   noise "Initial resetting..."
   liftIO $ initReset opts ipcHandle keyMap dpy
 
-  noise "Making cross-thread variables..."
-  ctVars <- liftIO $ do
-    ctState <- newMVar $ force def
-    (ctActions     :: Chan (ActionType Action))    <- newChan
-    (ctKeysActions :: Chan (ActionType KeyAction)) <- newChan
-    return CrossThreadVars { stateMVar       = ctState
-                           , actionsChan     = ctActions
-                           , keysActionsChan = ctKeysActions
-                           }
-  ctVars `deepseq` return ()
 
   let termHook  = Actions.initTerminate ctVars
       catch sig = installHandler sig (Catch termHook) Nothing
    in liftIO $ mapM_ catch [sigINT, sigTERM]
 
   let _getThreadIdx = (length <$> St.get) :: StateT ThreadsState IO Int
+
       _handleFork idx (Left e) =
+
         case fromException e of
+
              Just MortifyThreadException -> Actions.threadIsDeath ctVars idx
+
              _ -> do Actions.panicNoise ctVars
                        [qm|Unexpected thread #{idx} exception: {e}|]
+
                      Actions.overthrow ctVars
+
       _handleFork idx (Right _) = do
         Actions.panicNoise ctVars [qm|Thread #{idx} unexpectedly terminated|]
         Actions.overthrow ctVars
@@ -213,11 +231,13 @@ main = flip evalStateT ([] :: ThreadsState) $ do
 
   noise "Starting device handle threads (one thread per device)..."
   (devicesDisplays :: [Display]) <-
+
     let m fd = do noise [qm|Getting own X Display for thread of device: {fd}|]
                   _dpy <- liftIO xkbInit
                   noise [qm|Starting handle thread for device: {fd}|]
                   runThread $ withData _dpy handleKeyboard fd
                   return _dpy
+
      in mapM m $ O.handleDeviceFd opts
 
   modifyState reverse
@@ -225,6 +245,7 @@ main = flip evalStateT ([] :: ThreadsState) $ do
   noise "Listening for actions in main thread..."
   forever $ do
     (action :: ActionType Action) <- liftIO $ readChan $ actionsChan ctVars
+
     let f :: ActionType Action -> StateT ThreadsState IO ()
         f (Actions.Single a) = m a
         f (Actions.Sequence []) = return ()
@@ -235,21 +256,36 @@ main = flip evalStateT ([] :: ThreadsState) $ do
         m (Actions.Noise msg) = noise msg
         m (Actions.PanicNoise msg) = liftIO $ errPutStrLn msg
 
-        m (Actions.NotifyXmobar x) =
-          flip (maybe $ return ()) ipcHandle $ \ipc -> do
+        m (Actions.NotifyXmobar x) = whenJust ipcHandle $ \ipc ->
 
-            noise [qm| Setting xmobar {title} indicator state
-                     \ {isOn ? "On" $ "Off"}... |]
+          let flag a isOn title = do
 
-            lift $ setIndicatorState ipc x
+                noise [qm| Setting xmobar {title} indicator state
+                         \ {isOn ? "On" $ "Off"}... |]
 
-            where (title, isOn) = case x of
-                                       Actions.XmobarNumLockFlag flag ->
-                                         ("Num Lock", flag)
-                                       Actions.XmobarCapsLockFlag flag ->
-                                         ("Caps Lock", flag)
-                                       Actions.XmobarAlternativeFlag flag ->
-                                         ("Alternative Mode", flag)
+                liftIO $ setIndicatorState ipc a
+
+              flush = do
+
+                noise "Flushing all xmobar indicators..."
+                state <- liftIO $ readMVar $ State.stateMVar ctVars
+
+                handle $ Actions.XmobarNumLockFlag
+                       $ state ^. State.leds' . State.numLockLed'
+
+                handle $ Actions.XmobarCapsLockFlag
+                       $ state ^. State.leds' . State.capsLockLed'
+
+                handle $ Actions.XmobarAlternativeFlag
+                       $ State.alternative state
+
+              handle a = case a of
+                Actions.XmobarFlushAll          -> flush
+                Actions.XmobarNumLockFlag     y -> flag a y "Num Lock"
+                Actions.XmobarCapsLockFlag    y -> flag a y "Caps Lock"
+                Actions.XmobarAlternativeFlag y -> flag a y "Alternative Mode"
+
+           in handle x
 
         m Actions.InitTerminate = do
 
@@ -275,21 +311,19 @@ main = flip evalStateT ([] :: ThreadsState) $ do
 
           let markAsDead (_, []) = []
               markAsDead (l, (_, x) : xs) = l ++ (False, x) : xs
+
            in modifyState $ splitAt tIdx .> markAsDead
 
           (dead, total) <- St.get <&> (length . filter not . map fst &&& length)
-
-          noise [qm| Thread #{tIdx + 1} is dead
-                   \ ({dead} of {total} is dead) |]
+          noise [qm| Thread #{tIdx + 1} is dead ({dead} of {total} is dead) |]
           when (dead == total) $ liftIO $ Actions.overthrow ctVars
 
         m Actions.JustDie = do
 
           liftIO handleTerminationTimeout
-
           noise "Application is going to die"
-
           noise "Closing devices files descriptors..."
+
           forM_ (O.handleDeviceFd opts) $ \fd -> do
             noise [qm|Closing device file descriptor: {fd}...|]
             liftIO $ SysIO.hClose fd
@@ -298,26 +332,34 @@ main = flip evalStateT ([] :: ThreadsState) $ do
            in maybe (return ()) close ipcHandle
 
           noise "Closing X Display descriptors..."
+
           liftIO $ mapM_ closeDisplay $ dpy
                                       : dpyForKeysActionsHanlder
                                       : dpyForKeyboardStateHandler
                                       : dpyForLedsWatcher
                                       : devicesDisplays
+
           when (O.resetByWindowFocusEvent opts) $ do
 
             liftIO $ closeDisplay dpyForXWindowFocusHandler
 
             liftIO $ tryTakeMVar (State.stateMVar ctVars)
                       <&> fmap State.windowFocusProc
+
               >>= let fm (fromJust -> Just (execFilePath, procH, outH)) = do
+
                          noise [qm| Terminating of window focus events watcher
-                                  \ '{execFilePath}' subprocess...|]
+                                  \ '{execFilePath}' subprocess... |]
+
                          liftIO $ SysIO.hClose outH
                          liftIO $ terminateProcess procH
                          exitCode <- liftIO $ waitForProcess procH
+
                          noise [qm| Subprocess '{execFilePath}' terminated
                                   \ with exit code: {exitCode} |]
+
                       fm _ = return ()
+
                    in fm
 
           noise "Enabling disabled before XInput devices back..."
@@ -333,17 +375,18 @@ main = flip evalStateT ([] :: ThreadsState) $ do
         -- (by --help flag or because of error).
         getOptsFromArgs :: [String] -> IO Options
         getOptsFromArgs argv = case O.extractOptions argv of
+
           Left err -> errPutStrLn O.usageInfo >> dieWith err
+
           Right opts -> do
 
             when (O.showHelp opts) $ do
               putStrLn O.usageInfo
               exitSuccess
 
-            O.handleDevicePath opts & length & (> 0) &
-              \x -> unless x $ do
-                errPutStrLn O.usageInfo
-                dieWith "At least one device fd path must be specified!"
+            O.handleDevicePath opts & length & (> 0) & \x -> unless x $ do
+              errPutStrLn O.usageInfo
+              dieWith "At least one device fd path must be specified!"
 
             O.noise opts "Started in verbose mode"
             return opts
@@ -355,12 +398,15 @@ main = flip evalStateT ([] :: ThreadsState) $ do
         -- if there's no available devices.
         extractAvailableDevices :: Options -> IO Options
         extractAvailableDevices opts = flip execStateT opts $
-          fmap (^. O.handleDevicePath') St.get
+
+          fmap (view O.handleDevicePath') St.get
             >>= lift . filterM doesFileExist
             >>= lift . checkForCount
             >>= updateStateM' logAndStoreAvailable
+
             >>= liftBetween
                   (noise "Opening devices files descriptors for reading...")
+
             >>= lift . mapM (flip IOHandleFD.openFile SysIO.ReadMode)
             >>= updateState' (flip $ set O.handleDeviceFd')
 
@@ -369,18 +415,23 @@ main = flip evalStateT ([] :: ThreadsState) $ do
                 logAndStoreAvailable :: O.HasOptions s
                                      => s -> [FilePath] -> StateT s IO s
                 logAndStoreAvailable state files = do
+
                   let devicesList = foldr (("\n  " ++) .> (++)) "" files
                       title = "Devices that will be handled:"
+
                    in lift $ noise $ title ++ devicesList
+
                   return $ state & O.availableDevices' .~ files
 
                 -- Checks if we have at least one available device
                 -- and gets files list back.
                 checkForCount :: [FilePath] -> IO [FilePath]
                 checkForCount files = do
+
                   when (length files < 1) $
                     dieWith "All specified devices to get events from \
                             \is unavailable!"
+
                   return files
 
         -- Lift up a monad and return back original value
@@ -398,7 +449,7 @@ main = flip evalStateT ([] :: ThreadsState) $ do
             >>= logDisabled
 
           where logDisabled :: Options -> IO Options
-                logDisabled opts = opts ^. O.availableXInputDevices'
+                logDisabled opts = O.availableXInputDevices opts
                   & show .> ("XInput devices ids that was disabled: " ++)
                   & (\x -> opts <$ O.noise opts x)
 
@@ -406,10 +457,13 @@ main = flip evalStateT ([] :: ThreadsState) $ do
         -- can't finish its stuff correctly.
         handleTerminationTimeout :: IO ()
         handleTerminationTimeout = void $ forkIO $ do
+
           threadDelay $ terminationTimeout * 1000 * 1000
+
           errPutStrLn [qm| Termination process timeout
                          \ after {terminationTimeout} seconds,
                          \ just exiting immidiately... |]
+
           exitImmediately $ ExitFailure 1
 
 
