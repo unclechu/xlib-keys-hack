@@ -89,11 +89,13 @@ data ComboState =
              -- When Caps Lock works as additional Control
              , isCapsLockUsedWithCombos  :: Bool
              -- For fast-typing cases
+             -- (keys pressed before Caps Lock wont go to a combo).
              , keysPressedBeforeCapsLock :: Set.Set KeyName
 
              -- When Enter works as additional Control
              , isEnterUsedWithCombos  :: Bool
              -- For fast-typing cases
+             -- (keys pressed before Enter wont go to a combo).
              , keysPressedBeforeEnter :: Set.Set KeyName
 
              -- What Just or Nothing indicates:
@@ -139,13 +141,9 @@ instance Default ComboState where
   def = ComboState
     { appleMediaPressed         = False
 
-    -- TODO wrap `isCapsLockUsedWithCombos` to `Maybe`
-    --      and remvoe `keysPressedBeforeCapsLock`.
     , isCapsLockUsedWithCombos  = False
     , keysPressedBeforeCapsLock = Set.empty
 
-    -- TODO wrap `isEnterUsedWithCombos` to `Maybe`
-    --      and remvoe `keysPressedBeforeEnter`.
     , isEnterUsedWithCombos     = False
     , keysPressedBeforeEnter    = Set.empty
 
