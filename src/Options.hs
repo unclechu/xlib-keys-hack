@@ -53,6 +53,7 @@ data Options =
           , xmobarIndicatorsBusName      :: Maybe String
           , xmobarIndicatorsIface        :: Maybe String
           , xmobarIndicatorsFlushObjPath :: Maybe String
+          , xmobarIndicatorsFlushIface   :: Maybe String
 
           , handleDeviceFd               :: [Handle]
           , availableDevices             :: [FilePath]
@@ -80,6 +81,7 @@ instance NFData Options where
     xmobarIndicatorsBusName      opts `deepseq`
     xmobarIndicatorsIface        opts `deepseq`
     xmobarIndicatorsFlushObjPath opts `deepseq`
+    xmobarIndicatorsFlushIface   opts `deepseq`
 
     handleDeviceFd               opts `deepseq`
     availableDevices             opts `deepseq`
@@ -108,6 +110,7 @@ instance Default Options where
     , xmobarIndicatorsBusName      = Nothing
     , xmobarIndicatorsIface        = Nothing
     , xmobarIndicatorsFlushObjPath = Nothing
+    , xmobarIndicatorsFlushIface   = Nothing
 
     -- Will be extracted from `handleDevicePath`
     -- and will be reduced with only available
@@ -182,38 +185,49 @@ options =
 
   , GetOpt.Option  [ ]  ["xmobar-indicators"]
       (GetOpt.NoArg $ xmobarIndicators' .~ True)
-      "Enable notifying xmobar indicators process about indicators\
-      \ (num lock, caps lock and alternative mode)\
-      \ state changes by DBus (see also https://github.com/unclechu/xmonadrc)"
+      [qm| Enable notifying xmobar indicators process about indicators
+             \ (num lock, caps lock and alternative mode)
+             \ state changes by DBus.\n
+           See also https://github.com/unclechu/xmonadrc
+         |]
   , GetOpt.Option  [ ]  ["xmobar-indicators-dbus-path"]
       (GetOpt.OptArg (set xmobarIndicatorsObjPath') "PATH")
-      "DBus object path for xmobar indicators (default is: '/',\
-      \ this option makes sense only with --xmobar-indicators)"
+      [qm| DBus object path for xmobar indicators.\n
+           Default is: '/'\n
+           This option makes sense only with --xmobar-indicators
+         |]
   , GetOpt.Option  [ ]  ["xmobar-indicators-dbus-bus"]
       (GetOpt.OptArg (set xmobarIndicatorsBusName') "BUS")
-      [qm| DBus bus name for xmobar indicators
-         \ (default is: 'com.github.unclechu.xmonadrc.%DISPLAY%' where
-           \ '%DISPLAY%' is view of $DISPLAY environment variable where
-           \ ':' and '.' symbols are replaced to underscore '_',
-           \ for example if we have $DISPLAY as ':1' bus name will be
-           \ 'com.github.unclechu.xmonadrc._1',
-           \ this option makes sense only with --xmobar-indicators),
-           \ use --xmobar-indicators-dbus-bus=any to broadcast to everyone
+      [qm| DBus bus name for xmobar indicators.\n
+           Default is: 'com.github.unclechu.xmonadrc.%DISPLAY%' where
+             \ '%DISPLAY%' is view of $DISPLAY environment variable where
+             \ ':' and '.' symbols are replaced to underscore '_',
+             \ for example if we have $DISPLAY as ':1' bus name will be
+             \ 'com.github.unclechu.xmonadrc._1'\n
+           This option makes sense only with --xmobar-indicators\n
+           Use --xmobar-indicators-dbus-bus=any to broadcast to everyone.
          |]
   , GetOpt.Option  [ ]  ["xmobar-indicators-dbus-interface"]
       (GetOpt.OptArg (set xmobarIndicatorsIface') "INTERFACE")
-      "DBus interface for xmobar indicators\
-      \ (default is: 'com.github.unclechu.xmonadrc',\
-      \ this option makes sense only with --xmobar-indicators)"
+      [qm| DBus interface for xmobar indicators.\n
+           Default is: 'com.github.unclechu.xmonadrc'\n
+           This option makes sense only with --xmobar-indicators
+         |]
   , GetOpt.Option  [ ]  ["xmobar-indicators-dbus-flush-path"]
       (GetOpt.OptArg (set xmobarIndicatorsFlushObjPath') "PATH")
-      [qm| DBus object path for 'flush' request from xmobar indicators process
-         \ (default is: '/com/github/unclechu/xmonadrc/%DISPLAY%' where
-           \ '%DISPLAY%' is view of $DISPLAY environment variable where
-           \ ':' and '.' symbols are replaced to underscore '_',
-           \ for example if we have $DISPLAY as ':1' object path will be
-           \ '/com/github/unclechu/xmonadrc/_1',
-           \ this option makes sense only with --xmobar-indicators)
+      [qm| DBus object path for 'flush' request from xmobar indicators process.
+         \nDefault is: '/com/github/unclechu/xmonadrc/%DISPLAY%' where
+             \ '%DISPLAY%' is view of $DISPLAY environment variable where
+             \ ':' and '.' symbols are replaced to underscore '_',
+             \ for example if we have $DISPLAY as ':1' object path will be
+             \ '/com/github/unclechu/xmonadrc/_1'\n
+           This option makes sense only with --xmobar-indicators
+         |]
+  , GetOpt.Option  [ ]  ["xmobar-indicators-dbus-flush-interface"]
+      (GetOpt.OptArg (set xmobarIndicatorsFlushIface') "INTERFACE")
+      [qm| DBus interface for 'flush' request from xmobar indicators process.\n
+           Default is: 'com.github.unclechu.xmonadrc'\n
+           This option makes sense only with --xmobar-indicators
          |]
   ]
 

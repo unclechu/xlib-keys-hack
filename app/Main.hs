@@ -78,7 +78,7 @@ import "xlib-keys-hack" Process ( initReset
                                 )
 import qualified "xlib-keys-hack" Options as O
 import qualified "xlib-keys-hack" XInput
-import "xlib-keys-hack" IPC (openIPC, closeIPC, setIndicatorState)
+import "xlib-keys-hack" IPC (openIPC, closeIPC, setIndicatorState, logView)
 import "xlib-keys-hack" State ( CrossThreadVars ( CrossThreadVars
                                                 , stateMVar
                                                 , actionsChan
@@ -182,7 +182,9 @@ main = flip evalStateT ([] :: ThreadsState) $ do
 
   ipcHandle <- ifMaybeM' (O.xmobarIndicators opts) $ do
     noise "Opening DBus connection for xmobar indicators state updating..."
-    lift $ openIPC (displayString dpy) opts $ Actions.flushXmobar opts ctVars
+    let flush = Actions.flushXmobar opts ctVars
+    h <- lift $ openIPC (displayString dpy) opts flush
+    h <$ noise (logView h)
 
 
   noise "Initial resetting..."

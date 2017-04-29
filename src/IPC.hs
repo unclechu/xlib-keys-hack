@@ -9,9 +9,11 @@ module IPC
   , openIPC
   , closeIPC
   , setIndicatorState
+  , logView
   ) where
 
 import "base" Data.Maybe (fromMaybe)
+import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
 
 import "dbus" DBus ( ObjectPath
                    , objectPath_
@@ -24,6 +26,7 @@ import "dbus" DBus ( ObjectPath
                    , IsVariant(toVariant)
                    , Signal(signalBody)
                    )
+
 import "dbus" DBus.Client ( Client
                           , disconnect
                           , connectSession
@@ -60,6 +63,7 @@ data IPCHandle = IPCHandle { dbusClient            :: Client
                            , xmobarBus             :: Maybe BusName
                            , xmobarInterface       :: InterfaceName
                            , xmobarFlushObjectPath :: ObjectPath
+                           , xmobarFlushInterface  :: InterfaceName
                            , xmobarFlushSigHandler :: SignalHandler
                            }
 
@@ -77,17 +81,19 @@ openIPC dpyName opts flushAllCallback = do
                      then Nothing
                      else Just $ busName_ $ fromMaybe xmobarBusNameDef opt
 
-      iface = fromMaybe "com.github.unclechu.xmonadrc"
-            $ O.xmobarIndicatorsIface opts <&> interfaceName_
+      iface = defIface $ O.xmobarIndicatorsIface opts <&> interfaceName_
 
       flushObjPath = objectPath_
                    $ fromMaybe flushObjPathDef
                    $ O.xmobarIndicatorsFlushObjPath opts
 
+      flushIface = defIface
+                 $ O.xmobarIndicatorsFlushIface opts <&> interfaceName_
+
       flushMatchRule = matchAny { matchPath        = Just flushObjPath
                                 , matchSender      = Nothing
                                 , matchDestination = Nothing
-                                , matchInterface   = Just iface
+                                , matchInterface   = Just flushIface
                                 , matchMember      = Just "request_flush_all"
                                 }
 
@@ -98,11 +104,13 @@ openIPC dpyName opts flushAllCallback = do
                    , xmobarBus             = bus
                    , xmobarInterface       = iface
                    , xmobarFlushObjectPath = flushObjPath
+                   , xmobarFlushInterface  = flushIface
                    , xmobarFlushSigHandler = sigHandler
                    }
 
   where xmobarBusNameDef = "com.github.unclechu.xmonadrc." ++ dpyView
         flushObjPathDef = "/com/github/unclechu/xmonadrc/" ++ dpyView
+        defIface = fromMaybe "com.github.unclechu.xmonadrc"
 
         dpyView = let f ':' = '_'; f '.' = '_'; f x = x
                    in map f dpyName
@@ -137,3 +145,22 @@ setIndicatorState IPCHandle { dbusClient = c
                               XmobarAlternativeFlag x -> ("alternative", x)
 
                               XmobarFlushAll -> error "unexpected value"
+
+
+logView :: IPCHandle -> String
+logView IPCHandle { xmobarObjectPath      = objPath
+                  , xmobarBus             = bus
+                  , xmobarInterface       = iface
+                  , xmobarFlushObjectPath = flushObjPath
+                  , xmobarFlushInterface  = flushIface
+                  } =
+
+  [qm| IPC data (DBus):\n
+      \  xmobar bus name: {busView}\n
+      \  xmobar object path: {objPath}\n
+      \  xmobar interface name: {iface}\n
+      \  xmobar object path for listening for flush requests: {flushObjPath}\n
+      \  xmobar interface name for listening for flush requests: {flushIface}
+     |]
+
+  where busView = fromMaybe "any (broadcasting to everyone)" $ fmap show bus
