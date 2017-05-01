@@ -30,7 +30,7 @@ import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
 -- local imports
 
 import Utils.Instances ()
-import Utils.Sugar ((&))
+import Utils.Sugar ((&), (?))
 import Utils.Lens (makeApoClassy)
 
 
@@ -41,6 +41,7 @@ data Options =
           , realCapsLock                 :: Bool
           , alternativeMode              :: Bool
           , additionalControls           :: Bool
+          , shiftNumericKeys             :: Bool
           , resetByEscapeOnCapsLock      :: Bool
           , resetByWindowFocusEvent      :: Bool
 
@@ -69,6 +70,7 @@ instance NFData Options where
     realCapsLock                 opts `deepseq`
     alternativeMode              opts `deepseq`
     additionalControls           opts `deepseq`
+    shiftNumericKeys             opts `deepseq`
     resetByEscapeOnCapsLock      opts `deepseq`
     resetByWindowFocusEvent      opts `deepseq`
 
@@ -98,6 +100,7 @@ instance Default Options where
     , realCapsLock                 = False
     , alternativeMode              = True
     , additionalControls           = True
+    , shiftNumericKeys             = False
     , resetByEscapeOnCapsLock      = True
     , resetByWindowFocusEvent      = True
 
@@ -139,33 +142,52 @@ options =
       "Show this usage info"
   , GetOpt.Option ['v'] ["verbose"]
       (GetOpt.NoArg $ verboseMode' .~ True)
-      "Start in verbose-mode"
+      [qm| Start in verbose-mode\n
+           Default is: {verboseMode def ? "On" $ "Off"}
+         |]
 
   , GetOpt.Option  [ ]  ["real-capslock"]
       (GetOpt.NoArg $ (realCapsLock' .~ True)
                     . (resetByEscapeOnCapsLock' .~ False))
-      "Use real Caps Lock instead of remapping it to Escape"
+      [qm| Use real Caps Lock instead of remapping it to Escape\n
+           Default is: {realCapsLock def ? "On" $ "Off"}
+         |]
   , GetOpt.Option  [ ]  ["no-alternative-mode"]
       (GetOpt.NoArg $ alternativeMode' .~ False)
-      "Disable Alternative mode feature"
+      [qm| Disable Alternative mode feature\n
+           Default is: {alternativeMode def ? "On" $ "Off"}
+         |]
   , GetOpt.Option  [ ]  ["no-additional-controls"]
       (GetOpt.NoArg $ additionalControls' .~ False)
-      "Disable additional controls behavior for Caps Lock and Enter keys\n\
-      \(could be comfortable for playing some video games)"
+      [qm| Disable additional controls behavior for Caps Lock and Enter keys\n
+           (could be comfortable for playing some video games)\n
+           Default is: {additionalControls def ? "On" $ "Off"}
+         |]
+  , GetOpt.Option  [ ]  ["shift-numeric-keys"]
+      (GetOpt.NoArg $ shiftNumericKeys' .~ True)
+      [qm| Shift numeric keys in numbers row one key righter,
+             \ and move 'minus' key to the left side at '1' key position.\n
+           Could be more consistent for 10-fingers typing.\n
+           Default is: {shiftNumericKeys def ? "On" $ "Off"}
+         |]
   , GetOpt.Option  [ ]  ["disable-reset-by-escape-on-capslock"]
       (GetOpt.NoArg $ resetByEscapeOnCapsLock' .~ False)
-      "Disable resetting Caps Lock mode, Alternative mode\
-      \ and keyboard layout by Escape that triggered by Caps Lock key\n\
-      \(only when it's remapped, no need to use this option\
-      \ if you already used --real-capslock)"
+      [qm| Disable resetting Caps Lock mode, Alternative mode
+             \ and keyboard layout by Escape that triggered by Caps Lock key\n
+             (only when it's remapped, no need to use this option
+               \ if you already use --real-capslock)\n
+           Default is: {resetByEscapeOnCapsLock def ? "On" $ "Off"}
+         |]
   , GetOpt.Option  [ ]  ["disable-reset-by-window-focus-event"]
       (GetOpt.NoArg $ resetByWindowFocusEvent' .~ False)
-      "Disable resetting Caps Lock mode, Alternative mode\
-      \ and keyboard layout by switching between windows.\n\
-      \WARNING! If you don't disable this feature you should ensure\
-      \ that you have directory that contains\
-      \ 'xlib-keys-hack-watch-for-window-focus-events'\
-      \ executable in your 'PATH' environment variable!"
+      [qm| Disable resetting Caps Lock mode, Alternative mode
+             \ and keyboard layout by switching between windows.\n
+           WARNING! If you don't disable this feature you should ensure
+             \ that you have directory that contains
+             \ 'xlib-keys-hack-watch-for-window-focus-events'
+             \ executable in your 'PATH' environment variable!\n
+           Default is: {resetByWindowFocusEvent def ? "On" $ "Off"}
+         |]
 
   , GetOpt.Option  [ ]  ["disable-xinput-device-name"]
       (GetOpt.OptArg
@@ -188,7 +210,8 @@ options =
       [qm| Enable notifying xmobar indicators process about indicators
              \ (num lock, caps lock and alternative mode)
              \ state changes by DBus.\n
-           See also https://github.com/unclechu/xmonadrc
+           See also https://github.com/unclechu/xmonadrc\n
+           Default is: {xmobarIndicators def ? "On" $ "Off"}
          |]
   , GetOpt.Option  [ ]  ["xmobar-indicators-dbus-path"]
       (GetOpt.OptArg (set xmobarIndicatorsObjPath') "PATH")
@@ -215,8 +238,9 @@ options =
          |]
   , GetOpt.Option  [ ]  ["xmobar-indicators-dbus-flush-path"]
       (GetOpt.OptArg (set xmobarIndicatorsFlushObjPath') "PATH")
-      [qm| DBus object path for 'flush' request from xmobar indicators process.
-         \nDefault is: '/com/github/unclechu/xmonadrc/%DISPLAY%' where
+      [qm| DBus object path for 'flush' request
+             \ from xmobar indicators process.\n
+           Default is: '/com/github/unclechu/xmonadrc/%DISPLAY%' where
              \ '%DISPLAY%' is view of $DISPLAY environment variable where
              \ ':' and '.' symbols are replaced to underscore '_',
              \ for example if we have $DISPLAY as ':1' object path will be

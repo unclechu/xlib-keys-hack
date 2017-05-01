@@ -21,5 +21,5 @@ test-command:
 		/dev/input/by-id/usb-Apple_Inc._Apple_Keyboard-event-if01 \
 		--disable-xinput-device-name='2.4G Receiver' \
 		--disable-xinput-device-name='Apple Inc. Apple Keyboard' \
-		-v \
+		-v --shift-numeric-keys \
 		--xmobar-indicators

@@ -40,8 +40,10 @@ import "containers" Data.Map.Strict ( Map, (!), fromList, toList
                                     )
 import qualified "containers" Data.Map.Strict as Map
 import qualified "containers" Data.Set as Set
+import "base" Data.List (find)
 import "base" Data.Word (Word16)
 import "base" Data.Tuple (swap)
+import "base" Data.Maybe (fromMaybe, fromJust)
 import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
 
 -- local imports
@@ -365,6 +367,22 @@ asNames =
   ]
 
 
+numericShift :: Map.Map KeyName KeyName
+numericShift = Map.fromList
+  [ (Number1Key, MinusKey)
+  , (Number2Key, Number1Key)
+  , (Number3Key, Number2Key)
+  , (Number4Key, Number3Key)
+  , (Number5Key, Number4Key)
+  , (Number6Key, Number5Key)
+  , (Number7Key, Number6Key)
+  , (Number8Key, Number7Key)
+  , (Number9Key, Number8Key)
+  , (Number0Key, Number9Key)
+  , (MinusKey,   Number0Key)
+  ]
+
+
 -- Returns Map of aliases list using key name as a Map key
 getByNameMap :: [KeyAlias] -> Map KeyName KeyAlias
 getByNameMap keyMap = fromList $ map f keyMap
@@ -413,23 +431,34 @@ getKeyMap opts mediaKeyAliases =
 
   where keyAliases :: [KeyAlias]
         keyAliases =
-          let f (keyName, keyCode) =
-                case keyName `lookup` mediaMap of
-                     Just devNum -> (keyName, devNum, keyCode)
-                     Nothing -> error [qm|Unexpected media key: {keyName}|]
-              realCapsLockF alias@(keyName, devNum, _)
-                | keyName == CapsLockKey = (keyName, devNum, capsCode)
-                | otherwise = alias
-                where capsCode = realMap ! RealCapsLockKey
-           in defaultKeyAliases ++ map f mediaKeyAliases
-            & if isCapsLockReal then map realCapsLockF else id
+          let
+            resolveMediaKey (keyName, keyCode) =
+              case keyName `lookup` mediaMap of
+                   Just devNum -> (keyName, devNum, keyCode)
+                   Nothing -> error [qm|Unexpected media key: {keyName}|]
 
-        isCapsLockReal = O.realCapsLock opts :: Bool
+            makeCapsLockReal = map f
+              where capsCode = realMap ! RealCapsLockKey
+                    f alias@(keyName, devNum, _)
+                      | keyName == CapsLockKey = (keyName, devNum, capsCode)
+                      | otherwise = alias
+
+            shiftNumeric aliases = map f aliases
+              where f alias@(keyName, devNum, _) = fromMaybe alias $
+                      resolve devNum <$> keyName `Map.lookup` numericShift
+                    resolve devNum keyName =
+                      find (\(x, _, _) -> x == keyName) aliases
+                        & fromJust
+                        & (\(toName, _, toCode) -> (toName, devNum, toCode))
+          in
+            defaultKeyAliases ++ map resolveMediaKey mediaKeyAliases
+              & (if O.realCapsLock opts     then makeCapsLockReal else id)
+              & (if O.shiftNumericKeys opts then shiftNumeric     else id)
 
         _asNamesMap = fromList _asNames :: Map KeyName KeyName
 
         _asNames :: [(KeyName, KeyName)]
-        _asNames = asNames & (dupe CapsLockKey :) `applyIf` isCapsLockReal
+        _asNames = asNames & (dupe CapsLockKey :) `applyIf` O.realCapsLock opts
 
         byNameMediaAliasesMap :: Map KeyName KeyCode
         byNameMediaAliasesMap =

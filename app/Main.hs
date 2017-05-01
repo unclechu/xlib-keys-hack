@@ -165,6 +165,9 @@ main = flip evalStateT ([] :: ThreadsState) $ do
   -- Making it fail at start app time if media keys described incorrectly
   keyMap `deepseq` return ()
 
+  when (O.shiftNumericKeys opts) $
+    noise "Numeric keys in numbers row are shifted"
+
 
   noise "Making cross-thread variables..."
   ctVars <- liftIO $ do
