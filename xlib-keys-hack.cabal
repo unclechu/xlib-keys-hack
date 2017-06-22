@@ -1,122 +1,158 @@
+-- This file has been generated from package.yaml by hpack version 0.15.0.
+--
+-- see: https://github.com/sol/hpack
+
 name:                xlib-keys-hack
 version:             0.1.0
 synopsis:            Some my own hacks for advanced keyboard
--- description:
 homepage:            https://github.com/unclechu/xlib-keys-hack
 license:             GPL-3
 license-file:        LICENSE
 author:              Viacheslav Lotsmanov
-maintainer:          lotsmanov89@gmail.com
--- copyright:
+maintainer:          <lotsmanov89@gmail.com>
+copyright:           2016-2017 Viacheslav Lotsmanov
 category:            System
 build-type:          Simple
-extra-source-files:  README.md
-cabal-version:       >=1.10
+cabal-version:       >= 1.10
 
 library
-  default-language:    Haskell2010
-  hs-source-dirs:      src
-  ghc-options:         -Wall -O2
-  default-extensions:  PackageImports QuasiQuotes
-
-  exposed-modules:     Bindings.Xkb
-                     , Bindings.Xkb.Types
-                     , Bindings.XTest
-                     , Bindings.MoreXlib
-                     , Process
-                     , Process.Keyboard
-                     , Process.CrossThread
-                     , Process.KeysActions
-                     , Options
-                     , Actions
-                     , Actions.Types
-                     , State
-                     , XInput
-                     , IPC
-                     , Utils
-                     , Utils.X
-                     , Utils.Lens
-                     , Utils.Sugar
-                     , Utils.Instances
-                     , Utils.StateMonad
-                     , Utils.BreakableMonad
-                     , Keys
-
-  build-depends:       base
-                     , X11
-                     , lens
-                     , template-haskell
-                     , linux-evdev
-                     , unix
-                     , process
-                     , dbus
-                     , mtl
-                     , containers
-                     , deepseq
-                     , data-default
-                     , either
-                     , transformers
-                     , qm-interpolated-string
+  default-language: Haskell2010
+  hs-source-dirs:
+      src
+  ghc-options: -Wall -O2
+  default-extensions: PackageImports QuasiQuotes
+  exposed-modules:
+      Actions
+      Actions.Types
+      Bindings.MoreXlib
+      Bindings.Xkb
+      Bindings.Xkb.Types
+      Bindings.XTest
+      IPC
+      Keys
+      Options
+      Process
+      Process.CrossThread
+      Process.Keyboard
+      Process.KeysActions
+      State
+      Utils
+      Utils.BreakableMonad
+      Utils.Instances
+      Utils.Lens
+      Utils.StateMonad
+      Utils.Sugar
+      Utils.X
+      XInput
+  build-depends:
+      base
+    , containers
+    , data-default
+    , dbus
+    , deepseq
+    , directory
+    , either
+    , extra
+    , lens
+    , linux-evdev
+    , mtl
+    , process
+    , qm-interpolated-string
+    , template-haskell
+    , transformers
+    , unix
+    , X11
 
 executable xlib-keys-hack
-  default-language:    Haskell2010
-  ghc-options:         -Wall -O2 -threaded
-  default-extensions:  PackageImports QuasiQuotes
-  hs-source-dirs:      app
-  main-is:             Main.hs
-  extra-libraries:     "Xtst"
-
-  build-depends:       base
-                     , unix
-                     , process
-                     , directory
-                     , X11
-                     , deepseq
-                     , mtl
-                     , either
-                     , transformers
-                     , lens
-                     , extra
-                     , data-default
-                     , qm-interpolated-string
-
-                     , xlib-keys-hack
+  default-language: Haskell2010
+  ghc-options: -Wall -O2 -threaded
+  default-extensions: PackageImports QuasiQuotes
+  hs-source-dirs:
+      app
+  main-is: Main.hs
+  extra-libraries:
+      Xtst
+  build-depends:
+      base
+    , containers
+    , data-default
+    , dbus
+    , deepseq
+    , directory
+    , either
+    , extra
+    , lens
+    , linux-evdev
+    , mtl
+    , process
+    , qm-interpolated-string
+    , template-haskell
+    , transformers
+    , unix
+    , X11
+    , xlib-keys-hack
+  other-modules:
+      WindowFocusWatcher
 
 executable xlib-keys-hack-watch-for-window-focus-events
-  default-language:    Haskell2010
-  ghc-options:         -Wall -O2 -threaded
-  default-extensions:  PackageImports QuasiQuotes
-  hs-source-dirs:      app
-  main-is:             WindowFocusWatcher.hs
-
-  build-depends:       base
-                     , X11
-                     , unix
-
-                     , xlib-keys-hack
+  default-language: Haskell2010
+  ghc-options: -Wall -O2 -threaded
+  default-extensions: PackageImports QuasiQuotes
+  hs-source-dirs:
+      app
+  main-is: WindowFocusWatcher.hs
+  build-depends:
+      base
+    , containers
+    , data-default
+    , dbus
+    , deepseq
+    , directory
+    , either
+    , extra
+    , lens
+    , linux-evdev
+    , mtl
+    , process
+    , qm-interpolated-string
+    , template-haskell
+    , transformers
+    , unix
+    , X11
+    , xlib-keys-hack
+  other-modules:
+      Main
 
 test-suite xlib-keys-hack-utils-test
-  type:                exitcode-stdio-1.0
-  default-language:    Haskell2010
-  ghc-options:         -Wall -O2
-  default-extensions:  PackageImports QuasiQuotes
-  hs-source-dirs:      test
-  main-is:             UtilsSpec.hs
-
-  other-modules:       Utils.BreakableMonad
-                     , Utils.StateMonad
-                     , Utils.Sugar
-                     , Utils.Lens
-
-  build-depends:       base
-                     , hspec
-                     , either
-                     , transformers
-                     , mtl
-                     , lens
-
-                     , xlib-keys-hack
-
-source-repository head
-  type:     git
-  location: https://github.com/unclechu/xlib-keys-hack
+  type: exitcode-stdio-1.0
+  default-language: Haskell2010
+  ghc-options: -Wall -O2
+  default-extensions: PackageImports QuasiQuotes
+  hs-source-dirs:
+      test
+  main-is: UtilsSpec.hs
+  other-modules:
+      Utils.BreakableMonad
+      Utils.Lens
+      Utils.StateMonad
+      Utils.Sugar
+  build-depends:
+      base
+    , containers
+    , data-default
+    , dbus
+    , deepseq
+    , directory
+    , either
+    , extra
+    , lens
+    , linux-evdev
+    , mtl
+    , process
+    , qm-interpolated-string
+    , template-haskell
+    , transformers
+    , unix
+    , X11
+    , xlib-keys-hack
+    , hspec

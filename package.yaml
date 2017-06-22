@@ -1,0 +1,69 @@
+name:         xlib-keys-hack
+version:      0.1.0
+synopsis:     Some my own hacks for advanced keyboard
+homepage:     https://github.com/unclechu/xlib-keys-hack
+license:      GPL-3
+license-file: LICENSE
+author:       Viacheslav Lotsmanov
+maintainer:   <lotsmanov89@gmail.com>
+copyright:    2016-2017 Viacheslav Lotsmanov
+category:     System
+
+default-extensions:
+  - PackageImports
+  - QuasiQuotes
+
+dependencies:
+  - base
+  - containers
+  - data-default
+  - dbus
+  - deepseq
+  - directory
+  - either
+  - extra
+  - lens
+  - linux-evdev
+  - mtl
+  - process
+  - qm-interpolated-string
+  - template-haskell
+  - transformers
+  - unix
+  - X11
+
+ghc-options:
+  - -Wall
+  - -O2
+
+library:
+  source-dirs: src
+
+executables:
+
+  xlib-keys-hack:
+    extra-libraries: [Xtst]
+    dependencies: [xlib-keys-hack]
+    ghc-options: [-threaded]
+    source-dirs: app
+    main: Main.hs
+
+  xlib-keys-hack-watch-for-window-focus-events:
+    ghc-options: [-threaded]
+    dependencies: [xlib-keys-hack]
+    source-dirs: app
+    main: WindowFocusWatcher.hs
+
+tests:
+
+  xlib-keys-hack-utils-test:
+    source-dirs: test
+    main: UtilsSpec.hs
+    dependencies:
+      - xlib-keys-hack
+      - hspec
+
+source-repositories:
+  head:
+    type:     git
+    location: https://github.com/unclechu/xlib-keys-hack
