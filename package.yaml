@@ -1,13 +1,13 @@
 name:         xlib-keys-hack
 version:      0.1.0
 synopsis:     Some my own hacks for advanced keyboard
-homepage:     https://github.com/unclechu/xlib-keys-hack
 license:      GPL-3
 license-file: LICENSE
 author:       Viacheslav Lotsmanov
 maintainer:   <lotsmanov89@gmail.com>
 copyright:    2016-2017 Viacheslav Lotsmanov
 category:     System
+github:       unclechu/xlib-keys-hack
 
 default-extensions:
   - PackageImports
@@ -65,8 +65,3 @@ tests:
     dependencies:
       - xlib-keys-hack
       - hspec
-
-source-repositories:
-  head:
-    type:     git
-    location: https://github.com/unclechu/xlib-keys-hack
