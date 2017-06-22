@@ -20,7 +20,7 @@ library
   hs-source-dirs:
       src
   ghc-options: -Wall -O2
-  default-extensions: PackageImports QuasiQuotes
+  default-extensions: PackageImports QuasiQuotes ViewPatterns LambdaCase MultiWayIf
   exposed-modules:
       Actions
       Actions.Types
@@ -66,7 +66,7 @@ library
 executable xlib-keys-hack
   default-language: Haskell2010
   ghc-options: -Wall -O2 -threaded
-  default-extensions: PackageImports QuasiQuotes
+  default-extensions: PackageImports QuasiQuotes ViewPatterns LambdaCase MultiWayIf
   hs-source-dirs:
       app
   main-is: Main.hs
@@ -97,7 +97,7 @@ executable xlib-keys-hack
 executable xlib-keys-hack-watch-for-window-focus-events
   default-language: Haskell2010
   ghc-options: -Wall -O2 -threaded
-  default-extensions: PackageImports QuasiQuotes
+  default-extensions: PackageImports QuasiQuotes ViewPatterns LambdaCase MultiWayIf
   hs-source-dirs:
       app
   main-is: WindowFocusWatcher.hs
@@ -127,7 +127,7 @@ test-suite xlib-keys-hack-utils-test
   type: exitcode-stdio-1.0
   default-language: Haskell2010
   ghc-options: -Wall -O2
-  default-extensions: PackageImports QuasiQuotes
+  default-extensions: PackageImports QuasiQuotes ViewPatterns LambdaCase MultiWayIf
   hs-source-dirs:
       test
   main-is: UtilsSpec.hs

@@ -3,10 +3,8 @@
 
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE QuasiQuotes #-}
 
 module Options
   ( Options(..)

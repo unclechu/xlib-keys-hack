@@ -3,7 +3,6 @@
 
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE ViewPatterns #-}
 
 module Keys
   ( KeyName(..)

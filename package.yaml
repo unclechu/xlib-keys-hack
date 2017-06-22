@@ -12,6 +12,9 @@ category:     System
 default-extensions:
   - PackageImports
   - QuasiQuotes
+  - ViewPatterns
+  - LambdaCase
+  - MultiWayIf
 
 dependencies:
   - base
