@@ -28,7 +28,7 @@ import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
 -- local imports
 
 import Utils.Instances ()
-import Utils.Sugar ((&), (?))
+import Utils.Sugar ((.>), (&), (?))
 import Utils.Lens (makeApoClassy)
 
 
@@ -42,6 +42,10 @@ data Options =
           , shiftNumericKeys             :: Bool
           , resetByEscapeOnCapsLock      :: Bool
           , resetByWindowFocusEvent      :: Bool
+
+          , superDoublePress             :: Bool
+          , leftSuperDoublePressCmd      :: Maybe String
+          , rightSuperDoublePressCmd     :: Maybe String
 
           , disableXInputDeviceName      :: [String]
           , disableXInputDeviceId        :: [Int]
@@ -72,6 +76,10 @@ instance NFData Options where
     resetByEscapeOnCapsLock      opts `deepseq`
     resetByWindowFocusEvent      opts `deepseq`
 
+    superDoublePress             opts `deepseq`
+    leftSuperDoublePressCmd      opts `deepseq`
+    rightSuperDoublePressCmd     opts `deepseq`
+
     disableXInputDeviceName      opts `deepseq`
     disableXInputDeviceId        opts `deepseq`
     handleDevicePath             opts `deepseq`
@@ -101,6 +109,10 @@ instance Default Options where
     , shiftNumericKeys             = False
     , resetByEscapeOnCapsLock      = True
     , resetByWindowFocusEvent      = True
+
+    , superDoublePress             = True
+    , leftSuperDoublePressCmd      = Nothing
+    , rightSuperDoublePressCmd     = Nothing
 
     , disableXInputDeviceName      = []
     , disableXInputDeviceId        = []
@@ -185,6 +197,34 @@ options =
              \ 'xlib-keys-hack-watch-for-window-focus-events'
              \ executable in your 'PATH' environment variable!\n
            Default is: {resetByWindowFocusEvent def ? "On" $ "Off"}
+         |]
+
+  , GetOpt.Option  [ ]  ["disable-super-double-press"]
+      (GetOpt.NoArg $ superDoublePress' .~ False)
+      [qm| Disable handling of double Super key press.\n
+           Default is: {superDoublePress def ? "On" $ "Off"}
+         |]
+  , GetOpt.Option  [ ]  ["super-double-press-cmd"]
+      (GetOpt.ReqArg
+        (\(Just -> x) -> set leftSuperDoublePressCmd'  x
+                       . set rightSuperDoublePressCmd' x)
+        "COMMAND")
+      [qm| When Super key is pressed twice in short interval
+             \ alternative mode will be toggled or
+             \ specified shell command will be spawned.\n
+           This option makes no sense with --disable-super-double-press
+         |]
+  , GetOpt.Option  [ ]  ["left-super-double-press-cmd"]
+      (GetOpt.ReqArg (Just .> set leftSuperDoublePressCmd') "COMMAND")
+      [qm| Double Left Super key press will spawn specified shell command
+             \ instead of toggling alternative mode.\n
+           This option makes no sense with --disable-super-double-press
+         |]
+  , GetOpt.Option  [ ]  ["right-super-double-press-cmd"]
+      (GetOpt.ReqArg (Just .> set rightSuperDoublePressCmd') "COMMAND")
+      [qm| Double Right Super key press will spawn specified shell command
+             \ instead of toggling alternative mode.\n
+           This option makes no sense with --disable-super-double-press
          |]
 
   , GetOpt.Option  [ ]  ["disable-xinput-device-name"]

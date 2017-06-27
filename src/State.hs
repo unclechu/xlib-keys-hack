@@ -5,11 +5,12 @@
 {-# LANGUAGE DeriveGeneric #-}
 
 module State
-  ( State(..),      HasState(..)
-  , LedModes(..),   HasLedModes(..)
-  , ComboState(..), HasComboState(..)
+  ( State(..),            HasState(..)
+  , LedModes(..),         HasLedModes(..)
+  , ComboState(..),       HasComboState(..)
+  , SuperDoublePress(..)
 
-  , CrossThreadVars(..), HasCrossThreadVars(..)
+  , CrossThreadVars(..),  HasCrossThreadVars(..)
   ) where
 
 import "base" GHC.Generics (Generic)
@@ -22,6 +23,7 @@ import "base" Control.Concurrent.Chan (Chan)
 
 import "data-default" Data.Default (Default, def)
 import qualified "containers" Data.Set as Set
+import "time" Data.Time.Clock.POSIX (POSIXTime)
 
 -- local imports
 
@@ -40,7 +42,7 @@ data State =
         , isTerminating   :: Bool
         , windowFocusProc :: Maybe (FilePath, ProcessHandle, Handle)
         }
-  deriving (Show, Generic)
+          deriving (Show, Generic)
 
 instance NFData State where
   rnf x =
@@ -69,7 +71,7 @@ data LedModes =
   LedModes { capsLockLed :: Bool
            , numLockLed  :: Bool
            }
-  deriving (Show, Eq, Generic)
+             deriving (Show, Eq, Generic)
 
 instance NFData LedModes where
   rnf x =
@@ -117,8 +119,13 @@ data ComboState =
              -- Is keyboard layout reset deleyed til
              -- all currently pressed keys will be released.
              , resetKbdLayout :: Bool
+
+             -- TODO add description
+             , superDoublePress :: Maybe (KeyName, SuperDoublePress, POSIXTime)
+             -- Using it to prevent infinite recursion.
+             , superDoublePressProceeded :: Bool
              }
-  deriving (Show, Eq, Generic)
+               deriving (Show, Eq, Generic)
 
 instance NFData ComboState where
   rnf x =
@@ -135,6 +142,8 @@ instance NFData ComboState where
     capsLockModeChange        x `deepseq`
     alternativeModeChange     x `deepseq`
     resetKbdLayout            x `deepseq`
+    superDoublePress          x `deepseq`
+    superDoublePressProceeded x `deepseq`
       ()
 
 instance Default ComboState where
@@ -152,7 +161,18 @@ instance Default ComboState where
     , capsLockModeChange        = Nothing
     , alternativeModeChange     = Nothing
     , resetKbdLayout            = False
+    , superDoublePress          = Nothing
+    , superDoublePressProceeded = False
     }
+
+
+data SuperDoublePress = WaitForFirstRelease
+                      | WaitForSecondPressAgain
+                      | WaitForSecondReleaseOrPressAlternativeKey
+                      | WaitForReleaseToDisableAlternativeMode
+                        deriving (Show, Eq, Generic)
+
+instance NFData SuperDoublePress
 
 
 data CrossThreadVars =
@@ -160,7 +180,7 @@ data CrossThreadVars =
                   , actionsChan     :: Chan (ActionType Action)
                   , keysActionsChan :: Chan (ActionType KeyAction)
                   }
-  deriving (Generic)
+                    deriving (Generic)
 
 instance Show CrossThreadVars where
   show _ = "CrossThreadVars"

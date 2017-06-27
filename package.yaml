@@ -11,8 +11,9 @@ github:       unclechu/xlib-keys-hack
 
 default-extensions:
   - PackageImports
-  - QuasiQuotes
+  - BangPatterns
   - ViewPatterns
+  - QuasiQuotes
   - LambdaCase
   - MultiWayIf
 
@@ -31,6 +32,7 @@ dependencies:
   - process
   - qm-interpolated-string
   - template-haskell
+  - time
   - transformers
   - unix
   - X11
