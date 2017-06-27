@@ -49,6 +49,7 @@ makeApoClassy = LTH.makeLensesWith rules
                )
 
 
+-- (%=<&~>) means (%=) plus (<$>) plus (&~)
 (%=<&~>) :: (Functor f, MonadState s m)
          => ASetter s s (f a) (f a) -> (State a x) -> m ()
 a %=<&~> f = a %= fmap (&~ f)

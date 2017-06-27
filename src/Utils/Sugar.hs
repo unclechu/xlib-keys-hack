@@ -2,7 +2,7 @@
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
 module Utils.Sugar
-  ( (&), (.>), (<&>) -- pipes
+  ( (&), (<&>), (.>) -- pipes
   , (?), (|?|)       -- conditions helpers
 
   , ifMaybe, ifMaybeM, ifMaybeM'
@@ -12,16 +12,18 @@ module Utils.Sugar
 
 import "base" Data.Bool (bool)
 
+import qualified "lens" Control.Lens.Operators as Operators ((&), (<&>))
 
--- Pipe operator.
--- Left-to-right call instead of right-to-left.
--- Actually it's part of `Data.Function` from `base` package
--- but only since 4.8 version.
--- http://hackage.haskell.org/package/base-4.9.0.0/docs/Data-Function.html#v:-38-
+
 (&) :: a -> (a -> b) -> b
-(&) = flip ($)
+(&) = (Operators.&)
 {-# INLINE (&) #-}
 infixl 1 &
+
+(<&>) :: Functor f => f a -> (a -> b) -> f b
+(<&>) = (Operators.<&>)
+{-# INLINE (<&>) #-}
+infixr 5 <&>
 
 
 -- Pipe composition operator.
@@ -31,13 +33,6 @@ infixl 1 &
 (.>) = flip (.)
 {-# INLINE (.>) #-}
 infixl 9 .>
-
-
--- Pipe version of `fmap` operator.
-(<&>) :: Functor f => f a -> (a -> b) -> f b
-(<&>) = flip (<$>)
-{-# INLINE (<&>) #-}
-infixr 5 <&>
 
 
 -- Makes function from then-else values that takes an expression.
