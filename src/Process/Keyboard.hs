@@ -17,7 +17,7 @@ import "base" Control.Concurrent.MVar (modifyMVar_)
 import "transformers" Control.Monad.Trans.State (execStateT)
 import "either" Control.Monad.Trans.Either (EitherT, runEitherT, left, right)
 
-import "lens" Control.Lens ( (.~), (%~), (^.)
+import "lens" Control.Lens ( (.~), (%~), (^.), (&~), (.=), (%=)
                            , set, mapped, _1, _2, _3
                            , Lens'
                            )
@@ -35,6 +35,7 @@ import "X11" Graphics.X11.Xlib.Types (Display)
 
 import Utils.StateMonad (EitherStateT)
 import Utils.Sugar ((&), (?), (<&>))
+import Utils.Lens ((%=<&~>))
 import qualified Options as O
 import qualified Actions
 import qualified State
@@ -245,13 +246,12 @@ handleKeyboard ctVars opts keyMap _ fd =
              \ storing this in state for double press of Super key feature to
              \ wait for first release of this key... |]
 
-    state
+    again time keyName keyCode isPressed $ state &~ do
 
-      & State.comboState' . State.superDoublePress'
-        .~ Just (keyName, State.WaitForFirstRelease, time)
+      State.comboState' . State.superDoublePress' .=
+        Just (keyName, State.WaitForFirstRelease, time)
 
-      & State.comboState' . State.superDoublePressProceeded' .~ True
-      & again time keyName keyCode isPressed
+      State.comboState' . State.superDoublePressProceeded' .= True
 
   | onSuperDoubleFirstRelease -> do
 
@@ -259,13 +259,13 @@ handleKeyboard ctVars opts keyMap _ fd =
              \ storing this in state for double press of Super key feature to
              \ wait for second press of this key... |]
 
-    state
+    again time keyName keyCode isPressed $ state &~ do
 
-      & State.comboState' . State.superDoublePress'
-        %~ fmap (set _2 State.WaitForSecondPressAgain . set _3 time)
+      State.comboState' . State.superDoublePress' %=<&~> do
+        _2 .= State.WaitForSecondPressAgain
+        _3 .= time
 
-      & State.comboState' . State.superDoublePressProceeded' .~ True
-      & again time keyName keyCode isPressed
+      State.comboState' . State.superDoublePressProceeded' .= True
 
   | onSuperDoubleSecondPress -> do
 
@@ -274,25 +274,23 @@ handleKeyboard ctVars opts keyMap _ fd =
              \ wait for second release of this key
              \ or for alternative key press... |]
 
-    state
+    again time keyName keyCode isPressed $ state &~ do
 
-      & State.comboState' . State.superDoublePress'
-        %~ fmap ( set _2 State.WaitForSecondReleaseOrPressAlternativeKey
-                . set _3 time )
+      State.comboState' . State.superDoublePress' %=<&~> do
+        _2 .= State.WaitForSecondReleaseOrPressAlternativeKey
+        _3 .= time
 
-      & State.comboState' . State.superDoublePressProceeded' .~ True
-      & again time keyName keyCode isPressed
+      State.comboState' . State.superDoublePressProceeded' .= True
 
   | onSuperDoubleSecondRelease -> do
 
     noise [qm| {keyName} released second time in context of double press of
              \ Super key feature, turning on alternative mode... |]
 
-    state
-      & State.alternative' .~ True
-      & State.comboState' . State.superDoublePress' .~ Nothing
-      & State.comboState' . State.superDoublePressProceeded' .~ True
-      & again time keyName keyCode isPressed
+    again time keyName keyCode isPressed $ state &~ do
+      State.alternative'                                   .= True
+      State.comboState' . State.superDoublePress'          .= Nothing
+      State.comboState' . State.superDoublePressProceeded' .= True
 
   | onSuperDoubleElse -> do
 
@@ -304,10 +302,9 @@ handleKeyboard ctVars opts keyMap _ fd =
                )...
              |]
 
-    state
-      & State.comboState' . State.superDoublePress' .~ Nothing
-      & State.comboState' . State.superDoublePressProceeded' .~ True
-      & again time keyName keyCode isPressed
+    again time keyName keyCode isPressed $ state &~ do
+      State.comboState' . State.superDoublePress'          .= Nothing
+      State.comboState' . State.superDoublePressProceeded' .= True
 
   | onEnterWithModsOnlyInProgress ->
 
@@ -635,8 +632,8 @@ handleKeyboard ctVars opts keyMap _ fd =
            { EvdevEvent.evKeyCode      = (getAlias -> Just (name, _, code))
            , EvdevEvent.evKeyEventType = (checkPress -> Just isPressed)
            }
-             -> chain (name, isPressed) $ \x -> do !time <- getPOSIXTime
-                                                   m time name code isPressed x
+             -> chain (name, isPressed) $ \s -> do !time <- getPOSIXTime
+                                                   m time name code isPressed s
 
     _ -> return ()
 

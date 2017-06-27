@@ -4,12 +4,15 @@
 module Utils.Lens
   ( makeApoLenses
   , makeApoClassy
+  , (%=<&~>)
   ) where
 
 import qualified "template-haskell" Language.Haskell.TH as TH
 
-import "lens" Control.Lens ((.~))
+import "lens" Control.Lens (ASetter, (%=), (&~), (.~))
 import qualified "lens" Control.Lens.TH as LTH
+import "mtl" Control.Monad.State.Class (MonadState)
+import "mtl" Control.Monad.State.Lazy (State)
 
 import "base" Data.Char (toLower)
 
@@ -44,3 +47,10 @@ makeApoClassy = LTH.makeLensesWith rules
           Just ( TH.mkName $ "Has" ++ base
                , TH.mkName $ [toLower $ head base] ++ tail base ++ "'c"
                )
+
+
+(%=<&~>) :: (Functor f, MonadState s m)
+         => ASetter s s (f a) (f a) -> (State a x) -> m ()
+a %=<&~> f = a %= fmap (&~ f)
+{-# INLINE (%=<&~>) #-}
+infixl 1 %=<&~>

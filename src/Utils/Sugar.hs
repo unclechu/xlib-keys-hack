@@ -20,6 +20,7 @@ import "base" Data.Bool (bool)
 -- http://hackage.haskell.org/package/base-4.9.0.0/docs/Data-Function.html#v:-38-
 (&) :: a -> (a -> b) -> b
 (&) = flip ($)
+{-# INLINE (&) #-}
 infixl 1 &
 
 
@@ -28,12 +29,14 @@ infixl 1 &
 -- Just like bind operator (>>=) for monads but for simple functions.
 (.>) :: (a -> b) -> (b -> c) -> a -> c
 (.>) = flip (.)
+{-# INLINE (.>) #-}
 infixl 9 .>
 
 
 -- Pipe version of `fmap` operator.
 (<&>) :: Functor f => f a -> (a -> b) -> f b
 (<&>) = flip (<$>)
+{-# INLINE (<&>) #-}
 infixr 5 <&>
 
 
@@ -44,6 +47,7 @@ infixr 5 <&>
 --    in [foo (2+2 == 4), foo (2+2 == 5)] -- returns: ["Yes", "No"]
 (|?|) :: a -> a -> (Bool -> a)
 a |?| b = bool b a
+{-# INLINE (|?|) #-}
 infixl 2 |?|
 
 
@@ -56,6 +60,7 @@ infixl 2 |?|
 (?) :: Bool -> a -> a -> a
 (?) True  x _ = x
 (?) False _ y = y
+{-# INLINE (?) #-}
 infixl 1 ?
 
 
@@ -63,23 +68,29 @@ infixl 1 ?
 -- Returns given value inside Just only if it passes a predicate.
 ifMaybe :: (a -> Bool) -> a -> Maybe a
 ifMaybe f x = f x ? Just x $ Nothing
+{-# INLINE ifMaybe #-}
 
 -- Monadic version of `ifMaybe`
 ifMaybeM :: Monad m => (a -> Bool) -> m a -> m (Maybe a)
 ifMaybeM f m = m >>= \x -> return $ f x ? Just x $ Nothing
+{-# INLINE ifMaybeM #-}
 
 -- Like `ifMaybeM` but instead of predicate uses just Bool,
 -- also doesn't executes monad if Bool is False
 ifMaybeM' :: Monad m => Bool -> m a -> m (Maybe a)
 ifMaybeM' condition m = condition ? (Just <$> m) $ return Nothing
+{-# INLINE ifMaybeM' #-}
 
 
 applyIf :: (a -> a) -> Bool -> a -> a
 applyIf = (|?| id)
+{-# INLINE applyIf #-}
 
 applyUnless :: (a -> a) -> Bool -> a -> a
 applyUnless = (id |?|)
+{-# INLINE applyUnless #-}
 
 
 dupe :: a -> (a, a)
 dupe x = (x, x)
+{-# INLINE dupe #-}

@@ -25,24 +25,30 @@ type EitherStateT s l m r = EitherT l (StateT s m) r
 -- Updates a state and gets value back.
 updateState :: (St.MonadState s m) => ((s, a) -> s) -> a -> m a
 updateState = updateState' . curry
+{-# INLINE updateState #-}
 
 -- Alternative version of `updateState` that call `f` function
 -- with two arguments instead of tuple.
 updateState' :: (St.MonadState s m) => (s -> a -> s) -> a -> m a
 updateState' f x = St.state $ \s -> (x, f s x)
+{-# INLINE updateState' #-}
 
 -- Monadic version of `updateState`.
 updateStateM :: (St.MonadState s m) => ((s, a) -> m s) -> a -> m a
 updateStateM = updateStateM' . curry
+{-# INLINE updateStateM #-}
 
 -- Monadic version of `updateState'`.
 updateStateM' :: (St.MonadState s m) => (s -> a -> m s) -> a -> m a
 updateStateM' (flip -> fm) x = St.get >>= fm x >>= St.put >> return x
+{-# INLINE updateStateM' #-}
 
 -- Deal just with State and return void
 modifyState :: (St.MonadState s m) => (s -> s) -> m ()
 modifyState f = St.state $ \s -> ((), f s)
+{-# INLINE modifyState #-}
 
 -- Monadic version of `modifyState`
 modifyStateM :: (St.MonadState s m) => (s -> m s) -> m ()
 modifyStateM fm = St.get >>= fm >>= St.put
+{-# INLINE modifyStateM #-}
