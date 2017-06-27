@@ -175,8 +175,8 @@ handleKeyboard ctVars opts keyMap _ fd =
       onSuperDoubleFirstPress =
         O.superDoublePress opts &&
         not (state ^. State.comboState' . State.superDoublePressProceeded') &&
-        keyName `elem` [Keys.SuperLeftKey, Keys.SuperRightKey] && isPressed &&
-        pressed == Set.singleton keyName &&
+        maybeAsName keyName `elem` [Keys.SuperLeftKey, Keys.SuperRightKey] &&
+        isPressed && pressed == Set.singleton keyName &&
         isNothing (state ^. State.comboState' . State.superDoublePress')
 
       -- Super-Double-Press feature. 2nd step: first release of Super key.
@@ -603,7 +603,8 @@ handleKeyboard ctVars opts keyMap _ fd =
   isMedia  = Keys.isMedia keyMap  :: KeyName -> Bool
   getMedia = Keys.getMedia keyMap :: KeyName -> Maybe KeyCode
 
-  getAsName    = Keys.getAsName keyMap    :: KeyName -> KeyName
+  getAsName    = Keys.getAsName    keyMap :: KeyName -> KeyName
+  maybeAsName  = Keys.maybeAsName  keyMap :: KeyName -> KeyName
   getExtraKeys = Keys.getExtraKeys keyMap :: KeyName -> Set KeyName
 
   toggleCapsLock :: State -> IO State

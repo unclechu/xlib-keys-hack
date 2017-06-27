@@ -21,6 +21,8 @@ module Keys
   , isMedia
 
   , getAsName
+  , lookupAsName
+  , maybeAsName
   , getRemappedByName
   , getExtraKeys
   ) where
@@ -496,6 +498,12 @@ isAlternative keyMap keyName = keyName `member` byNameAlternativeMap keyMap
 
 getAsName :: KeyMap -> KeyName -> KeyName
 getAsName keyMap keyName = asNamesMap keyMap ! keyName
+
+lookupAsName :: KeyMap -> KeyName -> Maybe KeyName
+lookupAsName keyMap keyName = lookup keyName $ asNamesMap keyMap
+
+maybeAsName :: KeyMap -> KeyName -> KeyName
+maybeAsName keyMap keyName = fromMaybe keyName $ lookupAsName keyMap keyName
 
 getRemappedByName :: KeyMap -> KeyName -> Set.Set KeyName
 getRemappedByName keyMap keyName =
