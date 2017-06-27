@@ -288,10 +288,13 @@ handleKeyboard ctVars opts keyMap _ fd =
              \ Super key feature, toggling alternative mode
              \ (turning it {State.alternative state ? "off" $ "on"})... |]
 
-    again time keyName keyCode isPressed $ state &~ do
-      State.alternative'                                   %= not
-      State.comboState' . State.superDoublePress'          .= Nothing
-      State.comboState' . State.superDoublePressProceeded' .= True
+    let newState = state &~ do
+          State.alternative'                                   %= not
+          State.comboState' . State.superDoublePress'          .= Nothing
+          State.comboState' . State.superDoublePressProceeded' .= True
+
+    notify $ Actions.XmobarAlternativeFlag $ State.alternative newState
+    again time keyName keyCode isPressed newState
 
   | onSuperDoubleElse -> do
 
@@ -580,6 +583,7 @@ handleKeyboard ctVars opts keyMap _ fd =
 
   noise   = Actions.noise         opts ctVars ::  String  -> IO ()
   noise'  = Actions.noise'        opts ctVars :: [String] -> IO ()
+  notify  = Actions.notifyXmobar  opts ctVars ::  Actions.XmobarFlag  -> IO ()
   notify' = Actions.notifyXmobar' opts ctVars :: [Actions.XmobarFlag] -> IO ()
 
   pressKey        = Actions.pressKey        ctVars :: KeyCode -> IO ()
