@@ -285,10 +285,11 @@ handleKeyboard ctVars opts keyMap _ fd =
   | onSuperDoubleSecondRelease -> do
 
     noise [qm| {keyName} released second time in context of double press of
-             \ Super key feature, turning on alternative mode... |]
+             \ Super key feature, toggling alternative mode
+             \ (turning it {State.alternative state ? "off" $ "on"})... |]
 
     again time keyName keyCode isPressed $ state &~ do
-      State.alternative'                                   .= True
+      State.alternative'                                   %= not
       State.comboState' . State.superDoublePress'          .= Nothing
       State.comboState' . State.superDoublePressProceeded' .= True
 
