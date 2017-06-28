@@ -18,7 +18,7 @@ import "transformers" Control.Monad.Trans.State (execStateT)
 import "either" Control.Monad.Trans.Either (EitherT, runEitherT, left, right)
 
 import "lens" Control.Lens ( (.~), (%~), (^.), (&~), (.=), (%=)
-                           , set, mapped, _1, _2, _3
+                           , set, mapped, view, _1, _2, _3
                            , Lens'
                            )
 
@@ -288,12 +288,24 @@ handleKeyboard ctVars opts keyMap _ fd =
              \ Super key feature, toggling alternative mode
              \ (turning it {State.alternative state ? "off" $ "on"})... |]
 
-    let newState = state &~ do
-          State.alternative'                                   %= not
+    let superKey = maybeAsName $ view _1 $ fromJust $
+          state ^. State.comboState' . State.superDoublePress'
+
+        cmd =
+          case superKey of
+               Keys.SuperLeftKey  -> O.leftSuperDoublePressCmd  opts
+               Keys.SuperRightKey -> O.rightSuperDoublePressCmd opts
+               _ -> error "unexpected value"
+
+        newState = state &~ do
+          when (isNothing cmd) $ State.alternative' %= not
           State.comboState' . State.superDoublePress'          .= Nothing
           State.comboState' . State.superDoublePressProceeded' .= True
 
-    notify $ Actions.XmobarAlternativeFlag $ State.alternative newState
+    if isNothing cmd
+       then notify $ Actions.XmobarAlternativeFlag $ State.alternative newState
+       else return () -- TODO spawn command
+
     again time keyName keyCode isPressed newState
 
   | onSuperDoubleElse -> do
