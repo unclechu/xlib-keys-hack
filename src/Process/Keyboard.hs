@@ -8,7 +8,9 @@ module Process.Keyboard
   ( handleKeyboard
   ) where
 
+import "base" System.IO (IOMode (WriteMode), withFile)
 import qualified "base" GHC.IO.Handle as IOHandle
+import qualified "process" System.Process as P
 import qualified "linux-evdev" System.Linux.Input.Event as EvdevEvent
 
 import "transformers" Control.Monad.Trans.Class (lift)
@@ -16,13 +18,14 @@ import "base" Control.Monad ((>=>), when, unless, forM_, forever)
 import "base" Control.Concurrent.MVar (modifyMVar_)
 import "transformers" Control.Monad.Trans.State (execStateT)
 import "either" Control.Monad.Trans.Either (EitherT, runEitherT, left, right)
+import "base" Control.Concurrent (forkIO)
 
 import "lens" Control.Lens ( (.~), (%~), (^.), (&~), (.=), (%=)
                            , set, mapped, view, _1, _2, _3
                            , Lens'
                            )
 
-import "base" Data.Maybe (fromJust, isJust, isNothing)
+import "base" Data.Maybe (fromMaybe, fromJust, isJust, isNothing)
 import qualified "containers" Data.Set as Set
 import "base" Data.Function (fix)
 import "time" Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
@@ -71,7 +74,10 @@ handleKeyboard :: CrossThreadVars -> Options -> KeyMap -> Display -> Handle
 handleKeyboard ctVars opts keyMap _ fd =
   onEv $ fix $ \again time keyName keyCode isPressed state ->
 
-  let pressed, otherPressed :: Set KeyName
+  let reprocess :: State -> IO State
+      reprocess = again time keyName keyCode isPressed
+
+      pressed, otherPressed :: Set KeyName
       -- All pressed keys at this time.
       -- Curretly pressed or released key (`keyName`) automatically
       -- added to (or removed from) this Set at the same time.
@@ -246,7 +252,7 @@ handleKeyboard ctVars opts keyMap _ fd =
              \ storing this in state for double press of Super key feature to
              \ wait for first release of this key... |]
 
-    again time keyName keyCode isPressed $ state &~ do
+    reprocess $ state &~ do
 
       State.comboState' . State.superDoublePress' .=
         Just (keyName, State.WaitForFirstRelease, time)
@@ -259,7 +265,7 @@ handleKeyboard ctVars opts keyMap _ fd =
              \ storing this in state for double press of Super key feature to
              \ wait for second press of this key... |]
 
-    again time keyName keyCode isPressed $ state &~ do
+    reprocess $ state &~ do
 
       State.comboState' . State.superDoublePress' %=<&~> do
         _2 .= State.WaitForSecondPressAgain
@@ -274,7 +280,7 @@ handleKeyboard ctVars opts keyMap _ fd =
              \ wait for second release of this key
              \ or for alternative key press... |]
 
-    again time keyName keyCode isPressed $ state &~ do
+    reprocess $ state &~ do
 
       State.comboState' . State.superDoublePress' %=<&~> do
         _2 .= State.WaitForSecondReleaseOrPressAlternativeKey
@@ -284,29 +290,47 @@ handleKeyboard ctVars opts keyMap _ fd =
 
   | onSuperDoubleSecondRelease -> do
 
-    noise [qm| {keyName} released second time in context of double press of
-             \ Super key feature, toggling alternative mode
-             \ (turning it {State.alternative state ? "off" $ "on"})... |]
-
     let superKey = maybeAsName $ view _1 $ fromJust $
           state ^. State.comboState' . State.superDoublePress'
 
-        cmd =
-          case superKey of
-               Keys.SuperLeftKey  -> O.leftSuperDoublePressCmd  opts
-               Keys.SuperRightKey -> O.rightSuperDoublePressCmd opts
-               _ -> error "unexpected value"
+        cmd = case superKey of
+                   Keys.SuperLeftKey  -> O.leftSuperDoublePressCmd  opts
+                   Keys.SuperRightKey -> O.rightSuperDoublePressCmd opts
+                   _ -> error "unexpected value"
+
+        actionMsg :: String
+        actionMsg = isNothing cmd
+
+                  ? [qm| toggling alternative mode (turning it
+                       \ {State.alternative state ? "off" $ "on"}) |]
+
+                  $ [qm| spawning shell command "{fromJust cmd}" |]
 
         newState = state &~ do
           when (isNothing cmd) $ State.alternative' %= not
           State.comboState' . State.superDoublePress'          .= Nothing
           State.comboState' . State.superDoublePressProceeded' .= True
 
-    if isNothing cmd
-       then notify $ Actions.XmobarAlternativeFlag $ State.alternative newState
-       else return () -- TODO spawn command
+    noise [qm| {keyName} released second time in context of double press of
+             \ Super key feature, {actionMsg}... |]
 
-    again time keyName keyCode isPressed newState
+    let spawnCmd :: Maybe (IO ())
+        spawnCmd = _process <$> cmd
+
+        _process :: String -> IO ()
+        _process shellCmd = fmap (const ()) $ forkIO $
+          fmap (\(_, _, _, !_) -> ()) $
+            withFile "/dev/null" WriteMode $ \hNull ->
+              P.createProcess (P.shell shellCmd)
+                { P.std_in  = P.NoStream
+                , P.std_out = P.UseHandle hNull
+                , P.std_err = O.verboseMode opts ? P.Inherit $ P.UseHandle hNull
+                }
+
+    flip fromMaybe spawnCmd $
+      notify $ Actions.XmobarAlternativeFlag $ State.alternative newState
+
+    reprocess newState
 
   | onSuperDoubleElse -> do
 
@@ -318,7 +342,7 @@ handleKeyboard ctVars opts keyMap _ fd =
                )...
              |]
 
-    again time keyName keyCode isPressed $ state &~ do
+    reprocess $ state &~ do
       State.comboState' . State.superDoublePress'          .= Nothing
       State.comboState' . State.superDoublePressProceeded' .= True
 
@@ -326,7 +350,6 @@ handleKeyboard ctVars opts keyMap _ fd =
 
     let lens = State.comboState' . State.isEnterPressedWithMods'
         Just pressedModifiers = state ^. lens
-        rehandle = again time keyName keyCode isPressed
 
      in if -- When Enter had been pressed only with modifiers
            -- and one of the modifiers released erlier than Enter.
@@ -355,7 +378,7 @@ handleKeyboard ctVars opts keyMap _ fd =
              state
                & lens .~ Nothing
                & State.pressedKeys' %~ (Set.delete Keys.EnterKey)
-               & rehandle
+               & reprocess
 
            -- Another modifier pressed, adding it to stored list
            | isPressed && keyName `Set.member` allModifiersKeys -> do
@@ -369,7 +392,7 @@ handleKeyboard ctVars opts keyMap _ fd =
                     ]
 
              -- Let's trigger this modifier key by recursively handle it again
-             state & lens . mapped %~ Set.insert keyName & rehandle
+             state & lens . mapped %~ Set.insert keyName & reprocess
 
            -- Another key event, it's not 'Enter with modifiers only' anymore,
            -- it should be handled as additional control in this case.
@@ -388,7 +411,7 @@ handleKeyboard ctVars opts keyMap _ fd =
                       \ to handle Enter as additional control..."
                     ]
 
-             state & lens .~ Nothing & rehandle
+             state & lens .~ Nothing & reprocess
 
   -- Alternative mode on/off by Alts handling
   | onOnlyBothAltsPressed -> do
@@ -643,17 +666,23 @@ handleKeyboard ctVars opts keyMap _ fd =
 
   -- Wait and extract event, make preparations and call handler
   onEv :: (POSIXTime -> KeyName -> KeyCode -> Bool -> State -> IO State)
-       -> IO ()
-  onEv m = forever $ EvdevEvent.hReadEvent fd >>= \case
+          -> IO ()
+  onEv m = do
 
-    Just EvdevEvent.KeyEvent
-           { EvdevEvent.evKeyCode      = (getAlias -> Just (name, _, code))
-           , EvdevEvent.evKeyEventType = (checkPress -> Just isPressed)
-           }
-             -> chain (name, isPressed) $ \s -> do !time <- getPOSIXTime
-                                                   m time name code isPressed s
+    let process :: KeyName -> KeyCode -> Bool -> State -> IO State
+        process name code isPressed state = do
+          !time <- getPOSIXTime
+          m time name code isPressed state
 
-    _ -> return ()
+    forever $ EvdevEvent.hReadEvent fd >>= \case
+
+      Just EvdevEvent.KeyEvent
+             { EvdevEvent.evKeyCode      = (getAlias -> Just (name, _, code))
+             , EvdevEvent.evKeyEventType = (checkPress -> Just isPressed)
+             }
+               -> chain (name, isPressed) (process name code isPressed)
+
+      _ -> return ()
 
     where checkPress :: EvdevEvent.KeyEventType -> Maybe Bool
           checkPress = \case EvdevEvent.Depressed -> Just True

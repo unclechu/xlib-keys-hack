@@ -22,4 +22,5 @@ test-command:
 		--disable-xinput-device-name='2.4G Receiver' \
 		--disable-xinput-device-name='Apple Inc. Apple Keyboard' \
 		-v --shift-numeric-keys \
+		--right-super-double-press-cmd='place-cursor-at' \
 		--xmobar-indicators
