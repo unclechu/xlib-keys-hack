@@ -13,6 +13,7 @@ module Actions
   , notifyXmobar,  notifyXmobar', flushXmobar
   , initTerminate, threadIsDeath, overthrow
   , pressKey,      releaseKey,    pressReleaseKey
+  , pressKeys,     releaseKeys,   pressReleaseKeys
   , resetKeyboardLayout
   , turnCapsLock
   ) where
@@ -94,18 +95,35 @@ overthrow ctVars =
 
 -- Keys actions
 
+
 pressKey :: State.CrossThreadVars -> KeyCode -> IO ()
 pressKey ctVars =
   writeChan (State.keysActionsChan ctVars) . Single . KeyCodePress
+
+pressKeys :: State.CrossThreadVars -> [KeyCode] -> IO ()
+pressKeys ctVars =
+  writeChan (State.keysActionsChan ctVars) . Sequence . map KeyCodePress
+
 
 releaseKey :: State.CrossThreadVars -> KeyCode -> IO ()
 releaseKey ctVars =
   writeChan (State.keysActionsChan ctVars) . Single . KeyCodeRelease
 
+releaseKeys :: State.CrossThreadVars -> [KeyCode] -> IO ()
+releaseKeys ctVars =
+  writeChan (State.keysActionsChan ctVars) . Sequence . map KeyCodeRelease
+
+
 pressReleaseKey :: State.CrossThreadVars -> KeyCode -> IO ()
 pressReleaseKey ctVars keyCode =
   writeChan (State.keysActionsChan ctVars) $
     Sequence [KeyCodePress keyCode, KeyCodeRelease keyCode]
+
+pressReleaseKeys :: State.CrossThreadVars -> [KeyCode] -> IO ()
+pressReleaseKeys ctVars =
+  writeChan (State.keysActionsChan ctVars) . Sequence .
+    foldr (\x acc -> KeyCodePress x : KeyCodeRelease x : acc) []
+
 
 resetKeyboardLayout :: State.CrossThreadVars -> IO ()
 resetKeyboardLayout ctVars =

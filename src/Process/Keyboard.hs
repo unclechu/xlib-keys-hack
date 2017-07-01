@@ -27,6 +27,7 @@ import "lens" Control.Lens ( (.~), (%~), (^.), (&~), (.=), (%=)
 
 import "base" Data.Maybe (fromMaybe, fromJust, isJust, isNothing)
 import qualified "containers" Data.Set as Set
+import "containers" Data.Set ((\\))
 import "base" Data.Function (fix)
 import "time" Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
@@ -221,21 +222,61 @@ handleKeyboard ctVars opts keyMap _ fd =
             x ^. _2 == State.WaitForSecondReleaseOrPressAlternativeKey &&
             keyName == x ^. _1 && not isPressed && Set.null pressed
 
+      -- Super-Double-Press feature. 4nd step: pressed some alternative key
+      -- while Super key still pressed.
+      onSuperDoubleWithAlternativePressed :: Bool
+      onSuperDoubleWithAlternativePressed =
+        O.superDoublePress opts &&
+        not (state ^. State.comboState' . State.superDoublePressProceeded') &&
+        not (State.alternative state) &&
+
+        Just True ==
+          state ^. State.comboState' . State.superDoublePress' <&> \x ->
+            x ^. _2 == State.WaitForSecondReleaseOrPressAlternativeKey &&
+            isAlternative keyName && isPressed &&
+
+            (Set.map maybeAsName pressed \\ onlyRealModifiers) ==
+              Set.fromList [x ^. _1, keyName]
+
+      -- Super-Double-Press feature. 5nd step: held Super key is released after
+      -- some alternative keys had pressed.
+      onSuperDoubleReleasedAfterAlternative :: Bool
+      onSuperDoubleReleasedAfterAlternative =
+        O.superDoublePress opts &&
+        not (state ^. State.comboState' . State.superDoublePressProceeded') &&
+
+        Just True ==
+          state ^. State.comboState' . State.superDoublePress' <&> \x ->
+            x ^. _2 == State.WaitForSecondReleaseAfterAlternativeKeys &&
+            keyName == x ^. _1 && not isPressed
+
       onSuperDoubleElse :: Bool
       onSuperDoubleElse =
         O.superDoublePress opts &&
         not (state ^. State.comboState' . State.superDoublePressProceeded') &&
-        isJust (state ^. State.comboState' . State.superDoublePress')
+        isJust (state ^. State.comboState' . State.superDoublePress') &&
+
+        Just False == -- Letting modifiers to be passed.
+          state ^. State.comboState' . State.superDoublePress' <&> \x ->
+            -- Some modifier is pressed.
+            (x ^. _2 == State.WaitForSecondReleaseOrPressAlternativeKey &&
+            isPressed && maybeAsName keyName `Set.member` onlyRealModifiers) ||
+            -- Alternative mode on while holding Super key.
+            x ^. _2 == State.WaitForSecondReleaseAfterAlternativeKeys
 
       justTrigger, justAsTrigger, smartTrigger, alternativeTrigger :: IO ()
       justTrigger        = trigger   keyName keyCode isPressed
       justAsTrigger      = asTrigger keyName keyCode isPressed
       smartTrigger       = onAlternativeKey ? alternativeTrigger $ justTrigger
+
       alternativeTrigger = do
+
         let Just (keyNameTo, keyCodeTo) = alternative
+
         noise [qm| Triggering {isPressed ? "pressing" $ "releasing"}
                  \ of alternative {keyNameTo}
                  \ (X key code: {keyCodeTo}) by {keyName}... |]
+
         (isPressed ? pressKey $ releaseKey) keyCodeTo
 
       off :: KeyName -> IO ()
@@ -248,7 +289,7 @@ handleKeyboard ctVars opts keyMap _ fd =
 
   | onSuperDoubleFirstPress -> do
 
-    noise [qm| {keyName} pressed first time,
+    noise [qm| {maybeAsKeyStr keyName} pressed first time,
              \ storing this in state for double press of Super key feature to
              \ wait for first release of this key... |]
 
@@ -261,7 +302,7 @@ handleKeyboard ctVars opts keyMap _ fd =
 
   | onSuperDoubleFirstRelease -> do
 
-    noise [qm| {keyName} released first time,
+    noise [qm| {maybeAsKeyStr keyName} released first time,
              \ storing this in state for double press of Super key feature to
              \ wait for second press of this key... |]
 
@@ -275,7 +316,7 @@ handleKeyboard ctVars opts keyMap _ fd =
 
   | onSuperDoubleSecondPress -> do
 
-    noise [qm| {keyName} pressed second time,
+    noise [qm| {maybeAsKeyStr keyName} pressed second time,
              \ storing this in state for double press of Super key feature to
              \ wait for second release of this key
              \ or for alternative key press... |]
@@ -290,10 +331,7 @@ handleKeyboard ctVars opts keyMap _ fd =
 
   | onSuperDoubleSecondRelease -> do
 
-    let superKey = maybeAsName $ view _1 $ fromJust $
-          state ^. State.comboState' . State.superDoublePress'
-
-        cmd = case superKey of
+    let cmd = case maybeAsName keyName of
                    Keys.SuperLeftKey  -> O.leftSuperDoublePressCmd  opts
                    Keys.SuperRightKey -> O.rightSuperDoublePressCmd opts
                    _ -> error "unexpected value"
@@ -311,8 +349,8 @@ handleKeyboard ctVars opts keyMap _ fd =
           State.comboState' . State.superDoublePress'          .= Nothing
           State.comboState' . State.superDoublePressProceeded' .= True
 
-    noise [qm| {keyName} released second time in context of double press of
-             \ Super key feature, {actionMsg}... |]
+    noise [qm| {maybeAsKeyStr keyName} released second time in context of
+             \ double press of Super key feature, {actionMsg}... |]
 
     let spawnCmd :: Maybe (IO ())
         spawnCmd = _process <$> cmd
@@ -332,15 +370,55 @@ handleKeyboard ctVars opts keyMap _ fd =
 
     reprocess newState
 
+  | onSuperDoubleWithAlternativePressed -> do
+
+    let superKey = view _1 $ fromJust $
+          state ^. State.comboState' . State.superDoublePress'
+
+        superKeyCode = fromJust $ getKeyCodeByName superKey
+        alternativeKey = fromJust $ fmap fst $ alternative
+
+    noise [qm| Pressed alternative {keyName} as {alternativeKey}
+             \ while {maybeAsKeyStr superKey} is pressed
+             \ in context of double press of Super key feature,
+             \ triggering {maybeAsKeyStr superKey} off and enabling alternative
+             \ mode on until {maybeAsKeyStr superKey} will be released... |]
+
+    maybeAsTrigger (maybeAsName superKey) superKeyCode False
+    notify $ Actions.XmobarAlternativeFlag True
+
+    reprocess $ state &~ do
+
+      State.comboState' . State.superDoublePress' %=<&~> do
+        _2 .= State.WaitForSecondReleaseAfterAlternativeKeys
+
+      State.comboState' . State.superDoublePressProceeded' .= True
+      State.alternative' .= True
+
+  | onSuperDoubleReleasedAfterAlternative -> do
+
+    noise [qm| {maybeAsKeyStr keyName} released after some alternative keys
+             \ had triggered in context of double press of Super key feature,
+             \ triggering off events for unreleased keys: {Set.toList pressed},
+             \ turning alternative mode off and
+             \ resetting state of this feature... |]
+
+    alternativeMaybeAsTrigger' (Set.toList pressed) False
+    notify $ Actions.XmobarAlternativeFlag False
+
+    return $ state &~ do
+      State.comboState' . State.superDoublePressProceeded' .= True
+      State.comboState' . State.superDoublePress'          .= Nothing
+      State.pressedKeys'                                   .= Set.empty
+      State.alternative'                                   .= False
+
   | onSuperDoubleElse -> do
 
     noise [qm| Double press of Super key feature did not match
              \ required conditions, resetting state of it
              \ (a reason could be one of these:
                  \ 1. different key is pressed;
-                 \ 2. interval limit is exceeded
-               )...
-             |]
+                 \ 2. interval limit is exceeded)... |]
 
     reprocess $ state &~ do
       State.comboState' . State.superDoublePress'          .= Nothing
@@ -621,9 +699,11 @@ handleKeyboard ctVars opts keyMap _ fd =
   notify  = Actions.notifyXmobar  opts ctVars ::  Actions.XmobarFlag  -> IO ()
   notify' = Actions.notifyXmobar' opts ctVars :: [Actions.XmobarFlag] -> IO ()
 
-  pressKey        = Actions.pressKey        ctVars :: KeyCode -> IO ()
-  releaseKey      = Actions.releaseKey      ctVars :: KeyCode -> IO ()
-  pressReleaseKey = Actions.pressReleaseKey ctVars :: KeyCode -> IO ()
+  pressKey        = Actions.pressKey        ctVars ::  KeyCode  -> IO ()
+  pressKeys       = Actions.pressKeys       ctVars :: [KeyCode] -> IO ()
+  releaseKey      = Actions.releaseKey      ctVars ::  KeyCode  -> IO ()
+  releaseKeys     = Actions.releaseKeys     ctVars :: [KeyCode] -> IO ()
+  pressReleaseKey = Actions.pressReleaseKey ctVars ::  KeyCode  -> IO ()
 
   getAlias :: EvdevEvent.Key -> Maybe KeyAlias
   getAlias = Keys.getAliasByKey keyMap
@@ -631,7 +711,7 @@ handleKeyboard ctVars opts keyMap _ fd =
   getKeyCodeByName :: KeyName -> Maybe KeyCode
   getKeyCodeByName = Keys.getKeyCodeByName keyMap
 
-  -- isAlternative = Keys.isAlternative keyMap :: KeyName -> Bool
+  isAlternative = Keys.isAlternative keyMap :: KeyName -> Bool
   getAlternative :: KeyName -> Maybe (KeyName, KeyCode)
   getAlternative = Keys.getAlternative keyMap
 
@@ -749,9 +829,12 @@ handleKeyboard ctVars opts keyMap _ fd =
   -- -- It's commented because it's never used anywhere
   -- releaseAlternative :: Set KeyName -> IO (Set KeyName)
   -- releaseAlternative = abstractRelease
+  --
   --   "Releasing alternative keys during turning alternative mode off..."
+  --
   --   (\keyName -> [qm| Releasing alternative {keyName}
   --                   \ during turning alternative mode off... |])
+  --
   --   isAlternative
   --   (getAlternative .> fmap snd)
 
@@ -759,18 +842,23 @@ handleKeyboard ctVars opts keyMap _ fd =
   -- Useful when user released `FNKey` erlier than media key.
   releaseAppleMedia :: Set KeyName -> IO (Set KeyName)
   releaseAppleMedia = abstractRelease
+
     [qm| Releasing held media keys of apple keyboard
        \ after {Keys.FNKey} released... |]
+
     (\keyName -> [qm| Releasing held media {keyName} of apple keyboard
                     \ after {Keys.FNKey} released... |])
+
     isMedia
     getMedia
 
   -- Simple triggering key user pressed to X server
   trigger :: KeyName -> KeyCode -> Bool -> IO ()
   trigger keyName keyCode isPressed = do
+
     noise [qm| Triggering {isPressed ? "pressing" $ "releasing"}
              \ of {keyName} (X key code: {keyCode})... |]
+
     (isPressed ? pressKey $ releaseKey) keyCode
 
   -- Trigger remapped key.
@@ -778,30 +866,72 @@ handleKeyboard ctVars opts keyMap _ fd =
   -- shows in log which key this key remapped to.
   asTrigger :: KeyName -> KeyCode -> Bool -> IO ()
   asTrigger keyName keyCode isPressed = do
+
     noise [qm| Triggering {isPressed ? "pressing" $ "releasing"}
              \ of {keyName} as {getAsName keyName}
              \ (X key code: {keyCode})... |]
+
     (isPressed ? pressKey $ releaseKey) keyCode
+
+  maybeAsTrigger :: KeyName -> KeyCode -> Bool -> IO ()
+  maybeAsTrigger keyName =
+    let k = maybeAsName keyName
+     in k == keyName ? trigger keyName $ asTrigger keyName
+
+  -- Multiple version of `maybeAsTrigger` that supports alternative keys.
+  -- Alternative mode supposed to be enabled when calling this monad.
+  alternativeMaybeAsTrigger' :: [KeyName] -> Bool -> IO ()
+  alternativeMaybeAsTrigger' keyNames isPressed = do
+
+    let keys :: [(KeyName, KeyName, KeyCode)]
+        keys = flip map keyNames $ \k ->
+
+            let mappedAlternative = getAlternative k
+                nonAlternative = (maybeAsName k, fromJust $ getKeyCodeByName k)
+                (asKeyName, code) = fromMaybe nonAlternative mappedAlternative
+
+             in (k, asKeyName, code)
+
+    noise' $ flip map keys $ \(keyName, asKeyName, code) ->
+      let alternativeStr = isAlternative keyName ? "alternative " $ ""
+       in [qm| Triggering {isPressed ? "pressing" $ "releasing"}
+             \ of {alternativeStr}{asKeyStr keyName asKeyName}
+             \ (X key code: {code})... |]
+
+    (isPressed ? pressKeys $ releaseKeys) $ map (\(_, _, x) -> x) keys
 
   -- Triggering both press and release events to X server
   pressRelease :: KeyName -> KeyCode -> IO ()
   pressRelease keyName keyCode = do
+
     noise [qm| Triggering pressing and releasing of {keyName}
              \ (X key code: {keyCode})... |]
+
     pressReleaseKey keyCode
 
   -- Triggering both press and release events to X server.
   -- Also write to log about to which key this key remapped.
   asPressRelease :: KeyName -> KeyCode -> IO ()
   asPressRelease keyName keyCode = do
+
     noise [qm| Triggering pressing and releasing
              \ of {keyName} as {getAsName keyName}
              \ (X key code: {keyCode})... |]
+
     pressReleaseKey keyCode
 
+  onlyRealModifiers :: Set KeyName
+  onlyRealModifiers = Set.fromList
+    [ Keys.ControlLeftKey, Keys.ControlRightKey
+    , Keys.ShiftLeftKey,   Keys.ShiftRightKey
+    , Keys.AltLeftKey,     Keys.AltRightKey
+    ]
+
   -- Union of all modifiers keys
+  -- (including keys that remapped as these modifiers).
   allModifiersKeys :: Set KeyName
   allModifiersKeys = mods `Set.union` remappedMods
+
     where -- Just Set of modifiers keys
           mods :: Set KeyName
           mods = Set.fromList
@@ -810,9 +940,19 @@ handleKeyboard ctVars opts keyMap _ fd =
             , Keys.AltLeftKey,     Keys.AltRightKey
             , Keys.ShiftLeftKey,   Keys.ShiftRightKey
             ]
+
           -- Other keys that was remapped as modifiers keys,
           -- that means they're modifiers too.
           -- For example `LessKey` is remapped to `ShiftLeftKey`,
           -- so it means that this key is modifier too.
           remappedMods :: Set KeyName
           remappedMods = Set.foldr (Set.union . getExtraKeys) Set.empty mods
+
+  maybeAsKeyStr :: KeyName -> String
+  maybeAsKeyStr k | k == maybeAsName k = show k
+                  | otherwise          = [qm| {k} (as {maybeAsName k}) |]
+
+  asKeyStr :: KeyName -> KeyName -> String
+  asKeyStr keyName asKeyName
+    | keyName == asKeyName = show keyName
+    | otherwise            = [qm| {keyName} (as {asKeyName}) |]

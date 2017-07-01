@@ -169,6 +169,7 @@ instance Default ComboState where
 data SuperDoublePress = WaitForFirstRelease
                       | WaitForSecondPressAgain
                       | WaitForSecondReleaseOrPressAlternativeKey
+                      | WaitForSecondReleaseAfterAlternativeKeys
                       | WaitForReleaseToDisableAlternativeMode
                         deriving (Show, Eq, Generic)
 
