@@ -109,7 +109,7 @@ instance Default Options where
     , additionalControls           = True
     , shiftNumericKeys             = False
 
-    , toggleAlternativeModeByAlts  = False
+    , toggleAlternativeModeByAlts  = True
     , superDoublePress             = True
     , leftSuperDoublePressCmd      = Nothing
     , rightSuperDoublePressCmd     = Nothing
@@ -179,9 +179,9 @@ options =
            Default is: {shiftNumericKeys def ? "On" $ "Off"}
          |]
 
-  , GetOpt.Option  [ ]  ["toggle-alternative-mode-by-alts"]
-      (GetOpt.NoArg $ toggleAlternativeModeByAlts' .~ True)
-      [qm| Toggling alternative mode
+  , GetOpt.Option  [ ]  ["disable-toggling-alternative-mode-by-alts"]
+      (GetOpt.NoArg $ toggleAlternativeModeByAlts' .~ False)
+      [qm| Disable toggling alternative mode
          \ by pressing Alt keys (Left and Right) both at the same time\n
            Default is: {toggleAlternativeModeByAlts def ? "On" $ "Off"}
          |]
