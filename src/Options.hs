@@ -37,15 +37,16 @@ data Options =
           , verboseMode                  :: Bool
 
           , realCapsLock                 :: Bool
-          , alternativeMode              :: Bool
           , additionalControls           :: Bool
           , shiftNumericKeys             :: Bool
-          , resetByEscapeOnCapsLock      :: Bool
-          , resetByWindowFocusEvent      :: Bool
 
+          , toggleAlternativeModeByAlts  :: Bool
           , superDoublePress             :: Bool
           , leftSuperDoublePressCmd      :: Maybe String
           , rightSuperDoublePressCmd     :: Maybe String
+
+          , resetByEscapeOnCapsLock      :: Bool
+          , resetByWindowFocusEvent      :: Bool
 
           , disableXInputDeviceName      :: [String]
           , disableXInputDeviceId        :: [Int]
@@ -62,7 +63,7 @@ data Options =
           , availableDevices             :: [FilePath]
           , availableXInputDevices       :: [Int]
           }
-  deriving (Show, Eq, Generic)
+            deriving (Show, Eq, Generic)
 
 instance NFData Options where
   rnf opts =
@@ -70,15 +71,16 @@ instance NFData Options where
     verboseMode                  opts `deepseq`
 
     realCapsLock                 opts `deepseq`
-    alternativeMode              opts `deepseq`
     additionalControls           opts `deepseq`
     shiftNumericKeys             opts `deepseq`
-    resetByEscapeOnCapsLock      opts `deepseq`
-    resetByWindowFocusEvent      opts `deepseq`
 
+    toggleAlternativeModeByAlts  opts `deepseq`
     superDoublePress             opts `deepseq`
     leftSuperDoublePressCmd      opts `deepseq`
     rightSuperDoublePressCmd     opts `deepseq`
+
+    resetByEscapeOnCapsLock      opts `deepseq`
+    resetByWindowFocusEvent      opts `deepseq`
 
     disableXInputDeviceName      opts `deepseq`
     disableXInputDeviceId        opts `deepseq`
@@ -104,15 +106,16 @@ instance Default Options where
     , verboseMode                  = False
 
     , realCapsLock                 = False
-    , alternativeMode              = True
     , additionalControls           = True
     , shiftNumericKeys             = False
-    , resetByEscapeOnCapsLock      = True
-    , resetByWindowFocusEvent      = True
 
+    , toggleAlternativeModeByAlts  = False
     , superDoublePress             = True
     , leftSuperDoublePressCmd      = Nothing
     , rightSuperDoublePressCmd     = Nothing
+
+    , resetByEscapeOnCapsLock      = True
+    , resetByWindowFocusEvent      = True
 
     , disableXInputDeviceName      = []
     , disableXInputDeviceId        = []
@@ -162,11 +165,6 @@ options =
       [qm| Use real Caps Lock instead of remapping it to Escape\n
            Default is: {realCapsLock def ? "On" $ "Off"}
          |]
-  , GetOpt.Option  [ ]  ["no-alternative-mode"]
-      (GetOpt.NoArg $ alternativeMode' .~ False)
-      [qm| Disable Alternative mode feature\n
-           Default is: {alternativeMode def ? "On" $ "Off"}
-         |]
   , GetOpt.Option  [ ]  ["no-additional-controls"]
       (GetOpt.NoArg $ additionalControls' .~ False)
       [qm| Disable additional controls behavior for Caps Lock and Enter keys\n
@@ -180,25 +178,13 @@ options =
            Could be more consistent for 10-fingers typing.\n
            Default is: {shiftNumericKeys def ? "On" $ "Off"}
          |]
-  , GetOpt.Option  [ ]  ["disable-reset-by-escape-on-capslock"]
-      (GetOpt.NoArg $ resetByEscapeOnCapsLock' .~ False)
-      [qm| Disable resetting Caps Lock mode, Alternative mode
-             \ and keyboard layout by Escape that triggered by Caps Lock key\n
-             (only when it's remapped, no need to use this option
-               \ if you already use --real-capslock)\n
-           Default is: {resetByEscapeOnCapsLock def ? "On" $ "Off"}
-         |]
-  , GetOpt.Option  [ ]  ["disable-reset-by-window-focus-event"]
-      (GetOpt.NoArg $ resetByWindowFocusEvent' .~ False)
-      [qm| Disable resetting Caps Lock mode, Alternative mode
-             \ and keyboard layout by switching between windows.\n
-           WARNING! If you don't disable this feature you should ensure
-             \ that you have directory that contains
-             \ 'xlib-keys-hack-watch-for-window-focus-events'
-             \ executable in your 'PATH' environment variable!\n
-           Default is: {resetByWindowFocusEvent def ? "On" $ "Off"}
-         |]
 
+  , GetOpt.Option  [ ]  ["toggle-alternative-mode-by-alts"]
+      (GetOpt.NoArg $ toggleAlternativeModeByAlts' .~ True)
+      [qm| Toggling alternative mode
+         \ by pressing Alt keys (Left and Right) both at the same time\n
+           Default is: {toggleAlternativeModeByAlts def ? "On" $ "Off"}
+         |]
   , GetOpt.Option  [ ]  ["disable-super-double-press"]
       (GetOpt.NoArg $ superDoublePress' .~ False)
       [qm| Disable handling of double Super key press.\n
@@ -225,6 +211,25 @@ options =
       [qm| Double Right Super key press will spawn specified shell command
              \ instead of toggling alternative mode.\n
            This option makes no sense with --disable-super-double-press
+         |]
+
+  , GetOpt.Option  [ ]  ["disable-reset-by-escape-on-capslock"]
+      (GetOpt.NoArg $ resetByEscapeOnCapsLock' .~ False)
+      [qm| Disable resetting Caps Lock mode, Alternative mode
+             \ and keyboard layout by Escape that triggered by Caps Lock key\n
+             (only when it's remapped, no need to use this option
+               \ if you already use --real-capslock)\n
+           Default is: {resetByEscapeOnCapsLock def ? "On" $ "Off"}
+         |]
+  , GetOpt.Option  [ ]  ["disable-reset-by-window-focus-event"]
+      (GetOpt.NoArg $ resetByWindowFocusEvent' .~ False)
+      [qm| Disable resetting Caps Lock mode, Alternative mode
+             \ and keyboard layout by switching between windows.\n
+           WARNING! If you don't disable this feature you should ensure
+             \ that you have directory that contains
+             \ 'xlib-keys-hack-watch-for-window-focus-events'
+             \ executable in your 'PATH' environment variable!\n
+           Default is: {resetByWindowFocusEvent def ? "On" $ "Off"}
          |]
 
   , GetOpt.Option  [ ]  ["disable-xinput-device-name"]

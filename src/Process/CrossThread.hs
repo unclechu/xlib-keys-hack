@@ -29,7 +29,6 @@ module Process.CrossThread
 
 import "X11" Graphics.X11.Xlib (Display)
 
-import "base" Control.Monad (when)
 import "lens" Control.Lens ((.~), (^.), view, Lens')
 import "either" Control.Monad.Trans.Either (runEitherT, left, right)
 import "transformers" Control.Monad.Trans.State (execStateT)
@@ -391,7 +390,7 @@ resetKbdLayout ctVars noise' state = flip execStateT state . runEitherT $ do
 
 resetAll :: (St.MonadState State m, MonadIO m)
          => Options -> CrossThreadVars -> Noiser -> Notifier -> m ()
-resetAll opts ctVars noise' notify' = do
+resetAll _ ctVars noise' notify' = do
 
   liftIO $ noise' ["Resetting keyboard layout..."]
   modifyStateM $ liftIO . _resetKbdLayout
@@ -399,9 +398,8 @@ resetAll opts ctVars noise' notify' = do
   liftIO $ noise' ["Resetting Caps Lock mode..."]
   modifyStateM $ liftIO . turnCapsLockModeOff
 
-  when (Options.alternativeMode opts) $ do
-    liftIO $ noise' ["Resetting Alternative mode..."]
-    modifyStateM $ liftIO . turnAlternativeModeOff
+  liftIO $ noise' ["Resetting Alternative mode..."]
+  modifyStateM $ liftIO . turnAlternativeModeOff
 
   where _resetKbdLayout = Process.CrossThread.resetKbdLayout ctVars noise'
         turnCapsLockModeOff = flip (turnCapsLockMode ctVars noise') False

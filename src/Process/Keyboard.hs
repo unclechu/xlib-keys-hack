@@ -88,11 +88,11 @@ handleKeyboard ctVars opts keyMap _ fd =
 
       -- Alternative version of currently pressed or released key
       alternative :: Maybe (KeyName, KeyCode)
-      alternative = O.alternativeMode opts ? getAlternative keyName $ Nothing
+      alternative = getAlternative keyName
 
       onOnlyBothAltsPressed :: Bool
       onOnlyBothAltsPressed =
-        O.alternativeMode opts &&
+        O.toggleAlternativeModeByAlts opts &&
         let altsSet = Set.fromList [Keys.AltLeftKey, Keys.AltRightKey]
          in keyName `Set.member` altsSet && pressed == altsSet
 
@@ -738,9 +738,7 @@ handleKeyboard ctVars opts keyMap _ fd =
 
   handleAlternativeModeChange :: State -> IO State
   handleAlternativeModeChange =
-    O.alternativeMode opts
-      ? CrossThread.handleAlternativeModeChange noise' notify'
-      $ return
+    CrossThread.handleAlternativeModeChange noise' notify'
 
   handleResetKbdLayout :: State -> IO State
   handleResetKbdLayout = CrossThread.handleResetKbdLayout ctVars noise'
