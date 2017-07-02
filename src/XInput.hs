@@ -58,7 +58,7 @@ getAvailable = execStateT $
     >>= updateState' (flip $ set O.availableXInputDevices')
 
   where -- Filters only available devices ids.
-        filterAvailableDeviceId :: (MonadState s m, O.HasOptions s, Functor m)
+        filterAvailableDeviceId :: (MonadState s m, O.HasOptions s)
                                 => [Int] -> m [Int]
         filterAvailableDeviceId allDevs = fmap f St.get
           where f = view O.disableXInputDeviceId' .> filter (`elem` allDevs)
@@ -121,7 +121,7 @@ getAvailable = execStateT $
 
         -- Gets ids from 'disableXInputDeviceName' but only available.
         -- This typing means we can touch only state but never IO.
-        getAvailableIdsFromNames :: (MonadState s m, O.HasOptions s, Functor m)
+        getAvailableIdsFromNames :: (MonadState s m, O.HasOptions s)
                                  => [(Int, String)] -> m [Int]
         getAvailableIdsFromNames available = do
           (names :: [String]) <-
@@ -137,8 +137,8 @@ getAvailable = execStateT $
                         ]
 
         -- Merge it with previous option value (removes duplicates)
-        mergeAvailableIdsWithPrevious ::
-          (MonadState s m, O.HasOptions s, Functor m) => [Int] -> m [Int]
+        mergeAvailableIdsWithPrevious :: (MonadState s m, O.HasOptions s)
+                                      => [Int] -> m [Int]
         mergeAvailableIdsWithPrevious new =
           St.get <&> view O.availableXInputDevices'
                       .> (++ new) .> fromList .> toList

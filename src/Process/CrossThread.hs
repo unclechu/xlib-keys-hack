@@ -34,7 +34,7 @@ import "lens" Control.Lens ((.~), (^.), view, Lens')
 import "either" Control.Monad.Trans.Either (runEitherT, left, right)
 import "transformers" Control.Monad.Trans.State (execStateT)
 import qualified "mtl" Control.Monad.State.Class as St (MonadState)
-import "transformers" Control.Monad.IO.Class (MonadIO, liftIO)
+import "base" Control.Monad.IO.Class (MonadIO, liftIO)
 
 import qualified "containers" Data.Set as Set (null)
 import "base" Data.Maybe (fromJust, isJust)
