@@ -148,23 +148,55 @@ directory, make sure you have this directory in your `$PATH` environment variabl
 
 ``` text
 Usage: xlib-keys-hack [OPTION...] DEVICES-FD-PATHS...
-  -h  --help                                          Show this usage info
-  -v  --verbose                                       Start in verbose-mode
-      --real-capslock                                 Use real Caps Lock instead of remapping it to Escape
-      --no-alternative-mode                           Disable Alternative mode feature
-      --no-additional-controls                        Disable additional controls behavior for Caps Lock and Enter keys
-                                                      (could be comfortable for playing some video games)
-      --disable-reset-by-escape-on-capslock           Disable resetting Caps Lock mode, Alternative mode and keyboard layout by Escape that triggered by Caps Lock key
-                                                      (only when it's remapped, no need to use this option if you already used --real-capslock)
-      --disable-reset-by-window-focus-event           Disable resetting Caps Lock mode, Alternative mode and keyboard layout by switching between windows.
-                                                      WARNING! If you don't disable this feature you should ensure that you have directory that contains 'xlib-keys-hack-watch-for-window-focus-events' executable in your 'PATH' environment variable!
-      --disable-xinput-device-name[=NAME]             Name of device to disable using 'xinput' tool
-      --disable-xinput-device-id[=ID]                 Id of device to disable using 'xinput' tool
-      --device-fd-path[=FDPATH]                       Path to device file descriptor to get events from
-      --xmobar-indicators                             Enable notifying xmobar indicators process about indicators (num lock, caps lock and alternative mode) state changes by DBus (see also https://github.com/unclechu/xmonadrc)
-      --xmobar-indicators-dbus-path[=PATH]            DBus object path for xmobar indicators (default is: '/', this option makes sense only with --xmobar-indicators)
-      --xmobar-indicators-dbus-bus[=BUS]              DBus bus name for xmobar indicators (default is: 'com.github.unclechu.xmonadrc.%DISPLAY%' where '%DISPLAY%' is view of $DISPLAY environment variable where non-letter symbols are replaced to underscore '_', for example if we have $DISPLAY as ':1' bus name will be 'com.github.unclechu.xmonadrc._1', this option makes sense only with --xmobar-indicators)
-      --xmobar-indicators-dbus-interface[=INTERFACE]  DBus interface for xmobar indicators (default is: 'com.github.unclechu.xmonadrc', this option makes sense only with --xmobar-indicators)
+  -h  --help                                                Show this usage info
+  -v  --verbose                                             Start in verbose-mode
+                                                            Default is: Off
+      --real-capslock                                       Use real Caps Lock instead of remapping it to Escape
+                                                            Default is: Off
+      --no-additional-controls                              Disable additional controls behavior for Caps Lock and Enter keys
+                                                            (could be comfortable for playing some video games)
+                                                            Default is: On
+      --shift-numeric-keys                                  Shift numeric keys in numbers row one key righter, and move 'minus' key to the left side at '1' key position.
+                                                            Could be more consistent for 10-fingers typing.
+                                                            Default is: Off
+      --disable-toggling-alternative-mode-by-alts           Disable toggling alternative mode by pressing Alt keys (Left and Right) both at the same time
+                                                            Default is: On
+      --disable-super-double-press                          Disable handling of double Super key press.
+                                                            Default is: On
+      --super-double-press-cmd=COMMAND                      When Super key is pressed twice in short interval alternative mode will be toggled or specified shell command will be spawned.
+                                                            This option makes no sense with --disable-super-double-press
+      --left-super-double-press-cmd=COMMAND                 Double Left Super key press will spawn specified shell command instead of toggling alternative mode.
+                                                            This option makes no sense with --disable-super-double-press
+      --right-super-double-press-cmd=COMMAND                Double Right Super key press will spawn specified shell command instead of toggling alternative mode.
+                                                            This option makes no sense with --disable-super-double-press
+      --disable-reset-by-escape-on-capslock                 Disable resetting Caps Lock mode, Alternative mode and keyboard layout by Escape that triggered by Caps Lock key
+                                                            (only when it's remapped, no need to use this option if you already use --real-capslock)
+                                                            Default is: On
+      --disable-reset-by-window-focus-event                 Disable resetting Caps Lock mode, Alternative mode and keyboard layout by switching between windows.
+                                                            WARNING! If you don't disable this feature you should ensure that you have directory that contains 'xlib-keys-hack-watch-for-window-focus-events' executable in your 'PATH' environment variable!
+                                                            Default is: On
+      --disable-xinput-device-name[=NAME]                   Name of device to disable using 'xinput' tool
+      --disable-xinput-device-id[=ID]                       Id of device to disable using 'xinput' tool
+      --device-fd-path[=FDPATH]                             Path to device file descriptor to get events from
+      --xmobar-indicators                                   Enable notifying xmobar indicators process about indicators (num lock, caps lock and alternative mode) state changes by DBus.
+                                                            See also https://github.com/unclechu/xmonadrc
+                                                            Default is: Off
+      --xmobar-indicators-dbus-path[=PATH]                  DBus object path for xmobar indicators.
+                                                            Default is: '/'
+                                                            This option makes sense only with --xmobar-indicators
+      --xmobar-indicators-dbus-bus[=BUS]                    DBus bus name for xmobar indicators.
+                                                            Default is: 'com.github.unclechu.xmonadrc.%DISPLAY%' where '%DISPLAY%' is view of $DISPLAY environment variable where ':' and '.' symbols are replaced to underscore '_', for example if we have $DISPLAY as ':1' bus name will be 'com.github.unclechu.xmonadrc._1'
+                                                            This option makes sense only with --xmobar-indicators
+                                                            Use --xmobar-indicators-dbus-bus=any to broadcast to everyone.
+      --xmobar-indicators-dbus-interface[=INTERFACE]        DBus interface for xmobar indicators.
+                                                            Default is: 'com.github.unclechu.xmonadrc'
+                                                            This option makes sense only with --xmobar-indicators
+      --xmobar-indicators-dbus-flush-path[=PATH]            DBus object path for 'flush' request from xmobar indicators process.
+                                                            Default is: '/com/github/unclechu/xmonadrc/%DISPLAY%' where '%DISPLAY%' is view of $DISPLAY environment variable where ':' and '.' symbols are replaced to underscore '_', for example if we have $DISPLAY as ':1' object path will be '/com/github/unclechu/xmonadrc/_1'
+                                                            This option makes sense only with --xmobar-indicators
+      --xmobar-indicators-dbus-flush-interface[=INTERFACE]  DBus interface for 'flush' request from xmobar indicators process.
+                                                            Default is: 'com.github.unclechu.xmonadrc'
+                                                            This option makes sense only with --xmobar-indicators
 ```
 
 ### Generating coverage report
