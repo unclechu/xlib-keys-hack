@@ -1,9 +1,9 @@
 language: generic
 sudo: false
 
-cache:
-  directories:
-    - $HOME/.stack
+# cache:
+#   directories:
+#     - $HOME/.stack
 
 addons:
   apt:
