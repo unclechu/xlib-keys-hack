@@ -1,7 +1,6 @@
 # xlib-keys-hack
 
-__**TODO**__ Replace Travis shield branch to `master` after first release.<br>
-`haskell-version` branch: [![Build Status](https://api.travis-ci.org/unclechu/xlib-keys-hack.svg?branch=haskell-version)](https://travis-ci.org/unclechu/xlib-keys-hack)
+[![Build Status](https://api.travis-ci.org/unclechu/xlib-keys-hack.svg?branch=master)](https://travis-ci.org/unclechu/xlib-keys-hack)
 
 Keyboard behavior customization utility.
 
