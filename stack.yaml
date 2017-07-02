@@ -1,13 +1,12 @@
-resolver: lts-6.30
+resolver: lts-8.21
 system-ghc: false
 packages: [.]
 
 extra-deps:
   - linux-evdev-0.3.2 # getting events from devices files descriptors
-  - lens-4.15.1 # need newer version for lens renamer (see Utils module)
-  - kan-extensions-5.0.1 # newer 'lens' required this
-  - process-1.4.3.0 # need newer api for subprocess (like StdStream(NoStream))
   - qm-interpolated-string-0.1.0.0
+  - dbus-0.10.13
+  - libxml-sax-0.7.5
 
-flags: {}
 extra-package-dbs: []
+flags: {}
