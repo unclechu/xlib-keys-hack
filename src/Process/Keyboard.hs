@@ -235,8 +235,12 @@ handleKeyboard ctVars opts keyMap _ fd =
             x ^. _2 == State.WaitForSecondReleaseOrPressAlternativeKey &&
             isAlternative keyName && isPressed &&
 
-            (Set.map maybeAsName pressed \\ onlyRealModifiers) ==
-              Set.fromList [x ^. _1, keyName]
+            let superAndAlternative = [x ^. _1, keyName]
+                onlyModifiers = foldr Set.delete pressed superAndAlternative
+                mappedAs = Set.map maybeAsName onlyModifiers
+
+             in Set.fromList superAndAlternative `Set.isSubsetOf` pressed &&
+                Set.null (mappedAs \\ onlyRealModifiers)
 
       -- Super-Double-Press feature. 5nd step: held Super key is released after
       -- some alternative keys had pressed.
