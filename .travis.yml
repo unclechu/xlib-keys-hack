@@ -1,9 +1,9 @@
-language: generic
 sudo: false
+language: generic
 
-# cache:
-#   directories:
-#     - $HOME/.stack
+cache:
+  directories:
+    - $HOME/.stack
 
 addons:
   apt:
@@ -19,5 +19,4 @@ install:
   - travis_wait stack --no-terminal --install-ghc test --only-dependencies
 
 script:
-  - travis_wait stack --no-terminal test \
-      --haddock --no-haddock-deps --ghc-options="-Werror"
+  - travis_wait stack --no-terminal test --haddock --no-haddock-deps
