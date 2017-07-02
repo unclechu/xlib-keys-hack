@@ -3,11 +3,14 @@ system-ghc: false
 packages: [.]
 
 extra-deps:
+
   - linux-evdev-0.3.2 # getting events from devices files descriptors
   - lens-4.15.1 # need newer version for lens renamer (see Utils module)
   - kan-extensions-5.0.1 # newer 'lens' required this
-  - process-1.4.3.0 # need newer api for subprocess (like StdStream(NoStream))
   - qm-interpolated-string-0.1.0.0
 
-flags: {}
+  - process-1.4.3.0 # need newer api for subprocess (like StdStream(NoStream))
+  - cabal-install-1.24.0.2
+
 extra-package-dbs: []
+flags: {}

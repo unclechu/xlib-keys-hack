@@ -14,8 +14,6 @@ before_install:
   - export PATH=$HOME/.local/bin:$PATH
   - travis_retry curl -L https://www.stackage.org/stack/linux-x86_64 |
       tar xz --wildcards --strip-components=1 -C ~/.local/bin '*/stack'
-  - stack --no-terminal --resolver=lts-8.21 --install-ghc install
-      cabal-install-1.24.0.2
 
 install:
   - stack --no-terminal --install-ghc test --only-dependencies
