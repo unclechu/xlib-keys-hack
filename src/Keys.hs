@@ -321,11 +321,11 @@ alternativeModeRemaps =
   , (KKey,            ArrowUpKey)
   , (LKey,            ArrowRightKey)
 
+  , (YKey,            PageDownKey)
   , (UKey,            PageUpKey)
-  , (DKey,            PageDownKey)
 
-  , (FKey,            EndKey)
-  , (BKey,            HomeKey)
+  , (CommaKey,        HomeKey)
+  , (PeriodKey,       EndKey)
 
   , (BracketLeftKey,  BackSpaceKey)
   , (BracketRightKey, DeleteKey)
