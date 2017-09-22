@@ -2,10 +2,10 @@
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
 module Actions
-  ( ActionType(..)
-  , Action(..),     HasAction(..)
-  , XmobarFlag(..), HasXmobarFlag(..)
-  , KeyAction(..),  HasKeyAction(..)
+  ( ActionType (..)
+  , Action (..),     HasAction (..)
+  , XmobarFlag (..), HasXmobarFlag (..)
+  , KeyAction (..),  HasKeyAction (..)
 
   , seqHead
   , noise,         noise'
@@ -28,10 +28,10 @@ import "base" Control.Concurrent.Chan (writeChan)
 import qualified Options as O
 import qualified State
 
-import Actions.Types ( ActionType(..)
-                     , Action(..),     HasAction(..)
-                     , XmobarFlag(..), HasXmobarFlag(..)
-                     , KeyAction(..),  HasKeyAction(..)
+import Actions.Types ( ActionType (..)
+                     , Action (..),     HasAction (..)
+                     , XmobarFlag (..), HasXmobarFlag (..)
+                     , KeyAction (..),  HasKeyAction (..)
                      )
 
 

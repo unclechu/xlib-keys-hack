@@ -5,12 +5,12 @@
 {-# LANGUAGE DeriveGeneric #-}
 
 module State
-  ( State(..),            HasState(..)
-  , LedModes(..),         HasLedModes(..)
-  , ComboState(..),       HasComboState(..)
-  , SuperDoublePress(..)
+  ( State (..),            HasState (..)
+  , LedModes (..),         HasLedModes (..)
+  , ComboState (..),       HasComboState (..)
+  , SuperDoublePress (..)
 
-  , CrossThreadVars(..),  HasCrossThreadVars(..)
+  , CrossThreadVars (..),  HasCrossThreadVars (..)
   ) where
 
 import "base" GHC.Generics (Generic)
@@ -21,6 +21,7 @@ import "deepseq" Control.DeepSeq (NFData, rnf, deepseq)
 import "base" Control.Concurrent.MVar (MVar)
 import "base" Control.Concurrent.Chan (Chan)
 
+import "base" Data.Word (Word8)
 import "data-default" Data.Default (Default, def)
 import qualified "containers" Data.Set as Set
 import "time" Data.Time.Clock.POSIX (POSIXTime)
@@ -36,7 +37,7 @@ import Keys (KeyName)
 data State =
   State { pressedKeys     :: Set.Set KeyName
         , leds            :: LedModes
-        , kbdLayout       :: Int
+        , kbdLayout       :: Word8
         , alternative     :: Bool -- Alternative mode on/off
         , comboState      :: ComboState
         , isTerminating   :: Bool

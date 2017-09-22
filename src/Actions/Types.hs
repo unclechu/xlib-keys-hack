@@ -4,11 +4,13 @@
 {-# LANGUAGE TemplateHaskell #-}
 
 module Actions.Types
-  ( ActionType(..)
-  , Action(..),     HasAction(..)
-  , XmobarFlag(..), HasXmobarFlag(..)
-  , KeyAction(..),  HasKeyAction(..)
+  ( ActionType (..)
+  , Action (..),     HasAction (..)
+  , XmobarFlag (..), HasXmobarFlag (..)
+  , KeyAction (..),  HasKeyAction (..)
   ) where
+
+import "base" Data.Word (Word8)
 
 import "X11" Graphics.X11.Xlib (KeyCode)
 
@@ -36,6 +38,7 @@ data Action = Noise        String
 data XmobarFlag = XmobarNumLockFlag     Bool
                 | XmobarCapsLockFlag    Bool
                 | XmobarAlternativeFlag Bool
+                | XmobarXkbLayout       Word8
                 | XmobarFlushAll
                   deriving (Show, Eq)
 

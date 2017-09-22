@@ -22,8 +22,8 @@ import "dbus" DBus ( ObjectPath
                    , interfaceName_
                    , signal
                    , signalDestination
-                   , IsVariant(toVariant)
-                   , Signal(signalBody)
+                   , IsVariant (toVariant)
+                   , Signal (signalBody)
                    )
 
 import "dbus" DBus.Client ( Client
@@ -50,6 +50,7 @@ import qualified Options as O
 import Actions ( XmobarFlag ( XmobarNumLockFlag
                             , XmobarCapsLockFlag
                             , XmobarAlternativeFlag
+                            , XmobarXkbLayout
                             , XmobarFlushAll
                             )
                )
@@ -134,16 +135,19 @@ setIndicatorState IPCHandle { dbusClient = c
 
   emit c (signal path iface member)
            { signalDestination = bus
-           , signalBody        = [toVariant isOn]
+           , signalBody        = [arg]
            }
 
-  where (member, isOn) = case flag of
+  where (member, arg) =
 
-                              XmobarNumLockFlag     x -> ("numlock",     x)
-                              XmobarCapsLockFlag    x -> ("capslock",    x)
-                              XmobarAlternativeFlag x -> ("alternative", x)
+          case flag of
 
-                              XmobarFlushAll -> error "unexpected value"
+               XmobarNumLockFlag     x -> ("numlock",     toVariant x)
+               XmobarCapsLockFlag    x -> ("capslock",    toVariant x)
+               XmobarAlternativeFlag x -> ("alternative", toVariant x)
+               XmobarXkbLayout       x -> ("xkblayout",   toVariant x)
+
+               XmobarFlushAll -> error "unexpected value"
 
 
 logView :: IPCHandle -> String

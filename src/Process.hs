@@ -13,7 +13,7 @@ module Process
   , processKeyboardState
   ) where
 
-import "base" System.IO ( BufferMode(NoBuffering)
+import "base" System.IO ( BufferMode (NoBuffering)
                         , Handle
                         , hSetBinaryMode
                         , hSetBuffering
@@ -21,8 +21,8 @@ import "base" System.IO ( BufferMode(NoBuffering)
                         , hClose
                         , hIsEOF
                         )
-import "process" System.Process ( CreateProcess(std_in, std_out, std_err)
-                                , StdStream(CreatePipe, NoStream)
+import "process" System.Process ( CreateProcess (std_in, std_out, std_err)
+                                , StdStream (CreatePipe, NoStream)
                                 , ProcessHandle
                                 , createProcess
                                 , proc
@@ -86,9 +86,12 @@ initReset opts ipcHandle keyMap dpy = do
   when (O.xmobarIndicators opts) $ do
     noise "Initial resetting of xmobar indicators..."
     flip (maybe $ return ()) ipcHandle $ \ipc -> do
-      setIndicatorState ipc (Actions.XmobarNumLockFlag     False)
-      setIndicatorState ipc (Actions.XmobarCapsLockFlag    False)
-      setIndicatorState ipc (Actions.XmobarAlternativeFlag False)
+      setIndicatorState ipc $ Actions.XmobarNumLockFlag     False
+      setIndicatorState ipc $ Actions.XmobarCapsLockFlag    False
+      setIndicatorState ipc $ Actions.XmobarAlternativeFlag False
+
+      xkbGetCurrentLayout dpy
+        >>= setIndicatorState ipc . Actions.XmobarXkbLayout . fromIntegral
 
   where noise = O.noise opts
         justTurnCapsLockMode =
@@ -207,9 +210,15 @@ processKeyboardState ctVars opts _ dpy = do
     noise "Waiting for next X event about new keyboard layout state..."
     nextEvent' dpy evPtr
     _ <- XExtras.getEvent evPtr
-    layoutNum <- xkbGetCurrentLayout dpy
-    noise [qm| Keyboard layout switched to: {layoutNum} |]
-    modifyMVar_ (State.stateMVar ctVars) $
-                return . (State.kbdLayout' .~ layoutNum)
+    (fromIntegral -> layoutNum) <- xkbGetCurrentLayout dpy
 
-  where noise = Actions.noise opts ctVars :: String -> IO ()
+    modifyMVar_ (State.stateMVar ctVars) $ \state -> do
+
+      when (State.kbdLayout state /= layoutNum) $ do
+        notify $ Actions.XmobarXkbLayout layoutNum
+        noise  [qm| Keyboard layout switched to: {layoutNum} |]
+
+      return state { State.kbdLayout = layoutNum }
+
+  where noise  = Actions.noise opts ctVars :: String -> IO ()
+        notify = Actions.notifyXmobar opts ctVars :: Actions.XmobarFlag -> IO ()

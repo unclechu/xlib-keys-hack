@@ -8,11 +8,11 @@
 
 module Main (main) where
 
-import "base" System.Exit (ExitCode(ExitFailure), exitSuccess)
+import "base" System.Exit (ExitCode (ExitFailure), exitSuccess)
 import "base" System.Environment (getArgs)
 import "directory" System.Directory (doesFileExist)
 import "unix" System.Posix.Signals ( installHandler
-                                   , Handler(Catch)
+                                   , Handler (Catch)
                                    , sigINT
                                    , sigTERM
                                    )
@@ -45,7 +45,7 @@ import "base" Control.Concurrent ( forkIO
                                  )
 import "base" Control.Concurrent.MVar (newMVar, modifyMVar_, readMVar)
 import "base" Control.Concurrent.Chan (Chan, newChan, readChan)
-import "base" Control.Exception (Exception(fromException))
+import "base" Control.Exception (Exception (fromException))
 import "base" Control.Arrow ((&&&))
 import "extra" Control.Monad.Extra (whenJust)
 
@@ -85,9 +85,10 @@ import "xlib-keys-hack" State ( CrossThreadVars ( CrossThreadVars
                               , State ( isTerminating
                                       , windowFocusProc
                                       , alternative
+                                      , kbdLayout
                                       )
-                              , HasState(isTerminating', leds')
-                              , HasLedModes(numLockLed', capsLockLed')
+                              , HasState (isTerminating', leds')
+                              , HasLedModes (numLockLed', capsLockLed')
                               )
 import qualified "xlib-keys-hack" Actions
 import "xlib-keys-hack" Actions (ActionType, Action, KeyAction)
@@ -262,10 +263,12 @@ main = flip evalStateT ([] :: ThreadsState) $ do
         m (Actions.NotifyXmobar x) = whenJust ipcHandle $ \ipc ->
 
           let flag a isOn title = do
-
                 noise [qm| Setting xmobar {title} indicator state
                          \ {isOn ? "On" $ "Off"}... |]
+                liftIO $ setIndicatorState ipc a
 
+              value a v title = do
+                noise [qm| Setting xmobar {title} indicator value to '{v}'... |]
                 liftIO $ setIndicatorState ipc a
 
               flush = do
@@ -282,11 +285,15 @@ main = flip evalStateT ([] :: ThreadsState) $ do
                 handle $ Actions.XmobarAlternativeFlag
                        $ State.alternative state
 
+                handle $ Actions.XmobarXkbLayout
+                       $ State.kbdLayout state
+
               handle a = case a of
                 Actions.XmobarFlushAll          -> flush
                 Actions.XmobarNumLockFlag     y -> flag a y "Num Lock"
                 Actions.XmobarCapsLockFlag    y -> flag a y "Caps Lock"
                 Actions.XmobarAlternativeFlag y -> flag a y "Alternative Mode"
+                Actions.XmobarXkbLayout       y -> value a y "Keyboard layout"
 
            in handle x
 
