@@ -50,6 +50,7 @@ import "base" Control.Arrow ((&&&))
 import "extra" Control.Monad.Extra (whenJust)
 
 import "base" Data.Maybe (fromJust)
+import "base" Data.List (intercalate)
 import "base" Data.Typeable (Typeable)
 import "data-default" Data.Default (def)
 import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
@@ -67,6 +68,16 @@ import "xlib-keys-hack" Bindings.Xkb ( xkbGetDescPtr
                                      , xkbGetDisplay
                                      )
 -- import "xlib-keys-hack" Bindings.MoreXlib (initThreads)
+import qualified "xlib-keys-hack" Options as O
+import qualified "xlib-keys-hack" Actions
+import qualified "xlib-keys-hack" XInput
+import qualified "xlib-keys-hack" Keys
+import "xlib-keys-hack" Actions (ActionType, Action, KeyAction)
+import "xlib-keys-hack" IPC ( openIPC
+                            , closeIPC
+                            , setIndicatorState
+                            , logView
+                            )
 import "xlib-keys-hack" Process ( initReset
                                 , watchLeds
                                 , handleKeyboard
@@ -74,9 +85,10 @@ import "xlib-keys-hack" Process ( initReset
                                 , processKeysActions
                                 , processKeyboardState
                                 )
-import qualified "xlib-keys-hack" Options as O
-import qualified "xlib-keys-hack" XInput
-import "xlib-keys-hack" IPC (openIPC, closeIPC, setIndicatorState, logView)
+import qualified "xlib-keys-hack" Process.CrossThread as CrossThread
+  ( toggleAlternative
+  , turnAlternativeMode
+  )
 import "xlib-keys-hack" State ( CrossThreadVars ( CrossThreadVars
                                                 , stateMVar
                                                 , actionsChan
@@ -90,9 +102,6 @@ import "xlib-keys-hack" State ( CrossThreadVars ( CrossThreadVars
                               , HasState (isTerminating', leds')
                               , HasLedModes (numLockLed', capsLockLed')
                               )
-import qualified "xlib-keys-hack" Actions
-import "xlib-keys-hack" Actions (ActionType, Action, KeyAction)
-import qualified "xlib-keys-hack" Keys
 
 
 type Options = O.Options
@@ -182,11 +191,37 @@ main = flip evalStateT ([] :: ThreadsState) $ do
 
   ctVars `deepseq` return ()
 
-  ipcHandle <- ifMaybeM' (O.xmobarIndicators opts) $ do
-    noise "Opening DBus connection for xmobar indicators state updating..."
-    let flush = Actions.flushXmobar opts ctVars
-    h <- lift $ openIPC (displayString dpy) opts flush
-    h <$ noise (logView h)
+  ipcHandle <- ifMaybeM' (O.xmobarIndicators opts || O.externalControl opts) $
+    do let for = intercalate " and " $ []
+                   ++ (O.xmobarIndicators opts ? ["xmobar indicators"] $ [])
+                   ++ (O.externalControl opts  ? ["external control"]  $ [])
+        in noise [qm| Opening DBus connection for {for}... |]
+
+       h <- let flush = Actions.flushXmobar opts ctVars
+
+                _noise' :: [String] -> IO ()
+                _noise' = Actions.noise' opts ctVars
+
+                _notify' :: [Actions.XmobarFlag] -> IO ()
+                _notify' = Actions.notifyXmobar' opts ctVars
+
+                _toggleAlternative :: IO ()
+                _toggleAlternative =
+                  modifyMVar_ (State.stateMVar ctVars) $
+                    CrossThread.toggleAlternative _noise' _notify'
+
+                _turnAlternativeMode :: Bool -> IO ()
+                _turnAlternativeMode to =
+                  modifyMVar_ (State.stateMVar ctVars) $
+                    flip (CrossThread.turnAlternativeMode _noise' _notify') to
+
+                altModeChange :: Maybe Bool -> IO ()
+                altModeChange Nothing  = _toggleAlternative
+                altModeChange (Just x) = _turnAlternativeMode x
+
+             in lift $ openIPC (displayString dpy) opts flush altModeChange
+
+       h <$ noise (logView h)
 
 
   noise "Initial resetting..."

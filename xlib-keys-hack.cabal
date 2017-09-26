@@ -1,4 +1,4 @@
--- This file has been generated from package.yaml by hpack version 0.15.0.
+-- This file has been generated from package.yaml by hpack version 0.17.0.
 --
 -- see: https://github.com/sol/hpack
 
@@ -64,6 +64,7 @@ library
     , process
     , qm-interpolated-string
     , template-haskell
+    , text
     , time
     , transformers
     , unix
@@ -93,6 +94,7 @@ executable xlib-keys-hack
     , process
     , qm-interpolated-string
     , template-haskell
+    , text
     , time
     , transformers
     , unix
@@ -123,6 +125,7 @@ executable xlib-keys-hack-watch-for-window-focus-events
     , process
     , qm-interpolated-string
     , template-haskell
+    , text
     , time
     , transformers
     , unix
@@ -159,6 +162,7 @@ test-suite xlib-keys-hack-utils-test
     , process
     , qm-interpolated-string
     , template-haskell
+    , text
     , time
     , transformers
     , unix

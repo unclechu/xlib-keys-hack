@@ -2,6 +2,7 @@
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module IPC
   ( IPCHandle
@@ -11,8 +12,14 @@ module IPC
   , logView
   ) where
 
+import "base" System.Exit (die)
+import "base" System.IO (stderr, hPutStrLn)
+
+import "base" Data.List (intercalate)
 import "base" Data.Maybe (fromMaybe)
 import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
+
+import "base" Control.Monad (when)
 
 import "dbus" DBus ( ObjectPath
                    , objectPath_
@@ -22,7 +29,7 @@ import "dbus" DBus ( ObjectPath
                    , interfaceName_
                    , signal
                    , signalDestination
-                   , IsVariant (toVariant)
+                   , IsVariant (fromVariant, toVariant)
                    , Signal (signalBody)
                    )
 
@@ -34,10 +41,13 @@ import "dbus" DBus.Client ( Client
                           , addMatch
                           , removeMatch
                           , SignalHandler
+                          , RequestNameReply (NamePrimaryOwner)
+                          , ReleaseNameReply (NameReleased)
+                          , requestName
+                          , releaseName
 
                           , MatchRule ( matchPath
                                       , matchInterface
-                                      , matchSender
                                       , matchDestination
                                       , matchMember
                                       )
@@ -45,7 +55,7 @@ import "dbus" DBus.Client ( Client
 
 -- local imports
 
-import Utils.Sugar ((<&>))
+import Utils.Sugar ((?))
 import qualified Options as O
 import Actions ( XmobarFlag ( XmobarNumLockFlag
                             , XmobarCapsLockFlag
@@ -58,78 +68,146 @@ import Actions ( XmobarFlag ( XmobarNumLockFlag
 type Options = O.Options
 
 
-data IPCHandle = IPCHandle { dbusClient            :: Client
-                           , xmobarObjectPath      :: ObjectPath
-                           , xmobarBus             :: Maybe BusName
-                           , xmobarInterface       :: InterfaceName
-                           , xmobarFlushObjectPath :: ObjectPath
-                           , xmobarFlushInterface  :: InterfaceName
-                           , xmobarFlushSigHandler :: SignalHandler
+data XmobarIPC
+  = XmobarIPC
+  { xmobarObjectPath      :: ObjectPath
+  , xmobarBus             :: Maybe BusName
+  , xmobarInterface       :: InterfaceName
+  , xmobarFlushObjectPath :: ObjectPath
+  , xmobarFlushInterface  :: InterfaceName
+  , xmobarFlushSigHandler :: SignalHandler
+  }
+
+data ExternalCtrlIPC
+  = ExternalCtrlIPC
+  { externalCtrlObjectPath  :: ObjectPath
+  , externalCtrlBus         :: BusName
+  , externalCtrlInterface   :: InterfaceName
+  , externalCtrlSigHandlers :: [SignalHandler]
+  }
+
+data IPCHandle = IPCHandle { dbusClient      :: Client
+                           , xmobarIPC       :: Maybe XmobarIPC
+                           , externalCtrlIPC :: Maybe ExternalCtrlIPC
                            }
 
 
-openIPC :: String -> Options -> IO () -> IO IPCHandle
-openIPC dpyName opts flushAllCallback = do
+openIPC :: String -> Options -> IO () -> (Maybe Bool -> IO ()) -> IO IPCHandle
+openIPC dpyName opts flushAllCallback altModeChange = do
 
   dbusSession <- connectSession
 
-  let path  = fromMaybe "/"
-            $ O.xmobarIndicatorsObjPath opts <&> objectPath_
+  xmobar <- not (O.xmobarIndicators opts) ? pure Nothing $ fmap Just $ do
 
-      bus   = let opt = O.xmobarIndicatorsBusName opts
-               in if opt == Just "any"
-                     then Nothing
-                     else Just $ busName_ $ fromMaybe xmobarBusNameDef opt
+    let objPath        = objectPath_ $ resolveDpy $
+                         O.xmobarIndicatorsObjPath opts
 
-      iface = defIface $ O.xmobarIndicatorsIface opts <&> interfaceName_
+        bus            = case O.xmobarIndicatorsBusName opts of
+                              "any" -> Nothing
+                              x     -> Just $ busName_ $ resolveDpy x
 
-      flushObjPath = objectPath_
-                   $ fromMaybe flushObjPathDef
-                   $ O.xmobarIndicatorsFlushObjPath opts
+        iface          = interfaceName_ $ resolveDpy $
+                         O.xmobarIndicatorsIface opts
 
-      flushIface = defIface
-                 $ O.xmobarIndicatorsFlushIface opts <&> interfaceName_
+        flushObjPath   = objectPath_ $ resolveDpy $
+                         O.xmobarIndicatorsFlushObjPath opts
 
-      flushMatchRule = matchAny { matchPath        = Just flushObjPath
-                                , matchSender      = Nothing
-                                , matchDestination = Nothing
-                                , matchInterface   = Just flushIface
-                                , matchMember      = Just "request_flush_all"
-                                }
+        flushIface     = interfaceName_ $ resolveDpy $
+                         O.xmobarIndicatorsFlushIface opts
 
-  sigHandler <- addMatch dbusSession flushMatchRule flushHandle
-
-  return IPCHandle { dbusClient            = dbusSession
-                   , xmobarObjectPath      = path
-                   , xmobarBus             = bus
-                   , xmobarInterface       = iface
-                   , xmobarFlushObjectPath = flushObjPath
-                   , xmobarFlushInterface  = flushIface
-                   , xmobarFlushSigHandler = sigHandler
-                   }
-
-  where xmobarBusNameDef = "com.github.unclechu.xmonadrc." ++ dpyView
-        flushObjPathDef = "/com/github/unclechu/xmonadrc/" ++ dpyView
-        defIface = fromMaybe "com.github.unclechu.xmonadrc"
-
-        dpyView = let f ':' = '_'; f '.' = '_'; f x = x
-                   in map f dpyName
+        flushMatchRule = matchAny { matchPath      = Just flushObjPath
+                                  , matchInterface = Just flushIface
+                                  , matchMember    = Just "request_flush_all"
+                                  }
 
         flushHandle (signalBody -> []) = flushAllCallback
         flushHandle _ = return () -- Incorrect arguments, just ignoring it
 
+    -- Handling external request to refresh whole state of indicators
+    flushSigHandler <- addMatch dbusSession flushMatchRule flushHandle
+
+    return XmobarIPC { xmobarObjectPath      = objPath
+                     , xmobarBus             = bus
+                     , xmobarInterface       = iface
+                     , xmobarFlushObjectPath = flushObjPath
+                     , xmobarFlushInterface  = flushIface
+                     , xmobarFlushSigHandler = flushSigHandler
+                     }
+
+  externalCtrl <- not (O.externalControl opts) ? pure Nothing $ fmap Just $ do
+
+    let objPath   = objectPath_    $ resolveDpy $ O.externalControlObjPath opts
+        bus       = busName_       $ resolveDpy $ O.externalControlBusName opts
+        iface     = interfaceName_ $ resolveDpy $ O.externalControlIface   opts
+
+        matchRule = matchAny { matchPath        = Just objPath
+                             , matchDestination = Just bus
+                             , matchInterface   = Just iface
+                             }
+
+        matchAltOnOff  = matchRule
+                           { matchMember = Just "switch_alternative_mode" }
+
+        matchAltToggle = matchRule
+                           { matchMember = Just "toggle_alternative_mode" }
+
+        altOnOffHandler (signalBody -> map fromVariant -> [Just (x :: Bool)])
+          = altModeChange $ Just x
+        altOnOffHandler _ = pure ()
+
+        altToggleHandler (signalBody -> []) = altModeChange Nothing
+        altToggleHandler _ = pure ()
+
+    requestName dbusSession bus [] >>= \reply ->
+      when (reply /= NamePrimaryOwner) $
+        die [qm| Requesting name '{bus}' error: '{reply}' |]
+
+    -- Handling external control requests
+    switchSigHandler <- addMatch dbusSession matchAltOnOff  altOnOffHandler
+    toggleSigHandler <- addMatch dbusSession matchAltToggle altToggleHandler
+
+    return ExternalCtrlIPC { externalCtrlObjectPath  = objPath
+                           , externalCtrlBus         = bus
+                           , externalCtrlInterface   = iface
+                           , externalCtrlSigHandlers = [ switchSigHandler
+                                                       , toggleSigHandler
+                                                       ]
+                           }
+
+  return IPCHandle { dbusClient      = dbusSession
+                   , xmobarIPC       = xmobar
+                   , externalCtrlIPC = externalCtrl
+                   }
+
+  where resolveDpy = O.subsDisplay dpyName
+
 
 closeIPC :: IPCHandle -> IO ()
-closeIPC IPCHandle { dbusClient = c
-                   , xmobarFlushSigHandler = sigH
-                   } = removeMatch c sigH >> disconnect c
+closeIPC IPCHandle { dbusClient      = c
+                   , xmobarIPC       = xmobar
+                   , externalCtrlIPC = externalCtrl
+                   } = do
+
+  f (removeMatch c . xmobarFlushSigHandler)           xmobar
+  f (mapM_ (removeMatch c) . externalCtrlSigHandlers) externalCtrl
+
+  flip f externalCtrl $ \ExternalCtrlIPC { externalCtrlBus = bus } ->
+    releaseName c bus >>= \reply ->
+      when (reply /= NameReleased) $
+        hPutStrLn stderr [qm| Releasing name '{bus}' error: '{reply}' |]
+
+  disconnect c
+
+  where f = maybe $ pure ()
 
 
 setIndicatorState :: IPCHandle -> XmobarFlag -> IO ()
 setIndicatorState IPCHandle { dbusClient = c
-                            , xmobarObjectPath = path
-                            , xmobarBus = bus
-                            , xmobarInterface = iface
+                            , xmobarIPC  = Just XmobarIPC
+                                { xmobarObjectPath = path
+                                , xmobarBus = bus
+                                , xmobarInterface = iface
+                                }
                             }
                   flag =
 
@@ -149,21 +227,42 @@ setIndicatorState IPCHandle { dbusClient = c
 
                XmobarFlushAll -> error "unexpected value"
 
+setIndicatorState _ _ = pure ()
+
 
 logView :: IPCHandle -> String
-logView IPCHandle { xmobarObjectPath      = objPath
-                  , xmobarBus             = bus
-                  , xmobarInterface       = iface
-                  , xmobarFlushObjectPath = flushObjPath
-                  , xmobarFlushInterface  = flushIface
+logView IPCHandle { xmobarIPC       = xmobar
+                  , externalCtrlIPC = externalCtrl
                   } =
 
-  [qm| IPC data (DBus):\n
-      \  xmobar bus name: {busView}\n
-      \  xmobar object path: {objPath}\n
-      \  xmobar interface name: {iface}\n
-      \  xmobar object path for listening for flush requests: {flushObjPath}\n
-      \  xmobar interface name for listening for flush requests: {flushIface}
-     |]
+  intercalate "\n" $ mconcat
+    [["IPC data (DBus):"], xmobarView xmobar, externalCtrlView externalCtrl]
 
-  where busView = fromMaybe "any (broadcasting to everyone)" $ fmap show bus
+  where _xmobarBusView = fromMaybe "any (broadcasting to everyone)" . fmap show
+        _if f = maybe [] $ (: []) . f
+
+        xmobarView = _if $
+          \XmobarIPC { xmobarObjectPath      = objPath
+                     , xmobarBus             = bus
+                     , xmobarInterface       = iface
+                     , xmobarFlushObjectPath = flushObjPath
+                     , xmobarFlushInterface  = flushIface
+                     } ->
+            [qm|\  xmobar object path: {objPath}\n
+                \  xmobar bus name: {_xmobarBusView bus}\n
+                \  xmobar interface name: {iface}\n
+                \  xmobar object path for listening for flush requests:
+                     \ {flushObjPath}\n
+                \  xmobar interface name for listening for flush requests:
+                     \ {flushIface}
+                |]
+
+        externalCtrlView = _if $
+          \ExternalCtrlIPC { externalCtrlObjectPath = objPath
+                           , externalCtrlBus        = bus
+                           , externalCtrlInterface  = iface
+                           } ->
+            [qm|\  External control IPC object path: {objPath}\n
+                \  External control IPC bus name: {bus}\n
+                \  External control IPC interface name: {iface}
+                |]

@@ -32,6 +32,7 @@ dependencies:
   - process
   - qm-interpolated-string
   - template-haskell
+  - text
   - time
   - transformers
   - unix
