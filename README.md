@@ -32,7 +32,9 @@ __**TODO**__ This description isn't complete yet,
 
 - [Haskell Tool Stack](https://haskellstack.org/)
 - Development files of `libX11`, `libXtst` and `libXrandr`
-- Development files of `libgmp` (for some dependencies)
+  (for `X11` dependency)
+- Development files of `libxml2` (for `libxml-sax` dependency)
+- Development files of `libgmp` (for some other dependencies)
 - Superuser access (for giving to yourself read access permission (using ACL)
   to keyboard device file descriptor)
 
