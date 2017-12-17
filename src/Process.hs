@@ -47,31 +47,28 @@ import "X11" Graphics.X11.Xlib.Types (Display)
 
 -- local imports
 
-import Utils (dieWith)
-import Utils.X (nextEvent')
-import Utils.Sugar ((&), (?), (|?|))
-import Bindings.Xkb ( xkbSetGroup
-                    , xkbListenForKeyboardStateEvents
-                    , xkbGetCurrentLayout
-                    )
-import Bindings.MoreXlib (getLeds)
-import IPC (IPCHandle, setIndicatorState)
+import           Utils (dieWith)
+import           Utils.X (nextEvent')
+import           Utils.Sugar ((&), (?), (|?|))
+import           Bindings.Xkb ( xkbSetGroup
+                              , xkbListenForKeyboardStateEvents
+                              , xkbGetCurrentLayout
+                              )
+import           Bindings.MoreXlib (getLeds)
+import           IPC (IPCHandle, setIndicatorState)
+import           Options (type Options)
 import qualified Options as O
 import qualified Actions
+import           State (type State, type LedModes, type CrossThreadVars)
 import qualified State
+import           Keys (type KeyMap)
 import qualified Keys
 
-import Process.Keyboard (handleKeyboard)
-import Process.KeysActions (processKeysActions)
-import qualified Process.CrossThread as CrossThread
-  (justTurnCapsLockMode, resetAll)
-
-
-type Options         = O.Options
-type KeyMap          = Keys.KeyMap
-type State           = State.State
-type LedModes        = State.LedModes
-type CrossThreadVars = State.CrossThreadVars
+import           Process.Keyboard (handleKeyboard)
+import           Process.KeysActions (processKeysActions)
+import qualified Process.CrossThread as CrossThread ( justTurnCapsLockMode
+                                                    , resetAll
+                                                    )
 
 
 initReset :: Options -> Maybe IPCHandle -> KeyMap -> Display -> IO ()

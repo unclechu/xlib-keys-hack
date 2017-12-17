@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 40420303ecad70750ae9d63a5510181c2f44695eb552ebd1a9613039bbe06216
+-- hash: bb203d21511b78d1ff3d24c1ba730531ce473ef276e9c372fd7f628a12af6f55
 
 name:                xlib-keys-hack
 version:             0.1.0
@@ -27,7 +27,7 @@ library
   hs-source-dirs:
       src
   ghc-options: -Wall -O2
-  default-extensions: PackageImports BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
+  default-extensions: ExplicitNamespaces PackageImports BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
   exposed-modules:
       Actions
       Actions.Types
@@ -77,7 +77,7 @@ library
 executable xlib-keys-hack
   default-language: Haskell2010
   ghc-options: -Wall -O2 -threaded
-  default-extensions: PackageImports BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
+  default-extensions: ExplicitNamespaces PackageImports BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
   hs-source-dirs:
       app
   main-is: Main.hs
@@ -111,7 +111,7 @@ executable xlib-keys-hack
 executable xlib-keys-hack-watch-for-window-focus-events
   default-language: Haskell2010
   ghc-options: -Wall -O2 -threaded
-  default-extensions: PackageImports BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
+  default-extensions: ExplicitNamespaces PackageImports BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
   hs-source-dirs:
       app
   main-is: WindowFocusWatcher.hs
@@ -144,7 +144,7 @@ test-suite xlib-keys-hack-utils-test
   type: exitcode-stdio-1.0
   default-language: Haskell2010
   ghc-options: -Wall -O2
-  default-extensions: PackageImports BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
+  default-extensions: ExplicitNamespaces PackageImports BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
   hs-source-dirs:
       test
   main-is: UtilsSpec.hs

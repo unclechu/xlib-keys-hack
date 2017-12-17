@@ -9,7 +9,7 @@ module Process.Keyboard
   ) where
 
 import "base" System.IO (IOMode (WriteMode), withFile)
-import qualified "base" GHC.IO.Handle as IOHandle
+import "base" GHC.IO.Handle (type Handle)
 import qualified "process" System.Process as P
 import qualified "linux-evdev" System.Linux.Input.Event as EvdevEvent
 
@@ -27,22 +27,25 @@ import "lens" Control.Lens ( (.~), (%~), (^.), (&~), (.=), (%=)
 
 import "base" Data.Maybe (fromMaybe, fromJust, isJust, isNothing)
 import qualified "containers" Data.Set as Set
-import "containers" Data.Set ((\\))
+import "containers" Data.Set (type Set, (\\))
 import "base" Data.Function (fix)
 import "time" Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms, qns)
 
-import qualified "X11" Graphics.X11.Types as XTypes
+import "X11" Graphics.X11.Types (type KeyCode)
 import "X11" Graphics.X11.Xlib.Types (Display)
 
 -- local imports
 
-import Utils.StateMonad (EitherStateT)
-import Utils.Sugar ((&), (?), (<&>))
-import Utils.Lens ((%=<&~>))
+import           Utils.StateMonad (EitherStateT)
+import           Utils.Sugar ((&), (?), (<&>))
+import           Utils.Lens ((%=<&~>))
+import           Options (type Options)
 import qualified Options as O
 import qualified Actions
+import           State (type State, CrossThreadVars)
 import qualified State
+import           Keys (type KeyMap, type KeyName, type KeyAlias)
 import qualified Keys
 
 import qualified Process.CrossThread as CrossThread
@@ -55,18 +58,6 @@ import qualified Process.CrossThread as CrossThread
 
   , resetAll
   )
-
-
-type KeyCode         = XTypes.KeyCode
-type Handle          = IOHandle.Handle
-type Set             = Set.Set
-
-type Options         = O.Options
-type KeyMap          = Keys.KeyMap
-type KeyName         = Keys.KeyName
-type KeyAlias        = Keys.KeyAlias
-type State           = State.State
-type CrossThreadVars = State.CrossThreadVars
 
 
 -- Wait for key events and simulate them in X server.
@@ -269,9 +260,9 @@ handleKeyboard ctVars opts keyMap _ fd =
             x ^. _2 == State.WaitForSecondReleaseAfterAlternativeKeys
 
       justTrigger, justAsTrigger, smartTrigger, alternativeTrigger :: IO ()
-      justTrigger        = trigger   keyName keyCode isPressed
-      justAsTrigger      = asTrigger keyName keyCode isPressed
-      smartTrigger       = onAlternativeKey ? alternativeTrigger $ justTrigger
+      justTrigger   = trigger   keyName keyCode isPressed
+      justAsTrigger = asTrigger keyName keyCode isPressed
+      smartTrigger  = onAlternativeKey ? alternativeTrigger $ justTrigger
 
       alternativeTrigger = do
 

@@ -10,6 +10,7 @@ category:     System
 github:       unclechu/xlib-keys-hack
 
 default-extensions:
+  - ExplicitNamespaces
   - PackageImports
   - BangPatterns
   - ViewPatterns

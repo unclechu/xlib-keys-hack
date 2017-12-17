@@ -41,25 +41,23 @@ import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms, qns)
 
 -- local imports
 
-import Utils.StateMonad (modifyState, modifyStateM)
-import Utils.BreakableMonad (continueIf)
-import Utils.Sugar ((?), (|?|), (.>))
-import Bindings.XTest (fakeKeyCodeEvent)
-import Bindings.MoreXlib (getLeds)
+import           Utils.StateMonad (modifyState, modifyStateM)
+import           Utils.BreakableMonad (continueIf)
+import           Utils.Sugar ((?), (|?|), (.>))
+import           Bindings.XTest (fakeKeyCodeEvent)
+import           Bindings.MoreXlib (getLeds)
+import           Options (type Options)
 import qualified Options
 import qualified Actions
+import           State (type State, type CrossThreadVars)
 import qualified State
+import           Keys (type KeyMap)
 import qualified Keys
 
 
 
-type Options         = Options.Options
-type State           = State.State
-type CrossThreadVars = State.CrossThreadVars
-type Noiser          = [String] -> IO ()
-type Notifier        = [Actions.XmobarFlag] -> IO ()
-type KeyMap          = Keys.KeyMap
-
+type Noiser         = [String] -> IO ()
+type Notifier       = [Actions.XmobarFlag] -> IO ()
 type ModeChangeLens = Lens' State (Maybe Bool)
 
 
