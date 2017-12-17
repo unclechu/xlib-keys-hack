@@ -47,7 +47,6 @@ import           Utils.Sugar ((?), (|?|), (.>))
 import           Bindings.XTest (fakeKeyCodeEvent)
 import           Bindings.MoreXlib (getLeds)
 import           Options (type Options)
-import qualified Options
 import qualified Actions
 import           State (type State, type CrossThreadVars)
 import qualified State

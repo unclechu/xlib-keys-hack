@@ -62,7 +62,6 @@ import qualified Actions
 import           State (type State, type LedModes, type CrossThreadVars)
 import qualified State
 import           Keys (type KeyMap)
-import qualified Keys
 
 import           Process.Keyboard (handleKeyboard)
 import           Process.KeysActions (processKeysActions)
