@@ -146,7 +146,8 @@ handleKeyboard ctVars opts keyMap _ fd =
             -- and before it was pressed only with modifiers.
             releasedCase =
               not isPressed &&
-              isJust (state ^. State.comboState' . State.isEnterPressedWithMods')
+              isJust
+                (state ^. State.comboState' . State.isEnterPressedWithMods')
 
          in pressedCase || releasedCase
 
@@ -168,7 +169,8 @@ handleKeyboard ctVars opts keyMap _ fd =
       intervalLimit :: Rational
       intervalLimit = 0.5
 
-      -- Super-Double-Press feature. 1st step: first press of Super key.
+      -- Super-Double-Press feature.
+      -- 1st step: first press of Super key.
       onSuperDoubleFirstPress :: Bool
       onSuperDoubleFirstPress =
         O.superDoublePress opts &&
@@ -177,7 +179,8 @@ handleKeyboard ctVars opts keyMap _ fd =
         isPressed && pressed == Set.singleton keyName &&
         isNothing (state ^. State.comboState' . State.superDoublePress')
 
-      -- Super-Double-Press feature. 2nd step: first release of Super key.
+      -- Super-Double-Press feature.
+      -- 2nd step: first release of Super key.
       onSuperDoubleFirstRelease :: Bool
       onSuperDoubleFirstRelease =
         O.superDoublePress opts &&
@@ -189,7 +192,8 @@ handleKeyboard ctVars opts keyMap _ fd =
             x ^. _2 == State.WaitForFirstRelease &&
             keyName == x ^. _1 && not isPressed && Set.null pressed
 
-      -- Super-Double-Press feature. 3nd step: second press of Super key.
+      -- Super-Double-Press feature.
+      -- 3rd step: second press of Super key.
       onSuperDoubleSecondPress :: Bool
       onSuperDoubleSecondPress =
         O.superDoublePress opts &&
@@ -201,7 +205,8 @@ handleKeyboard ctVars opts keyMap _ fd =
             x ^. _2 == State.WaitForSecondPressAgain &&
             keyName == x ^. _1 && isPressed && pressed == Set.singleton keyName
 
-      -- Super-Double-Press feature. 4nd step: second release of Super key.
+      -- Super-Double-Press feature.
+      -- 4th step: second release of Super key.
       onSuperDoubleSecondRelease :: Bool
       onSuperDoubleSecondRelease =
         O.superDoublePress opts &&
@@ -213,13 +218,24 @@ handleKeyboard ctVars opts keyMap _ fd =
             x ^. _2 == State.WaitForSecondReleaseOrPressAlternativeKey &&
             keyName == x ^. _1 && not isPressed && Set.null pressed
 
-      -- Super-Double-Press feature. 4nd step: pressed some alternative key
-      -- while Super key still pressed.
+      -- Super-Double-Press feature.
+      -- 4th step: pressed some alternative key while Super key still pressed.
+      --
+      -- P.S. If alternative mode it is already turned on we pass this as it
+      -- isn't to make behavior consistent for user-experience, for example:
+      -- user could accidetly press and release Super key twice but last time
+      -- accidently release it before pressing alternative mode, in this case
+      -- alternative mode will be just turned on, so then user tries again do
+      -- the same but right this time and he wan't be able to do this if we do
+      -- not pass this (it would be alternative key with actual Super modifier
+      -- and after releasing alternative mode won't be turned off).
       onSuperDoubleWithAlternativePressed :: Bool
       onSuperDoubleWithAlternativePressed =
         O.superDoublePress opts &&
         not (state ^. State.comboState' . State.superDoublePressProceeded') &&
-        not (State.alternative state) &&
+
+        -- see P.S. section which explains why this is commented
+        -- not (State.alternative state) &&
 
         Just True ==
           state ^. State.comboState' . State.superDoublePress' <&> \x ->
@@ -233,7 +249,8 @@ handleKeyboard ctVars opts keyMap _ fd =
              in Set.fromList superAndAlternative `Set.isSubsetOf` pressed &&
                 Set.null (mappedAs \\ onlyRealModifiers)
 
-      -- Super-Double-Press feature. 5nd step: held Super key is released after
+      -- Super-Double-Press feature.
+      -- 5th step: held Super key is released after
       -- some alternative keys had pressed.
       onSuperDoubleReleasedAfterAlternative :: Bool
       onSuperDoubleReleasedAfterAlternative =
