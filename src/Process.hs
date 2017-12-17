@@ -39,7 +39,7 @@ import "transformers" Control.Monad.Trans.State (execStateT)
 import "base" Control.Exception (Exception, throw, catch)
 
 import "base" Data.Typeable (Typeable)
-import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
+import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms)
 
 import qualified "X11" Graphics.X11.Xlib.Event  as XEvent
 import qualified "X11" Graphics.X11.Xlib.Extras as XExtras
@@ -108,8 +108,8 @@ instance Exception IsEOFException
 processWindowFocus :: CrossThreadVars -> Options -> KeyMap -> Display -> IO ()
 processWindowFocus ctVars opts _ _ = forever $ do
 
-  noise [qm| Spawning subprocess of '{appExecPath}'
-           \ to get window focus events... |]
+  noise [qms| Spawning subprocess of '{appExecPath}'
+              to get window focus events... |]
 
   (Nothing, Just outH, Nothing, procH) <-
     createProcess (proc appExecPath []) { std_in  = NoStream
@@ -125,8 +125,8 @@ processWindowFocus ctVars opts _ _ = forever $ do
     (State.stateMVar ctVars) $
     return . (State.windowFocusProc' .~ Just (appExecPath, procH, outH))
 
-  noise [qm| Starting listening for window focus events
-           \ from '{appExecPath}' subprocess... |]
+  noise [qms| Starting listening for window focus events
+              from '{appExecPath}' subprocess... |]
   forever (hIsEOF outH >>= throw IsEOFException |?| handle outH)
     `catch` \IsEOFException -> handleFail outH procH
 
@@ -134,8 +134,8 @@ processWindowFocus ctVars opts _ _ = forever $ do
 
   where handle :: Handle -> IO ()
         handle outH = do
-          noise [qm| Got new window focus event
-                   \ from '{appExecPath}' subprocess |]
+          noise [qms| Got new window focus event
+                      from '{appExecPath}' subprocess |]
           _ <- hGetLine outH
           when (O.resetByWindowFocusEvent opts) $
             modifyMVar_ (State.stateMVar ctVars) $ execStateT $
@@ -146,20 +146,20 @@ processWindowFocus ctVars opts _ _ = forever $ do
 
         handleFail :: Handle -> ProcessHandle -> IO ()
         handleFail outH procH = do
-          scream [qm| Subprocess '{appExecPath}' unexpectedly
-                    \ closed its stdout |]
+          scream [qms| Subprocess '{appExecPath}' unexpectedly
+                       closed its stdout |]
           hClose outH
           getProcessExitCode procH >>= \case
             Nothing -> do
-              scream [qm| Subprocess '{appExecPath}' for some reason
-                        \ still running, terminating it... |]
+              scream [qms| Subprocess '{appExecPath}' for some reason
+                           still running, terminating it... |]
               terminateProcess procH
               exitCode <- waitForProcess procH
-              scream [qm| Subprocess '{appExecPath}' just terminated
-                        \ with exit code: {exitCode} |]
+              scream [qms| Subprocess '{appExecPath}' just terminated
+                           with exit code: {exitCode} |]
             Just exitCode ->
-              scream [qm| Subprocess '{appExecPath}' was terminated with
-                        \ with exit code: {exitCode} |]
+              scream [qms| Subprocess '{appExecPath}' was terminated with
+                           with exit code: {exitCode} |]
 
         noise   = Actions.noise  opts ctVars        ::  String  -> IO ()
         noise'  = Actions.noise' opts ctVars        :: [String] -> IO ()

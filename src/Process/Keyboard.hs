@@ -30,7 +30,7 @@ import qualified "containers" Data.Set as Set
 import "containers" Data.Set ((\\))
 import "base" Data.Function (fix)
 import "time" Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
-import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
+import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms, qns)
 
 import qualified "X11" Graphics.X11.Types as XTypes
 import "X11" Graphics.X11.Xlib.Types (Display)
@@ -277,9 +277,9 @@ handleKeyboard ctVars opts keyMap _ fd =
 
         let Just (keyNameTo, keyCodeTo) = alternative
 
-        noise [qm| Triggering {isPressed ? "pressing" $ "releasing"}
-                 \ of alternative {keyNameTo}
-                 \ (X key code: {keyCodeTo}) by {keyName}... |]
+        noise [qms| Triggering {isPressed ? "pressing" $ "releasing"}
+                    of alternative {keyNameTo}
+                    (X key code: {keyCodeTo}) by {keyName}... |]
 
         (isPressed ? pressKey $ releaseKey) keyCodeTo
 
@@ -293,9 +293,9 @@ handleKeyboard ctVars opts keyMap _ fd =
 
   | onSuperDoubleFirstPress -> do
 
-    noise [qm| {maybeAsKeyStr keyName} pressed first time,
-             \ storing this in state for double press of Super key feature to
-             \ wait for first release of this key... |]
+    noise [qms| {maybeAsKeyStr keyName} pressed first time,
+                storing this in state for double press of Super key feature to
+                wait for first release of this key... |]
 
     reprocess $ state &~ do
 
@@ -306,9 +306,9 @@ handleKeyboard ctVars opts keyMap _ fd =
 
   | onSuperDoubleFirstRelease -> do
 
-    noise [qm| {maybeAsKeyStr keyName} released first time,
-             \ storing this in state for double press of Super key feature to
-             \ wait for second press of this key... |]
+    noise [qms| {maybeAsKeyStr keyName} released first time,
+                storing this in state for double press of Super key feature to
+                wait for second press of this key... |]
 
     reprocess $ state &~ do
 
@@ -320,10 +320,10 @@ handleKeyboard ctVars opts keyMap _ fd =
 
   | onSuperDoubleSecondPress -> do
 
-    noise [qm| {maybeAsKeyStr keyName} pressed second time,
-             \ storing this in state for double press of Super key feature to
-             \ wait for second release of this key
-             \ or for alternative key press... |]
+    noise [qms| {maybeAsKeyStr keyName} pressed second time,
+                storing this in state for double press of Super key feature to
+                wait for second release of this key
+                or for alternative key press... |]
 
     reprocess $ state &~ do
 
@@ -343,8 +343,8 @@ handleKeyboard ctVars opts keyMap _ fd =
         actionMsg :: String
         actionMsg = isNothing cmd
 
-                  ? [qm| toggling alternative mode (turning it
-                       \ {State.alternative state ? "off" $ "on"}) |]
+                  ? [qms| toggling alternative mode (turning it
+                          {State.alternative state ? "off" $ "on"}) |]
 
                   $ [qm| spawning shell command "{fromJust cmd}" |]
 
@@ -353,8 +353,8 @@ handleKeyboard ctVars opts keyMap _ fd =
           State.comboState' . State.superDoublePress'          .= Nothing
           State.comboState' . State.superDoublePressProceeded' .= True
 
-    noise [qm| {maybeAsKeyStr keyName} released second time in context of
-             \ double press of Super key feature, {actionMsg}... |]
+    noise [qms| {maybeAsKeyStr keyName} released second time in context of
+                double press of Super key feature, {actionMsg}... |]
 
     let spawnCmd :: Maybe (IO ())
         spawnCmd = _process <$> cmd
@@ -382,11 +382,11 @@ handleKeyboard ctVars opts keyMap _ fd =
         superKeyCode = fromJust $ getKeyCodeByName superKey
         alternativeKey = fromJust $ fmap fst $ alternative
 
-    noise [qm| Pressed alternative {keyName} as {alternativeKey}
-             \ while {maybeAsKeyStr superKey} is pressed
-             \ in context of double press of Super key feature,
-             \ triggering {maybeAsKeyStr superKey} off and enabling alternative
-             \ mode on until {maybeAsKeyStr superKey} will be released... |]
+    noise [qms| Pressed alternative {keyName} as {alternativeKey}
+                while {maybeAsKeyStr superKey} is pressed
+                in context of double press of Super key feature,
+                triggering {maybeAsKeyStr superKey} off and enabling alternative
+                mode on until {maybeAsKeyStr superKey} will be released... |]
 
     maybeAsTrigger (maybeAsName superKey) superKeyCode False
     notify $ Actions.XmobarAlternativeFlag True
@@ -401,11 +401,11 @@ handleKeyboard ctVars opts keyMap _ fd =
 
   | onSuperDoubleReleasedAfterAlternative -> do
 
-    noise [qm| {maybeAsKeyStr keyName} released after some alternative keys
-             \ had triggered in context of double press of Super key feature,
-             \ triggering off events for unreleased keys: {Set.toList pressed},
-             \ turning alternative mode off and
-             \ resetting state of this feature... |]
+    noise [qms| {maybeAsKeyStr keyName} released after some alternative keys
+                had triggered in context of double press of Super key feature,
+                triggering off events for unreleased keys: {Set.toList pressed},
+                turning alternative mode off and
+                resetting state of this feature... |]
 
     alternativeMaybeAsTrigger' (Set.toList pressed) False
     notify $ Actions.XmobarAlternativeFlag False
@@ -418,11 +418,11 @@ handleKeyboard ctVars opts keyMap _ fd =
 
   | onSuperDoubleElse -> do
 
-    noise [qm| Double press of Super key feature did not match
-             \ required conditions, resetting state of it
-             \ (a reason could be one of these:
-                 \ 1. different key is pressed;
-                 \ 2. interval limit is exceeded)... |]
+    noise [qns| Double press of Super key feature did not match
+                required conditions, resetting state of it
+                (a reason could be one of these:
+                  1. different key is pressed;
+                  2. interval limit is exceeded)... |]
 
     reprocess $ state &~ do
       State.comboState' . State.superDoublePress'          .= Nothing
@@ -437,15 +437,15 @@ handleKeyboard ctVars opts keyMap _ fd =
            -- and one of the modifiers released erlier than Enter.
            | not isPressed && keyName `Set.member` pressedModifiers -> do
 
-             noise' [ [qm| In sequence of 'modifier(s) + Enter' combo
-                         \ modifier ({keyName}) was released before Enter,
-                         \ we're about to take it as 'modifier(s) + Enter'
-                         \ ({Set.toList pressedModifiers} + {Keys.EnterKey}) |]
+             noise' [ [qms| In sequence of 'modifier(s) + Enter' combo
+                            modifier ({keyName}) was released before Enter,
+                            we're about to take it as 'modifier(s) + Enter'
+                            ({Set.toList pressedModifiers} + {Keys.EnterKey}) |]
 
-                    , [qm| Triggering pressing and releasing {Keys.EnterKey}
-                         \ right now and
-                         \ recursively calling handler again to release
-                         \ modifier ({keyName})... |]
+                    , [qms| Triggering pressing and releasing {Keys.EnterKey}
+                            right now and
+                            recursively calling handler again to release
+                            modifier ({keyName})... |]
                     ]
 
              -- Triggering Enter pressing and releasing first
@@ -465,12 +465,12 @@ handleKeyboard ctVars opts keyMap _ fd =
            -- Another modifier pressed, adding it to stored list
            | isPressed && keyName `Set.member` allModifiersKeys -> do
 
-             noise' [ [qm| In sequence of 'modifiers + Enter' combo
-                         \ another modifier ({keyName}) was pressed,
-                         \ adding this modifier to state... |]
+             noise' [ [qms| In sequence of 'modifiers + Enter' combo
+                            another modifier ({keyName}) was pressed,
+                            adding this modifier to state... |]
 
-                    , [qm| Calling handler recursively again
-                         \ to trigger modifier ({keyName}) key... |]
+                    , [qms| Calling handler recursively again
+                            to trigger modifier ({keyName}) key... |]
                     ]
 
              -- Let's trigger this modifier key by recursively handle it again
@@ -480,17 +480,17 @@ handleKeyboard ctVars opts keyMap _ fd =
            -- it should be handled as additional control in this case.
            | otherwise -> do
 
-             noise' [ [qm| In sequence of 'modifier(s) + Enter' combo
-                         \ ({Set.toList pressedModifiers} + {Keys.EnterKey})
-                         \ some another key was detected
-                         \ ({keyName} was {isPressed ? "pressed" $ "released"}),
-                         \ so it means it's not that kind of combo anymore,
-                         \ Enter key will be interpreted as additional control
-                         \ (it could be Ctrl+Shift+C for example) |]
+             noise' [ [qms| In sequence of 'modifier(s) + Enter' combo
+                            ({Set.toList pressedModifiers} + {Keys.EnterKey})
+                            some another key was detected
+                            ({keyName} was {isPressed ? "pressed" $ "released"}),
+                            so it means it's not that kind of combo anymore,
+                            Enter key will be interpreted as additional control
+                            (it could be Ctrl+Shift+C for example) |]
 
-                    , "Removing 'modifier(s) + Enter' flag from state\
-                      \ and calling handler recursively again\
-                      \ to handle Enter as additional control..."
+                    , [qns| Removing 'modifier(s) + Enter' flag from state
+                            and calling handler recursively again
+                            to handle Enter as additional control... |]
                     ]
 
              state & lens .~ Nothing & reprocess
@@ -527,8 +527,8 @@ handleKeyboard ctVars opts keyMap _ fd =
 
   -- When held `FNKey` on apple keyboard and press some media key
   | onAppleMediaPressed -> do
-    noise [qm| Apple media key pressed, preventing triggering
-             \ {Keys.FNKey} as {Keys.InsertKey}... |]
+    noise [qms| Apple media key pressed, preventing triggering
+                {Keys.FNKey} as {Keys.InsertKey}... |]
     smartTrigger
     return $ state & State.comboState' . State.appleMediaPressed' .~ True
 
@@ -558,17 +558,17 @@ handleKeyboard ctVars opts keyMap _ fd =
            -- On Enter key pressed.
            -- Storing pressed modifiers in state.
            then set lens (Just otherPressed) state
-                <$ noise [qm| {keyName} pressed only with modifiers for now,
-                            \ storing these modifiers list in state... |]
+                <$ noise [qms| {keyName} pressed only with modifiers for now,
+                               storing these modifiers list in state... |]
 
            -- On Enter key released.
            -- Triggering Enter key pressing+releasing
            -- (with triggered modifiers before),
            -- so it means we're triggering modifier + Enter combo
            -- (like Shift+Enter, Ctrl+Enter, etc.).
-           else do noise [qm| {keyName} released and had pressed before
-                            \ only with modifiers, triggering it as
-                            \ {Set.toList mods} + {keyName}... |]
+           else do noise [qms| {keyName} released and had pressed before
+                               only with modifiers, triggering it as
+                               {Set.toList mods} + {keyName}... |]
                    set lens Nothing state <$ pressRelease keyName keyCode
 
   -- Handling of additional controls by `CapsLockKey` and `EnterKey`.
@@ -587,8 +587,8 @@ handleKeyboard ctVars opts keyMap _ fd =
                  , State.comboState' . State.keysPressedBeforeEnter'
                  , Keys.ControlRightKey
                  )
-               _ -> error [qm| Got unexpected key, it supposed to be only
-                             \ {Keys.CapsLockKey} or {Keys.EnterKey} |]
+               _ -> error [qms| Got unexpected key, it supposed to be only
+                                {Keys.CapsLockKey} or {Keys.EnterKey} |]
 
           :: (Lens' State Bool, Lens' State (Set KeyName), KeyName)
      in if
@@ -597,11 +597,11 @@ handleKeyboard ctVars opts keyMap _ fd =
         -- But store keys that hadn't released in time.
         | isPressed -> do
           unless (Set.null otherPressed) $
-            noise' [ [qm| {keyName} was pressed with some another keys
-                        \ that hadn't be released in time, these another keys
-                        \ WONT be taken as combo with additional control |]
-                   , [qm| Storing keys was pressed before {keyName}:
-                        \ {Set.toList otherPressed}... |]
+            noise' [ [qms| {keyName} was pressed with some another keys
+                           that hadn't be released in time, these another keys
+                           WONT be taken as combo with additional control |]
+                   , [qms| Storing keys was pressed before {keyName}:
+                           {Set.toList otherPressed}... |]
                    ]
           return $ state & pressedBeforeLens .~ otherPressed
 
@@ -610,10 +610,10 @@ handleKeyboard ctVars opts keyMap _ fd =
         -- it triggers Control pressing.
         | state ^. withCombosFlagLens -> do
           let ctrlKeyCode = fromJust $ getKeyCodeByName controlKeyName
-          noise' [ [qm| {ctrlKeyCode} released after pressed with combos,
-                      \ it means it was interpreted as {controlKeyName} |]
-                 , [qm| Triggering releasing of {controlKeyName}
-                      \ (X key code: {ctrlKeyCode})... |]
+          noise' [ [qms| {ctrlKeyCode} released after pressed with combos,
+                         it means it was interpreted as {controlKeyName} |]
+                 , [qms| Triggering releasing of {controlKeyName}
+                         (X key code: {ctrlKeyCode})... |]
                  ]
           releaseKey ctrlKeyCode
           return $ state & withCombosFlagLens .~ False
@@ -653,8 +653,8 @@ handleKeyboard ctVars opts keyMap _ fd =
              , Keys.ControlRightKey
              )
            | otherwise =
-             error [qm| Got unexpected key, it supposed to be only
-                      \ {Keys.CapsLockKey} or {Keys.EnterKey} |]
+             error [qms| Got unexpected key, it supposed to be only
+                         {Keys.CapsLockKey} or {Keys.EnterKey} |]
 
         ( mainKeyName,
           withCombosFlagLens,
@@ -678,9 +678,9 @@ handleKeyboard ctVars opts keyMap _ fd =
         -- it means it should be interpreted as Control key.
         | otherwise -> do
           let ctrlKeyCode = fromJust $ getKeyCodeByName controlKeyName
-          noise [qm| {mainKeyName} pressed with combo,
-                   \ triggering {controlKeyName}
-                   \ (X key code: {ctrlKeyCode})... |]
+          noise [qms| {mainKeyName} pressed with combo,
+                      triggering {controlKeyName}
+                      (X key code: {ctrlKeyCode})... |]
           pressKey ctrlKeyCode -- Press Control before current key
           smartTrigger
           return $ state & withCombosFlagLens .~ True
@@ -834,8 +834,8 @@ handleKeyboard ctVars opts keyMap _ fd =
   --
   --   "Releasing alternative keys during turning alternative mode off..."
   --
-  --   (\keyName -> [qm| Releasing alternative {keyName}
-  --                   \ during turning alternative mode off... |])
+  --   (\keyName -> [qms| Releasing alternative {keyName}
+  --                      during turning alternative mode off... |])
   --
   --   isAlternative
   --   (getAlternative .> fmap snd)
@@ -845,11 +845,11 @@ handleKeyboard ctVars opts keyMap _ fd =
   releaseAppleMedia :: Set KeyName -> IO (Set KeyName)
   releaseAppleMedia = abstractRelease
 
-    [qm| Releasing held media keys of apple keyboard
-       \ after {Keys.FNKey} released... |]
+    [qms| Releasing held media keys of apple keyboard
+          after {Keys.FNKey} released... |]
 
-    (\keyName -> [qm| Releasing held media {keyName} of apple keyboard
-                    \ after {Keys.FNKey} released... |])
+    (\keyName -> [qms| Releasing held media {keyName} of apple keyboard
+                       after {Keys.FNKey} released... |])
 
     isMedia
     getMedia
@@ -858,8 +858,8 @@ handleKeyboard ctVars opts keyMap _ fd =
   trigger :: KeyName -> KeyCode -> Bool -> IO ()
   trigger keyName keyCode isPressed = do
 
-    noise [qm| Triggering {isPressed ? "pressing" $ "releasing"}
-             \ of {keyName} (X key code: {keyCode})... |]
+    noise [qms| Triggering {isPressed ? "pressing" $ "releasing"}
+                of {keyName} (X key code: {keyCode})... |]
 
     (isPressed ? pressKey $ releaseKey) keyCode
 
@@ -869,9 +869,9 @@ handleKeyboard ctVars opts keyMap _ fd =
   asTrigger :: KeyName -> KeyCode -> Bool -> IO ()
   asTrigger keyName keyCode isPressed = do
 
-    noise [qm| Triggering {isPressed ? "pressing" $ "releasing"}
-             \ of {keyName} as {getAsName keyName}
-             \ (X key code: {keyCode})... |]
+    noise [qms| Triggering {isPressed ? "pressing" $ "releasing"}
+                of {keyName} as {getAsName keyName}
+                (X key code: {keyCode})... |]
 
     (isPressed ? pressKey $ releaseKey) keyCode
 
@@ -896,9 +896,9 @@ handleKeyboard ctVars opts keyMap _ fd =
 
     noise' $ flip map keys $ \(keyName, asKeyName, code) ->
       let alternativeStr = isAlternative keyName ? "alternative " $ ""
-       in [qm| Triggering {isPressed ? "pressing" $ "releasing"}
-             \ of {alternativeStr}{asKeyStr keyName asKeyName}
-             \ (X key code: {code})... |]
+       in [qms| Triggering {isPressed ? "pressing" $ "releasing"}
+                of {alternativeStr}{asKeyStr keyName asKeyName}
+                (X key code: {code})... |]
 
     (isPressed ? pressKeys $ releaseKeys) $ map (\(_, _, x) -> x) keys
 
@@ -906,8 +906,8 @@ handleKeyboard ctVars opts keyMap _ fd =
   pressRelease :: KeyName -> KeyCode -> IO ()
   pressRelease keyName keyCode = do
 
-    noise [qm| Triggering pressing and releasing of {keyName}
-             \ (X key code: {keyCode})... |]
+    noise [qms| Triggering pressing and releasing of {keyName}
+                (X key code: {keyCode})... |]
 
     pressReleaseKey keyCode
 
@@ -916,9 +916,9 @@ handleKeyboard ctVars opts keyMap _ fd =
   asPressRelease :: KeyName -> KeyCode -> IO ()
   asPressRelease keyName keyCode = do
 
-    noise [qm| Triggering pressing and releasing
-             \ of {keyName} as {getAsName keyName}
-             \ (X key code: {keyCode})... |]
+    noise [qms| Triggering pressing and releasing
+                of {keyName} as {getAsName keyName}
+                (X key code: {keyCode})... |]
 
     pressReleaseKey keyCode
 

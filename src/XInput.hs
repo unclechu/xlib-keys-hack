@@ -23,7 +23,7 @@ import "lens" Control.Lens (set, view)
 import "containers" Data.Set (toList, fromList, difference)
 import "base" Data.List (elemIndex, find)
 import "base" Data.Maybe (isJust)
-import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
+import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms, qns)
 
 -- local imports
 
@@ -71,10 +71,10 @@ getAvailable = execStateT $
           where f = (fromList . view O.disableXInputDeviceId')
                  .> (\x -> (x, fromList filteredAvailable))
                 check (a, b) = when (a /= b) $ do
-                  errPutStrLn [qm| 'xinput' error:
-                                 \ these ids is unavailable: {diff} |]
-                  dieWith "'xinput': all explicit ids of devices\
-                          \ must be available"
+                  errPutStrLn [qms| 'xinput' error:
+                                    these ids is unavailable: {diff} |]
+                  dieWith [qns| 'xinput': all explicit ids of devices
+                                must be available |]
                   where diff = toList $ difference a b
 
         -- Get pair with (id, name) from single line of 'xinput' output.

@@ -37,7 +37,7 @@ import "base" Control.Monad.IO.Class (MonadIO, liftIO)
 
 import qualified "containers" Data.Set as Set (null)
 import "base" Data.Maybe (fromJust, isJust)
-import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
+import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms, qns)
 
 -- local imports
 
@@ -111,15 +111,15 @@ handleCapsLockModeChange ctVars noise' state =
   handleModeChange mcLens (doingItMsg, alreadyMsg) handler isNowOn
                    noise' state
 
-  where doingItMsg = [qm| Delayed Caps Lock mode turning
-                        \ {toOn ? "on" $ "off"}
-                        \ after all other keys release
-                        \ (by pressing and releasing {keyName})... |]
+  where doingItMsg = [qms| Delayed Caps Lock mode turning
+                           {toOn ? "on" $ "off"}
+                           after all other keys release
+                           (by pressing and releasing {keyName})... |]
 
-        alreadyMsg = [qm| Delayed Caps Lock mode turning
-                        \ {toOn ? "on" $ "off"}
-                        \ after all other keys release was skipped
-                        \ because it's already done now |]
+        alreadyMsg = [qms| Delayed Caps Lock mode turning
+                           {toOn ? "on" $ "off"}
+                           after all other keys release was skipped
+                           because it's already done now |]
 
         mcLens :: ModeChangeLens
         mcLens = State.comboState' . State.capsLockModeChange'
@@ -140,14 +140,14 @@ handleAlternativeModeChange noise' notify' state =
   handleModeChange mcLens (doingItMsg, alreadyMsg) handler isNowOn
                    noise' state
 
-  where doingItMsg = [qm| Delayed Alternative mode turning
-                        \ {toOn ? "on" $ "off"}
-                        \ after all other keys release... |]
+  where doingItMsg = [qms| Delayed Alternative mode turning
+                           {toOn ? "on" $ "off"}
+                           after all other keys release... |]
 
-        alreadyMsg = [qm| Delayed Alternative mode turning
-                        \ {toOn ? "on" $ "off"}
-                        \ after all other keys release was skipped
-                        \ because it's already done now |]
+        alreadyMsg = [qms| Delayed Alternative mode turning
+                           {toOn ? "on" $ "off"}
+                           after all other keys release was skipped
+                           because it's already done now |]
 
         mcLens :: ModeChangeLens
         mcLens = State.comboState' . State.alternativeModeChange'
@@ -210,16 +210,16 @@ toggleCapsLock ctVars noise' state =
            noise' state
 
   where immediatelyMsg =
-          [qm| Toggling Caps Lock mode (turning it {onOrOff toOn}
-             \ by pressing and releasing {keyName})... |]
+          [qms| Toggling Caps Lock mode (turning it {onOrOff toOn}
+                by pressing and releasing {keyName})... |]
 
-        laterMsgs = [ [qm| Attempt to toggle Caps Lock mode
-                         \ (to turn it {onOrOff toOn}
-                         \ by pressing and releasing {keyName})
-                         \ while pressed some another keys |]
+        laterMsgs = [ [qms| Attempt to toggle Caps Lock mode
+                            (to turn it {onOrOff toOn}
+                            by pressing and releasing {keyName})
+                            while pressed some another keys |]
 
-                    , [qm| Storing in state request to turn Caps Lock mode
-                         \ {onOrOff toOn} after all another keys release... |]
+                    , [qms| Storing in state request to turn Caps Lock mode
+                            {onOrOff toOn} after all another keys release... |]
                     ]
 
         mcLens :: ModeChangeLens
@@ -239,15 +239,15 @@ toggleAlternative noise' notify' state =
   turnMode mcLens ([immediatelyMsg], laterMsgs) Nothing handler toOn
            noise' state
 
-  where immediatelyMsg = [qm| Toggling Alternative mode
-                            \ (turning it {onOrOff toOn})... |]
+  where immediatelyMsg = [qms| Toggling Alternative mode
+                               (turning it {onOrOff toOn})... |]
 
-        laterMsgs = [ [qm| Attempt to toggle Alternative mode
-                         \ (to turn it {onOrOff toOn})
-                         \ while pressed some another keys |]
+        laterMsgs = [ [qms| Attempt to toggle Alternative mode
+                            (to turn it {onOrOff toOn})
+                            while pressed some another keys |]
 
-                    , [qm| Storing in state request to turn Alternative mode
-                         \ {onOrOff toOn} after all another keys release... |]
+                    , [qms| Storing in state request to turn Alternative mode
+                            {onOrOff toOn} after all another keys release... |]
                     ]
 
         mcLens :: ModeChangeLens
@@ -267,19 +267,19 @@ turnCapsLockMode ctVars noise' state toOn =
   turnMode mcLens ([immediatelyMsg], laterMsgs) already handler toOn
            noise' state
 
-  where immediatelyMsg = [qm| Turning Caps Lock mode {onOrOff toOn}
-                            \ (by pressing and releasing {keyName})... |]
+  where immediatelyMsg = [qms| Turning Caps Lock mode {onOrOff toOn}
+                               (by pressing and releasing {keyName})... |]
 
-        laterMsgs = [ [qm| Attempt to turn Caps Lock mode {onOrOff toOn}
-                         \ (by pressing and releasing {keyName})
-                         \ while pressed some another keys |]
+        laterMsgs = [ [qms| Attempt to turn Caps Lock mode {onOrOff toOn}
+                            (by pressing and releasing {keyName})
+                            while pressed some another keys |]
 
-                    , [qm| Storing in state request to turn Caps Lock mode
-                         \ {onOrOff toOn} after all another keys release... |]
+                    , [qms| Storing in state request to turn Caps Lock mode
+                            {onOrOff toOn} after all another keys release... |]
                     ]
 
-        alreadyMsg = [qm| Skipping attempt to turn Caps Lock mode
-                        \ {onOrOff toOn}, because it's already done... |]
+        alreadyMsg = [qms| Skipping attempt to turn Caps Lock mode
+                           {onOrOff toOn}, because it's already done... |]
 
         mcLens :: ModeChangeLens
         mcLens  = State.comboState' . State.capsLockModeChange'
@@ -301,15 +301,15 @@ turnAlternativeMode noise' notify' state toOn =
 
   where immediatelyMsg = [qm| Turning Alternative mode {onOrOff toOn}... |]
 
-        laterMsgs = [ [qm| Attempt to turn Alternative mode {onOrOff toOn}
-                         \ while pressed some another keys |]
+        laterMsgs = [ [qms| Attempt to turn Alternative mode {onOrOff toOn}
+                            while pressed some another keys |]
 
-                    , [qm| Storing in state request to turn Alternative mode
-                         \ {onOrOff toOn} after all another keys release... |]
+                    , [qms| Storing in state request to turn Alternative mode
+                            {onOrOff toOn} after all another keys release... |]
                     ]
 
-        alreadyMsg = [qm| Skipping attempt to turn Alternative mode
-                        \ {onOrOff toOn}, because it's already done... |]
+        alreadyMsg = [qms| Skipping attempt to turn Alternative mode
+                           {onOrOff toOn}, because it's already done... |]
 
         mcLens :: ModeChangeLens
         mcLens  = State.comboState' . State.alternativeModeChange'
@@ -333,9 +333,9 @@ handleResetKbdLayout ctVars noise' state =
 
   -- Skip if it's already done
   if State.kbdLayout state == 0
-     then let msg = "Delayed reset keyboard layout to default\
-                    \ after all other keys release was skipped\
-                    \ because it's already done now"
+     then let msg = [qns| Delayed reset keyboard layout to default
+                          after all other keys release was skipped
+                          because it's already done now |]
            in liftIO (noise' [msg])
                 >> modifyState (mcLens .~ False)
                 >> left ()
@@ -345,8 +345,8 @@ handleResetKbdLayout ctVars noise' state =
   continueIf everyKeyIsReleased
 
   -- Perfect time to do it!
-  liftIO $ noise' [ "Delayed resetting keyboard layout to default\
-                    \ after all other keys release..." ]
+  liftIO $ noise' [ [qns| Delayed resetting keyboard layout to default
+                          after all other keys release... |] ]
   liftIO handle
   modifyState $ mcLens .~ False
 
@@ -360,8 +360,8 @@ resetKbdLayout ctVars noise' state = flip execStateT state . runEitherT $ do
 
   -- Skip if it's already done
   if State.kbdLayout state == 0
-     then let msg = "Skipping attempt to reset keyboard layout\
-                    \ to default because it's already done"
+     then let msg = [qns| Skipping attempt to reset keyboard layout
+                          to default because it's already done |]
            in liftIO (noise' [msg])
                 >> modifyState (mcLens .~ False)
                 >> left ()
@@ -377,10 +377,11 @@ resetKbdLayout ctVars noise' state = flip execStateT state . runEitherT $ do
      else right () -- Or not, go further
 
   -- Let's do it later
-  liftIO $ noise' [ "Attempt to reset keyboard layout to default\
-                    \ while pressed some another keys"
-                  , "Storing in state request to reset keyboard layout\
-                    \ to default after all another keys release..." ]
+  liftIO $ noise' [ [qns| Attempt to reset keyboard layout to default
+                          while pressed some another keys |]
+                  , [qns| Storing in state request to reset keyboard layout
+                          to default after all another keys release... |]
+                  ]
   modifyState $ mcLens .~ True
 
   where mcLens = State.comboState' . State.resetKbdLayout'
@@ -412,8 +413,8 @@ resetAll _ ctVars noise' notify' = do
 justTurnCapsLockMode :: Display -> (String -> IO ()) -> KeyMap -> Bool -> IO ()
 justTurnCapsLockMode dpy noise keyMap isOn =
 
-  let logIt = noise [qm| Turning Caps Lock mode {onOrOff isOn}
-                       \ (by pressing and releasing {keyName})... |]
+  let logIt = noise [qms| Turning Caps Lock mode {onOrOff isOn}
+                          (by pressing and releasing {keyName})... |]
 
       f = fakeKeyCodeEvent dpy keyCode
       toggle = f True >> f False
@@ -430,8 +431,8 @@ justTurnCapsLockMode dpy noise keyMap isOn =
 
   `orIfAlreadyOn`
 
-  noise [qm| Attempt to turn Caps Lock mode {onOrOff isOn},
-           \ it's already done, skipping... |]
+  noise [qms| Attempt to turn Caps Lock mode {onOrOff isOn},
+              it's already done, skipping... |]
 
   where keyName = Keys.RealCapsLockKey
         keyCode = fromJust $ Keys.getRealKeyCodeByName keyMap keyName

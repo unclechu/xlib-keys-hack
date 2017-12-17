@@ -53,7 +53,7 @@ import "base" Data.Maybe (fromJust)
 import "base" Data.List (intercalate)
 import "base" Data.Typeable (Typeable)
 import "data-default" Data.Default (def)
-import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
+import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms, qns)
 
 -- local imports
 
@@ -134,8 +134,8 @@ main = flip evalStateT ([] :: ThreadsState) $ do
 
     if O.resetByWindowFocusEvent opts
 
-       then do noise "Getting additional X Display\
-                     \ for window focus handler thread..."
+       then do noise [qns| Getting additional X Display
+                           for window focus handler thread... |]
                liftIO xkbInit
 
        else return undefined
@@ -298,8 +298,8 @@ main = flip evalStateT ([] :: ThreadsState) $ do
         m (Actions.NotifyXmobar x) = whenJust ipcHandle $ \ipc ->
 
           let flag a isOn title = do
-                noise [qm| Setting xmobar {title} indicator state
-                         \ {isOn ? "On" $ "Off"}... |]
+                noise [qms| Setting xmobar {title} indicator state
+                            {isOn ? "On" $ "Off"}... |]
                 liftIO $ setIndicatorState ipc a
 
               value a v title = do
@@ -342,10 +342,10 @@ main = flip evalStateT ([] :: ThreadsState) $ do
 
             -- Check if termination process already initialized
             St.get <&> not . State.isTerminating
-              >>= right () |?| let msg = "Attempt to initialize application\
-                                         \ termination process when it's\
-                                         \ already initialized was skipped"
-                                in noise msg >> left ()
+              >>= right () |?| let s = [qns| Attempt to initialize application
+                                             termination process when it's
+                                             already initialized was skipped |]
+                                in noise s >> left ()
 
             modifyState $ State.isTerminating' .~ True
             noise "Application termination process initialization..."
@@ -393,15 +393,15 @@ main = flip evalStateT ([] :: ThreadsState) $ do
 
               >>= let fm (fromJust -> Just (execFilePath, procH, outH)) = do
 
-                         noise [qm| Terminating of window focus events watcher
-                                  \ '{execFilePath}' subprocess... |]
+                         noise [qms| Terminating of window focus events watcher
+                                     '{execFilePath}' subprocess... |]
 
                          liftIO $ SysIO.hClose outH
                          liftIO $ terminateProcess procH
                          exitCode <- liftIO $ waitForProcess procH
 
-                         noise [qm| Subprocess '{execFilePath}' terminated
-                                  \ with exit code: {exitCode} |]
+                         noise [qms| Subprocess '{execFilePath}' terminated
+                                     with exit code: {exitCode} |]
 
                       fm _ = return ()
 
@@ -474,8 +474,8 @@ main = flip evalStateT ([] :: ThreadsState) $ do
                 checkForCount files = do
 
                   when (length files < 1) $
-                    dieWith "All specified devices to get events from \
-                            \is unavailable!"
+                    dieWith [qns| All specified devices to get events from
+                                  is unavailable! |]
 
                   return files
 
@@ -505,9 +505,9 @@ main = flip evalStateT ([] :: ThreadsState) $ do
 
           threadDelay $ terminationTimeout * 1000 * 1000
 
-          errPutStrLn [qm| Termination process timeout
-                         \ after {terminationTimeout} seconds,
-                         \ just exiting immidiately... |]
+          errPutStrLn [qms| Termination process timeout
+                            after {terminationTimeout} seconds,
+                            just exiting immidiately... |]
 
           exitImmediately $ ExitFailure 1
 

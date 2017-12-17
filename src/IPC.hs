@@ -17,7 +17,7 @@ import "base" System.IO (stderr, hPutStrLn)
 
 import "base" Data.List (intercalate)
 import "base" Data.Maybe (fromMaybe)
-import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
+import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qmb)
 
 import "base" Control.Monad (when)
 
@@ -248,21 +248,20 @@ logView IPCHandle { xmobarIPC       = xmobar
                      , xmobarFlushObjectPath = flushObjPath
                      , xmobarFlushInterface  = flushIface
                      } ->
-            [qm|\  xmobar object path: {objPath}\n
-                \  xmobar bus name: {_xmobarBusView bus}\n
-                \  xmobar interface name: {iface}\n
-                \  xmobar object path for listening for flush requests:
-                     \ {flushObjPath}\n
-                \  xmobar interface name for listening for flush requests:
-                     \ {flushIface}
-                |]
+            [qmb|\  xmobar object path: {objPath}
+                 \  xmobar bus name: {_xmobarBusView bus}
+                 \  xmobar interface name: {iface}
+                 \  xmobar object path for listening for flush requests: \
+                      {flushObjPath}
+                 \  xmobar interface name for listening for flush requests: \
+                      {flushIface}
+                 |]
 
         externalCtrlView = _if $
           \ExternalCtrlIPC { externalCtrlObjectPath = objPath
                            , externalCtrlBus        = bus
                            , externalCtrlInterface  = iface
                            } ->
-            [qm|\  External control IPC object path: {objPath}\n
-                \  External control IPC bus name: {bus}\n
-                \  External control IPC interface name: {iface}
-                |]
+            [qmb|\  External control IPC object path: {objPath}
+                 \  External control IPC bus name: {bus}
+                 \  External control IPC interface name: {iface} |]

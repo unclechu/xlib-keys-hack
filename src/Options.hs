@@ -26,7 +26,7 @@ import "deepseq" Control.DeepSeq (NFData, rnf, deepseq)
 
 import "base" Data.Maybe (fromJust)
 import "data-default" Data.Default (Default, def)
-import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
+import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms, qmb)
 import qualified "text" Data.Text as T (pack, unpack, replace)
 
 -- local imports
@@ -179,82 +179,82 @@ options =
       "Show this usage info"
   , GetOpt.Option ['v'] ["verbose"]
       (GetOpt.NoArg $ verboseMode' .~ True)
-      [qm| Start in verbose-mode\n
-           Default is: {verboseMode def ? "On" $ "Off"}
-         |]
+      [qmb| Start in verbose-mode
+            Default is: {verboseMode def ? "On" $ "Off"}
+            |]
 
   , GetOpt.Option  [ ]  ["real-capslock"]
       (GetOpt.NoArg $ (realCapsLock' .~ True)
                     . (resetByEscapeOnCapsLock' .~ False))
-      [qm| Use real Caps Lock instead of remapping it to Escape\n
-           Default is: {realCapsLock def ? "On" $ "Off"}
-         |]
+      [qmb| Use real Caps Lock instead of remapping it to Escape
+            Default is: {realCapsLock def ? "On" $ "Off"}
+            |]
   , GetOpt.Option  [ ]  ["no-additional-controls"]
       (GetOpt.NoArg $ additionalControls' .~ False)
-      [qm| Disable additional controls behavior for Caps Lock and Enter keys\n
-           (could be comfortable for playing some video games)\n
-           Default is: {additionalControls def ? "On" $ "Off"}
-         |]
+      [qmb| Disable additional controls behavior for Caps Lock and Enter keys
+            (could be comfortable for playing some video games)
+            Default is: {additionalControls def ? "On" $ "Off"}
+            |]
   , GetOpt.Option  [ ]  ["shift-numeric-keys"]
       (GetOpt.NoArg $ shiftNumericKeys' .~ True)
-      [qm| Shift numeric keys in numbers row one key righter,
-             \ and move 'minus' key to the left side at '1' key position.\n
-           Could be more consistent for 10-fingers typing.\n
-           Default is: {shiftNumericKeys def ? "On" $ "Off"}
-         |]
+      [qmb| Shift numeric keys in numbers row one key righter, \
+              and move 'minus' key to the left side at '1' key position.
+            Could be more consistent for 10-fingers typing.
+            Default is: {shiftNumericKeys def ? "On" $ "Off"}
+            |]
 
   , GetOpt.Option  [ ]  ["disable-toggling-alternative-mode-by-alts"]
       (GetOpt.NoArg $ toggleAlternativeModeByAlts' .~ False)
-      [qm| Disable toggling alternative mode
-         \ by pressing Alt keys (Left and Right) both at the same time\n
-           Default is: {toggleAlternativeModeByAlts def ? "On" $ "Off"}
-         |]
+      [qmb| Disable toggling alternative mode \
+              by pressing Alt keys (Left and Right) both at the same time
+            Default is: {toggleAlternativeModeByAlts def ? "On" $ "Off"}
+            |]
   , GetOpt.Option  [ ]  [disableSuperDoublePress]
       (GetOpt.NoArg $ superDoublePress' .~ False)
-      [qm| Disable handling of double Super key press.\n
-           Default is: {superDoublePress def ? "On" $ "Off"}
-         |]
+      [qmb| Disable handling of double Super key press.
+            Default is: {superDoublePress def ? "On" $ "Off"}
+            |]
   , GetOpt.Option  [ ]  ["super-double-press-cmd"]
       (GetOpt.ReqArg
         (\(Just -> x) -> set leftSuperDoublePressCmd'  x
                        . set rightSuperDoublePressCmd' x)
         "COMMAND")
-      [qm| When Super key is pressed twice in short interval
-             \ alternative mode will be toggled or
-             \ specified shell command will be spawned.\n
-           {makesNoSense disableSuperDoublePress}
-         |]
+      [qmb| When Super key is pressed twice in short interval \
+              alternative mode will be toggled or \
+              specified shell command will be spawned.
+            {makesNoSense disableSuperDoublePress}
+            |]
   , GetOpt.Option  [ ]  ["left-super-double-press-cmd"]
       (GetOpt.ReqArg (Just .> set leftSuperDoublePressCmd') "COMMAND")
-      [qm| Double Left Super key press will spawn specified shell command
-             \ instead of toggling alternative mode.\n
-           {makesNoSense disableSuperDoublePress}
-         |]
+      [qmb| Double Left Super key press will spawn specified shell command \
+              instead of toggling alternative mode.
+            {makesNoSense disableSuperDoublePress}
+            |]
   , GetOpt.Option  [ ]  ["right-super-double-press-cmd"]
       (GetOpt.ReqArg (Just .> set rightSuperDoublePressCmd') "COMMAND")
-      [qm| Double Right Super key press will spawn specified shell command
-             \ instead of toggling alternative mode.\n
-           {makesNoSense disableSuperDoublePress}
-         |]
+      [qmb| Double Right Super key press will spawn specified shell command \
+              instead of toggling alternative mode.
+            {makesNoSense disableSuperDoublePress}
+            |]
 
   , GetOpt.Option  [ ]  ["disable-reset-by-escape-on-capslock"]
       (GetOpt.NoArg $ resetByEscapeOnCapsLock' .~ False)
-      [qm| Disable resetting Caps Lock mode, Alternative mode
-             \ and keyboard layout by Escape that triggered by Caps Lock key\n
-             (only when it's remapped, no need to use this option
-               \ if you already use --real-capslock)\n
-           Default is: {resetByEscapeOnCapsLock def ? "On" $ "Off"}
-         |]
+      [qmb| Disable resetting Caps Lock mode, Alternative mode \
+              and keyboard layout by Escape that triggered by Caps Lock key
+            (only when it's remapped, no need to use this option \
+              if you already use --real-capslock)
+            Default is: {resetByEscapeOnCapsLock def ? "On" $ "Off"}
+            |]
   , GetOpt.Option  [ ]  ["disable-reset-by-window-focus-event"]
       (GetOpt.NoArg $ resetByWindowFocusEvent' .~ False)
-      [qm| Disable resetting Caps Lock mode, Alternative mode
-             \ and keyboard layout by switching between windows.\n
-           WARNING! If you don't disable this feature you should ensure
-             \ that you have directory that contains
-             \ 'xlib-keys-hack-watch-for-window-focus-events'
-             \ executable in your 'PATH' environment variable!\n
-           Default is: {resetByWindowFocusEvent def ? "On" $ "Off"}
-         |]
+      [qmb| Disable resetting Caps Lock mode, Alternative mode \
+              and keyboard layout by switching between windows.
+            WARNING! If you don't disable this feature you should ensure \
+              that you have directory that contains \
+              'xlib-keys-hack-watch-for-window-focus-events' \
+              executable in your 'PATH' environment variable!
+            Default is: {resetByWindowFocusEvent def ? "On" $ "Off"}
+            |]
 
   , GetOpt.Option  [ ]  ["disable-xinput-device-name"]
       (GetOpt.OptArg
@@ -274,85 +274,84 @@ options =
 
   , GetOpt.Option  [ ]  [xmobarIndicatorsOptName]
       (GetOpt.NoArg $ xmobarIndicators' .~ True)
-      [qm| Enable notifying xmobar indicators process about indicators
-             \ (num lock, caps lock and alternative mode)
-             \ state changes by DBus.\n
-           See also https://github.com/unclechu/xmonadrc\n
-           See also https://github.com/unclechu/unclechu-i3-status
-             \ (this one isn't about xmobar but uses same IPC interface)\n
-           Default is: {xmobarIndicators def ? "On" $ "Off"}
-         |]
+      [qmb| Enable notifying xmobar indicators process about indicators \
+              (num lock, caps lock and alternative mode) \
+              state changes by DBus.
+            See also https://github.com/unclechu/xmonadrc
+            See also https://github.com/unclechu/unclechu-i3-status \
+              (this one isn't about xmobar but uses same IPC interface)
+            Default is: {xmobarIndicators def ? "On" $ "Off"}
+            |]
   , GetOpt.Option  [ ]  ["xmobar-indicators-dbus-path"]
       (GetOpt.ReqArg (set xmobarIndicatorsObjPath') "PATH")
-      [qm| DBus object path for xmobar indicators.\n
-           {explainDef xmobarIndicatorsObjPath'}\n
-           {makesSense xmobarIndicatorsOptName}
-         |]
+      [qmb| DBus object path for xmobar indicators.
+            {explainDef xmobarIndicatorsObjPath'}
+            {makesSense xmobarIndicatorsOptName}
+            |]
   , GetOpt.Option  [ ]  ["xmobar-indicators-dbus-bus"]
       (GetOpt.ReqArg (set xmobarIndicatorsBusName') "BUS")
-      [qm| DBus bus name for xmobar indicators.\n
-           {explainDef xmobarIndicatorsBusName'}\n
-           {makesSense xmobarIndicatorsOptName}\n
-           Use --xmobar-indicators-dbus-bus=any to broadcast for everyone.
-         |]
+      [qmb| DBus bus name for xmobar indicators.
+            {explainDef xmobarIndicatorsBusName'}
+            {makesSense xmobarIndicatorsOptName}
+            Use --xmobar-indicators-dbus-bus=any to broadcast for everyone.
+            |]
   , GetOpt.Option  [ ]  ["xmobar-indicators-dbus-interface"]
       (GetOpt.ReqArg (set xmobarIndicatorsIface') "INTERFACE")
-      [qm| DBus interface for xmobar indicators.\n
-           {explainDef xmobarIndicatorsIface'}\n
-           {makesSense xmobarIndicatorsOptName}
-         |]
+      [qmb| DBus interface for xmobar indicators.
+            {explainDef xmobarIndicatorsIface'}
+            {makesSense xmobarIndicatorsOptName}
+            |]
   , GetOpt.Option  [ ]  ["xmobar-indicators-dbus-flush-path"]
       (GetOpt.ReqArg (set xmobarIndicatorsFlushObjPath') "PATH")
-      [qm| DBus object path for 'flush' request
-             \ from xmobar indicators process.\n
-           {explainDef xmobarIndicatorsFlushObjPath'}\n
-           {makesSense xmobarIndicatorsOptName}
-         |]
+      [qmb| DBus object path for 'flush' request from xmobar indicators process.
+            {explainDef xmobarIndicatorsFlushObjPath'}
+            {makesSense xmobarIndicatorsOptName}
+            |]
   , GetOpt.Option  [ ]  ["xmobar-indicators-dbus-flush-interface"]
       (GetOpt.ReqArg (set xmobarIndicatorsFlushIface') "INTERFACE")
-      [qm| DBus interface for 'flush' request from xmobar indicators process.\n
-           {explainDef xmobarIndicatorsFlushIface'}\n
-           {makesSense xmobarIndicatorsOptName}
-         |]
+      [qmb| DBus interface for 'flush' request from xmobar indicators process.
+            {explainDef xmobarIndicatorsFlushIface'}
+            {makesSense xmobarIndicatorsOptName}
+            |]
 
   , GetOpt.Option  [ ]  [externalControlOptName]
       (GetOpt.NoArg $ externalControl' .~ True)
-      [qm| Enabling handling of external control IPC-commands through DBus.\n
-           Default is: {externalControl def ? "On" $ "Off"}
-         |]
+      [qmb| Enabling handling of external control IPC-commands through DBus.
+            Default is: {externalControl def ? "On" $ "Off"}
+            |]
   , GetOpt.Option  [ ]  ["external-control-dbus-path"]
       (GetOpt.ReqArg (set externalControlObjPath') "PATH")
-      [qm| DBus object path of external control IPC.\n
-           {explainDef externalControlObjPath'}\n
-           {makesSense externalControlOptName}
-         |]
+      [qmb| DBus object path of external control IPC.
+            {explainDef externalControlObjPath'}
+            {makesSense externalControlOptName}
+            |]
   , GetOpt.Option  [ ]  ["external-control-dbus-bus"]
       (GetOpt.ReqArg (set externalControlBusName') "BUS")
-      [qm| DBus bus name of external control IPC.\n
-           {explainDef externalControlBusName'}\n
-           {makesSense externalControlOptName}
-         |]
+      [qmb| DBus bus name of external control IPC.
+            {explainDef externalControlBusName'}
+            {makesSense externalControlOptName}
+            |]
   , GetOpt.Option  [ ]  ["external-control-dbus-interface"]
       (GetOpt.ReqArg (set externalControlIface') "INTERFACE")
-      [qm| DBus interface of external control IPC.\n
-           {explainDef externalControlIface'}\n
-           {makesSense externalControlOptName}
-         |]
+      [qmb| DBus interface of external control IPC.
+            {explainDef externalControlIface'}
+            {makesSense externalControlOptName}
+            |]
   ]
 
   where explainDef :: Lens' Options String -> String
         explainDef ((def ^.) -> id &&& (not . _hasDpy) -> (d, isPlain))
 
-          | isPlain   = [qm| Default is: '{d}'\n
-                             {_hint}\n
-                             '%DISPLAY%' will be replaced with {_viewOf}\n
-                             {_forExample d}
-                           |]
+          | isPlain   = [qmb| Default is: '{d}'
+                              {_hint}
+                              '%DISPLAY%' will be replaced with {_viewOf}
+                              {_forExample d}
+                              |]
 
-          | otherwise = [qm| Default is: '{d}' where '%DISPLAY%' is {_viewOf}\n
-                             {_forExample d}\n
-                             {_hint}
-                           |]
+          | otherwise = [qmb| Default is: '{d}' where '%DISPLAY%' is {_viewOf}
+                              {_forExample d}
+                              {_hint}
+                              |]
 
         makesSense :: String -> String
         makesSense = ("This option makes sense only with --" ++)
@@ -369,16 +368,16 @@ options =
 
         _forExample :: String -> String
         _forExample ((\x -> _hasDpy x ? x $ "foo.%DISPLAY%.bar") -> d) =
-          [qm| For example if we have '$DISPLAY' as '{_demoDpy}'
-             \ '{d}' will be replaced to '{_s d}'. |]
+          [qms| For example if we have '$DISPLAY' as '{_demoDpy}'
+                '{d}' will be replaced to '{_s d}'. |]
 
         _viewOf :: String
-        _viewOf = [qm| view of '$DISPLAY' environment variable where
-                     \ ':' and '.' symbols are replaced to underscore '_'. |]
+        _viewOf = [qms| view of '$DISPLAY' environment variable where
+                        ':' and '.' symbols are replaced to underscore '_'. |]
 
         _hint :: String
-        _hint = [qm| You can use '%DISPLAY%' in your own value of this
-                   \ option (it will be automatically replaced). |]
+        _hint = [qms| You can use '%DISPLAY%' in your own value of this
+                      option (it will be automatically replaced). |]
 
         _s = subsDisplay _demoDpy ; _s       :: String -> String
         _hasDpy x = x /= _s x     ; _hasDpy  :: String -> Bool
