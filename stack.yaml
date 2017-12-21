@@ -1,10 +1,9 @@
-resolver: lts-9.20
+resolver: lts-10.0
 system-ghc: false
 packages: [.]
 
 extra-deps:
   - linux-evdev-0.3.2 # getting events from devices files descriptors
-  - qm-interpolated-string-0.2.1.0
 
 extra-package-dbs: []
 flags: {}

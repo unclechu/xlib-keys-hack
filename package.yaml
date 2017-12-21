@@ -52,14 +52,14 @@ executables:
     extra-libraries: [Xtst]
     dependencies: [xlib-keys-hack]
     ghc-options: [-threaded]
-    source-dirs: app
+    source-dirs: app/XlibKeysHack
     main: Main.hs
 
   xlib-keys-hack-watch-for-window-focus-events:
     ghc-options: [-threaded]
     dependencies: [xlib-keys-hack]
-    source-dirs: app
-    main: WindowFocusWatcher.hs
+    source-dirs: app/WindowFocusWatcher
+    main: Main.hs
 
 tests:
 

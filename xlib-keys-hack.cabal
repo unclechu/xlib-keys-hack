@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: bb203d21511b78d1ff3d24c1ba730531ce473ef276e9c372fd7f628a12af6f55
+-- hash: d88a952d74b7a2c80cf4b56574e52fe75f73a440d0e9c9ede125379f18666bbb
 
 name:                xlib-keys-hack
 version:             0.1.0
@@ -79,7 +79,7 @@ executable xlib-keys-hack
   ghc-options: -Wall -O2 -threaded
   default-extensions: ExplicitNamespaces PackageImports BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
   hs-source-dirs:
-      app
+      app/XlibKeysHack
   main-is: Main.hs
   extra-libraries:
       Xtst
@@ -105,7 +105,6 @@ executable xlib-keys-hack
     , unix
     , xlib-keys-hack
   other-modules:
-      WindowFocusWatcher
       Paths_xlib_keys_hack
 
 executable xlib-keys-hack-watch-for-window-focus-events
@@ -113,8 +112,8 @@ executable xlib-keys-hack-watch-for-window-focus-events
   ghc-options: -Wall -O2 -threaded
   default-extensions: ExplicitNamespaces PackageImports BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
   hs-source-dirs:
-      app
-  main-is: WindowFocusWatcher.hs
+      app/WindowFocusWatcher
+  main-is: Main.hs
   build-depends:
       X11
     , base
@@ -137,7 +136,6 @@ executable xlib-keys-hack-watch-for-window-focus-events
     , unix
     , xlib-keys-hack
   other-modules:
-      Main
       Paths_xlib_keys_hack
 
 test-suite xlib-keys-hack-utils-test
