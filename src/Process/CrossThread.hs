@@ -30,8 +30,8 @@ module Process.CrossThread
 import "X11" Graphics.X11.Xlib (Display)
 
 import "lens" Control.Lens ((.~), (^.), view, Lens')
-import "either" Control.Monad.Trans.Either (runEitherT, left, right)
 import "transformers" Control.Monad.Trans.State (execStateT)
+import "transformers" Control.Monad.Trans.Except (runExceptT, throwE)
 import qualified "mtl" Control.Monad.State.Class as St (MonadState)
 import "base" Control.Monad.IO.Class (MonadIO, liftIO)
 
@@ -77,14 +77,14 @@ handleModeChange :: ModeChangeLens -- Lens for delayed mode change
 handleModeChange mcLens (doingItMsg, alreadyMsg) doHandle isNowOn
                  noise' state =
 
-  flip execStateT state . runEitherT $ do
+  flip execStateT state . runExceptT $ do
 
   -- Remove delayed task if it's already done
   if hasDelayed && isAlreadyDone -- Nothing to do, already done
      then liftIO (noise' [alreadyMsg])
             >> modifyState (mcLens .~ Nothing)
-            >> left ()
-     else right () -- Go further
+            >> throwE ()
+     else pure () -- Go further
 
   -- Do nothing if Caps Lock mode changing is not requested
   -- or if all another keys isn't released yet.
@@ -173,7 +173,7 @@ turnMode :: ModeChangeLens -- Lens for delayed mode change
 turnMode mcLens (immediatelyMsgs, laterMsgs) already nowHandle toOn
          noise' state =
 
-  flip execStateT state . runEitherT $ do
+  flip execStateT state . runExceptT $ do
 
   -- It's already done
   if isJust already && let Just (isNowOn, _) = already
@@ -182,8 +182,8 @@ turnMode mcLens (immediatelyMsgs, laterMsgs) already nowHandle toOn
            in liftIO (noise' alreadyMsgs)
                 >> modifyState (mcLens .~ Nothing) -- Clear possible previous
                                                    -- delayed action.
-                >> left ()
-     else right () -- Go further
+                >> throwE ()
+     else pure () -- Go further
 
   -- Doing it right now
   if Set.null (State.pressedKeys state)
@@ -191,8 +191,8 @@ turnMode mcLens (immediatelyMsgs, laterMsgs) already nowHandle toOn
             >> modifyStateM (liftIO . nowHandle) -- State can be modified there
             >> modifyState  (mcLens .~ Nothing)  -- Clear possible previous
                                                  -- delayed action.
-            >> left ()
-     else right () -- Or not, go further
+            >> throwE ()
+     else pure () -- Or not, go further
 
   -- Let's do it later
   liftIO $ noise' laterMsgs
@@ -323,7 +323,7 @@ turnAlternativeMode noise' notify' state toOn =
 handleResetKbdLayout :: CrossThreadVars -> Noiser -> State -> IO State
 handleResetKbdLayout ctVars noise' state =
 
-  flip execStateT state . runEitherT $ do
+  flip execStateT state . runExceptT $ do
 
   -- Break if we don't have to do anything
   continueIf hasDelayed
@@ -335,8 +335,8 @@ handleResetKbdLayout ctVars noise' state =
                           because it's already done now |]
            in liftIO (noise' [msg])
                 >> modifyState (mcLens .~ False)
-                >> left ()
-     else right ()
+                >> throwE ()
+     else pure ()
 
   -- Do nothing right now if we have some not released keys yet
   continueIf everyKeyIsReleased
@@ -353,7 +353,7 @@ handleResetKbdLayout ctVars noise' state =
         everyKeyIsReleased = (Set.null $ State.pressedKeys state) :: Bool
 
 resetKbdLayout :: CrossThreadVars -> Noiser -> State -> IO State
-resetKbdLayout ctVars noise' state = flip execStateT state . runEitherT $ do
+resetKbdLayout ctVars noise' state = flip execStateT state . runExceptT $ do
 
   -- Skip if it's already done
   if State.kbdLayout state == 0
@@ -361,8 +361,8 @@ resetKbdLayout ctVars noise' state = flip execStateT state . runEitherT $ do
                           to default because it's already done |]
            in liftIO (noise' [msg])
                 >> modifyState (mcLens .~ False)
-                >> left ()
-     else right ()
+                >> throwE ()
+     else pure ()
 
   -- Doing it right now
   if Set.null (State.pressedKeys state)
@@ -370,8 +370,8 @@ resetKbdLayout ctVars noise' state = flip execStateT state . runEitherT $ do
             >> liftIO handle
             >> modifyState (mcLens .~ False) -- Clear possible previous
                                              -- delayed action.
-            >> left ()
-     else right () -- Or not, go further
+            >> throwE ()
+     else pure () -- Or not, go further
 
   -- Let's do it later
   liftIO $ noise' [ [qns| Attempt to reset keyboard layout to default

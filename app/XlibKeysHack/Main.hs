@@ -31,9 +31,9 @@ import "X11" Graphics.X11.Xlib (displayString)
 import "deepseq" Control.DeepSeq (deepseq, force)
 import qualified "mtl" Control.Monad.State as St (get)
 import "mtl" Control.Monad.State (StateT, execStateT, evalStateT)
-import "either" Control.Monad.Trans.Either (runEitherT, left, right)
 import "base" Control.Monad.IO.Class (liftIO)
 import "transformers" Control.Monad.Trans.Class (lift)
+import "transformers" Control.Monad.Trans.Except (runExceptT, throwE)
 import "base" Control.Monad (when, unless, filterM, forever, forM_, void)
 import "lens" Control.Lens ((.~), (^.), set, view)
 import "base" Control.Concurrent ( forkIO
@@ -338,14 +338,14 @@ main = flip evalStateT ([] :: ThreadsState) $ do
 
           threads <- St.get
           liftIO $ modifyMVar_ (State.stateMVar ctVars)
-                 $ execStateT . runEitherT $ do
+                 $ execStateT . runExceptT $ do
 
             -- Check if termination process already initialized
             St.get <&> not . State.isTerminating
-              >>= right () |?| let s = [qns| Attempt to initialize application
-                                             termination process when it's
-                                             already initialized was skipped |]
-                                in noise s >> left ()
+              >>= pure () |?| let s = [qns| Attempt to initialize application
+                                            termination process when it's
+                                            already initialized was skipped |]
+                               in noise s >> throwE ()
 
             modifyState $ State.isTerminating' .~ True
             noise "Application termination process initialization..."

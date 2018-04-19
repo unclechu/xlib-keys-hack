@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: d88a952d74b7a2c80cf4b56574e52fe75f73a440d0e9c9ede125379f18666bbb
+-- hash: 9b52c4c79339b7414d65138282cf44e1c1a307aa8a81f4879af2db17904e0a23
 
 name:                xlib-keys-hack
 version:             0.1.0
@@ -61,7 +61,6 @@ library
     , dbus
     , deepseq
     , directory
-    , either
     , extra
     , lens
     , linux-evdev
@@ -91,7 +90,6 @@ executable xlib-keys-hack
     , dbus
     , deepseq
     , directory
-    , either
     , extra
     , lens
     , linux-evdev
@@ -122,7 +120,6 @@ executable xlib-keys-hack-watch-for-window-focus-events
     , dbus
     , deepseq
     , directory
-    , either
     , extra
     , lens
     , linux-evdev
@@ -160,7 +157,6 @@ test-suite xlib-keys-hack-utils-test
     , dbus
     , deepseq
     , directory
-    , either
     , extra
     , hspec
     , lens

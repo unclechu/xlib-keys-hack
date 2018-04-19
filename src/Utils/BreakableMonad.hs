@@ -8,8 +8,8 @@ module Utils.BreakableMonad
   ( BreakableMonad(continueIf, continueUnless)
   ) where
 
-import "either" Control.Monad.Trans.Either (EitherT, left, right)
 import "transformers" Control.Monad.Trans.Maybe (MaybeT)
+import "transformers" Control.Monad.Trans.Except (ExceptT, throwE)
 
 -- local imports
 
@@ -24,10 +24,10 @@ instance a ~ () => BreakableMonad (Either a) where
   continueIf     cond = cond ? Right () $ Left  ()
   continueUnless cond = cond ? Left  () $ Right ()
 -- Type equality to void type constraint
--- helps ghc with deducing void from monad (when it's ambiguous).
-instance (Monad t, a ~ ()) => BreakableMonad (EitherT a t) where
-  continueIf     cond = cond ? right () $ left  ()
-  continueUnless cond = cond ? left  () $ right ()
+-- helps ghc with deducing void from a monad (when it's ambiguous).
+instance (Monad t, a ~ ()) => BreakableMonad (ExceptT a t) where
+  continueIf     cond = cond ? pure   () $ throwE ()
+  continueUnless cond = cond ? throwE () $ pure   ()
 
 instance BreakableMonad Maybe where
   continueIf     cond = cond ? Just () $ Nothing

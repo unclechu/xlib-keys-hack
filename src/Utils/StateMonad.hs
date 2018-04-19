@@ -2,7 +2,7 @@
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
 module Utils.StateMonad
-  ( EitherStateT
+  ( ExceptStateT
   , updateState
   , updateState'
   , updateStateM
@@ -11,15 +11,15 @@ module Utils.StateMonad
   , modifyStateM
   ) where
 
-import "either" Control.Monad.Trans.Either (EitherT)
+import "transformers" Control.Monad.Trans.Except (ExceptT)
 import "transformers" Control.Monad.Trans.State (StateT)
 
 import qualified "mtl" Control.Monad.State.Class as St
   (MonadState(get, put, state))
 
 
--- Simplified alias for combined `EitherT` and `StateT`
-type EitherStateT s l m r = EitherT l (StateT s m) r
+-- Simplified alias for combined `ExceptT` and `StateT`
+type ExceptStateT s e m a = ExceptT e (StateT s m) a
 
 
 -- Updates a state and gets value back.

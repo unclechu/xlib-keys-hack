@@ -17,7 +17,7 @@ import "transformers" Control.Monad.Trans.Class (lift)
 import "base" Control.Monad ((>=>), when, unless, forM_, forever)
 import "base" Control.Concurrent.MVar (modifyMVar_)
 import "transformers" Control.Monad.Trans.State (execStateT)
-import "either" Control.Monad.Trans.Either (EitherT, runEitherT, left, right)
+import "transformers" Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
 import "base" Control.Concurrent (forkIO)
 
 import "lens" Control.Lens ( (.~), (%~), (^.), (&~), (.=), (%=)
@@ -37,7 +37,7 @@ import "X11" Graphics.X11.Xlib.Types (Display)
 
 -- local imports
 
-import           Utils.StateMonad (EitherStateT)
+import           Utils.StateMonad (ExceptStateT)
 import           Utils.Sugar ((&), (?), (<&>))
 import           Utils.Lens ((%=<&~>))
 import           Options (type Options)
@@ -637,7 +637,7 @@ handleKeyboard ctVars opts keyMap _ fd =
                       else asPressRelease ) keyName keyCode
 
                  if O.resetByEscapeOnCapsLock opts
-                    then execStateT (runEitherT resetAll) state
+                    then execStateT (runExceptT resetAll) state
                     else return state
 
                Keys.EnterKey -> state <$ pressRelease keyName keyCode
@@ -698,7 +698,7 @@ handleKeyboard ctVars opts keyMap _ fd =
   -- and specific logging (noticing about remapping).
   | keyName == Keys.CapsLockKey && not (O.realCapsLock opts) ->
     if O.resetByEscapeOnCapsLock opts && not isPressed
-       then justAsTrigger >> execStateT (runEitherT resetAll) state
+       then justAsTrigger >> execStateT (runExceptT resetAll) state
        else state <$ justAsTrigger
 
   -- Usual key handling
@@ -751,7 +751,7 @@ handleKeyboard ctVars opts keyMap _ fd =
   handleResetKbdLayout :: State -> IO State
   handleResetKbdLayout = CrossThread.handleResetKbdLayout ctVars noise'
 
-  resetAll :: EitherStateT State () IO ()
+  resetAll :: ExceptStateT State () IO ()
   resetAll = CrossThread.resetAll opts ctVars noise' notify'
 
   -- Wait and extract event, make preparations and call handler
@@ -787,12 +787,12 @@ handleKeyboard ctVars opts keyMap _ fd =
     noise [qm| {keyName} is {isPressed ? "pressed" $ "released"} |]
 
     let mapState :: State -> IO State
-        mapState = fmap (either id id) . runEitherT . _chain
+        mapState = fmap (either id id) . runExceptT . _chain
 
         _reset :: State -> State
         _reset = State.comboState' . State.superDoublePressProceeded' .~ False
 
-        _chain :: State -> EitherT State IO State
+        _chain :: State -> ExceptT State IO State
         _chain = ignoreDuplicates
                    >=> storeKey
                    >=> lift . handleM
@@ -804,15 +804,15 @@ handleKeyboard ctVars opts keyMap _ fd =
      in modifyMVar_ (State.stateMVar ctVars) mapState
 
     where -- Prevent doing anything when key state is the same
-          ignoreDuplicates :: State -> EitherT State IO State
+          ignoreDuplicates :: State -> ExceptT State IO State
           ignoreDuplicates state =
             let pressed     = State.pressedKeys state
                 isMember    = keyName `Set.member` pressed
                 isDuplicate = isPressed == isMember
-             in (isDuplicate ? left $ right) state
+             in (isDuplicate ? throwE $ pure) state
 
           -- Store key user pressed in state
-          storeKey :: State -> EitherT State IO State
+          storeKey :: State -> ExceptT State IO State
           storeKey state =
             let action = isPressed ? Set.insert $ Set.delete
              in return $ state & State.pressedKeys' %~ action keyName

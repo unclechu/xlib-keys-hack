@@ -5,8 +5,8 @@ module Utils.BreakableMonad (spec) where
 
 import "base" Data.Functor.Identity (Identity, runIdentity)
 
-import "either" Control.Monad.Trans.Either (EitherT, runEitherT)
 import "transformers" Control.Monad.Trans.Maybe (MaybeT, runMaybeT)
+import "transformers" Control.Monad.Trans.Except (ExceptT, runExceptT)
 
 import "hspec" Test.Hspec (Spec, describe, it, shouldBe)
 
@@ -24,10 +24,10 @@ spec = do
     let
       m :: Identity ()
       m = do
-        either (const ()) (const ()) <$> runEitherT (continueIf True)
-        either (const ()) (const ()) <$> runEitherT (continueIf False)
-        either (const ()) (const ()) <$> runEitherT (continueUnless True)
-        either (const ()) (const ()) <$> runEitherT (continueUnless False)
+        either (const ()) (const ()) <$> runExceptT (continueIf True)
+        either (const ()) (const ()) <$> runExceptT (continueIf False)
+        either (const ()) (const ()) <$> runExceptT (continueUnless True)
+        either (const ()) (const ()) <$> runExceptT (continueUnless False)
     in m `shouldBe` return ()
 
   describe "Maybe" $ do
@@ -108,22 +108,22 @@ spec = do
         m1 `shouldBe` Right ()
         m2 `shouldBe` Right ()
 
-  describe "EitherT" $ do
+  describe "ExceptT" $ do
 
     it "Correctly breaks" $
       let
-        m1 :: EitherT () Identity ()
+        m1 :: ExceptT () Identity ()
         m1 = continueIf     False
         m2 = continueUnless True
       in do
-        runIdentity (runEitherT m1) `shouldBe` Left ()
-        runIdentity (runEitherT m2) `shouldBe` Left ()
+        runIdentity (runExceptT m1) `shouldBe` Left ()
+        runIdentity (runExceptT m2) `shouldBe` Left ()
 
     it "Correctly continues" $
       let
-        m1 :: EitherT () Identity ()
+        m1 :: ExceptT () Identity ()
         m1 = continueIf     True
         m2 = continueUnless False
       in do
-        runIdentity (runEitherT m1) `shouldBe` Right ()
-        runIdentity (runEitherT m2) `shouldBe` Right ()
+        runIdentity (runExceptT m1) `shouldBe` Right ()
+        runIdentity (runExceptT m2) `shouldBe` Right ()

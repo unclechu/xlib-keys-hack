@@ -1,9 +1,6 @@
-resolver: lts-10.0
+resolver: lts-11.5
 system-ghc: false
 packages: [.]
 
 extra-deps:
   - linux-evdev-0.3.2 # getting events from devices files descriptors
-
-extra-package-dbs: []
-flags: {}

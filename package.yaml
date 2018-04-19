@@ -25,7 +25,6 @@ dependencies:
   - dbus
   - deepseq
   - directory
-  - either
   - extra
   - lens
   - linux-evdev
