@@ -11,13 +11,15 @@ import "hspec" Test.Hspec (Spec, describe, it, shouldBe)
 
 import "xlib-keys-hack" Utils.Sugar ( (.>), (|?|), (?)
                                     , dupe, applyIf, applyUnless
-                                    , ifMaybe, ifMaybeM, ifMaybeM'
+                                    , preserve,  preserve'
+                                    , preserveF, preserveF', lazyPreserveF'
+                                    , preserveM, preserveM'
                                     )
 
 spec :: Spec
 spec = do
 
-  describe "Piping operators" $ do
+  describe "Piping operators" $
 
     it "(.>) flipped version of composition operator" $ do
       (subtract 6 .  (*2) .  subtract 2) 15 `shouldBe` (20 :: Int)
@@ -45,40 +47,71 @@ spec = do
 
   describe "'Maybe' helpers" $ do
 
-    it "`ifMaybe` that returns Just if value passes a predicate" $ do
-      ifMaybe (== 10) 10 `shouldBe` (Just 10 :: Maybe Int)
-      ifMaybe (== 10) 20 `shouldBe` (Nothing :: Maybe Int)
-      ifMaybe (== 20) 20 `shouldBe` (Just 20 :: Maybe Int)
+    it "`preserve` that returns Just if value passes a predicate" $ do
+      preserve (== 10) 10 `shouldBe` (Just 10 :: Maybe Int)
+      preserve (== 10) 20 `shouldBe` (Nothing :: Maybe Int)
+      preserve (== 20) 20 `shouldBe` (Just 20 :: Maybe Int)
 
-    it "`ifMaybeM` monadic version of `ifMaybe`" $ do
-      ifMaybeM (== 10) (return 10 :: IO Int) >>= (`shouldBe` Just 10)
-      ifMaybeM (== 10) (return 20 :: IO Int) >>= (`shouldBe` Nothing)
-      ifMaybeM (== 20) (return 20 :: IO Int) >>= (`shouldBe` Just 20)
-
-    it "`ifMaybeM'` alternative version of `ifMaybe`\
+    it "`preserve'` alternative version of `preserve`\
        \ (just Bool instead of predicate)" $ do
-      ifMaybeM' True  (return 10 :: IO Int) >>= (`shouldBe` Just 10)
-      ifMaybeM' False (return 20 :: IO Int) >>= (`shouldBe` Nothing)
-      ifMaybeM' True  (return 20 :: IO Int) >>= (`shouldBe` Just 20)
+      preserve' True  10 `shouldBe` (Just 10 :: Maybe Int)
+      preserve' False 20 `shouldBe` (Nothing :: Maybe Int)
+      preserve' True  20 `shouldBe` (Just 20 :: Maybe Int)
 
-    it "`ifMaybeM` executes monad even if predicate is constantly falsy" $ do
+    it "`preserveF` monadic version of `preserveF`" $ do
+      preserveF (== 10) (return 10 :: IO Int) >>= (`shouldBe` Just 10)
+      preserveF (== 10) (return 20 :: IO Int) >>= (`shouldBe` Nothing)
+      preserveF (== 20) (return 20 :: IO Int) >>= (`shouldBe` Just 20)
+
+    it "`preserveF'` alternative version of `preserveF`\
+       \ (just Bool instead of predicate)" $ do
+      preserveF' True  (return 10 :: IO Int) >>= (`shouldBe` Just 10)
+      preserveF' False (return 20 :: IO Int) >>= (`shouldBe` Nothing)
+      preserveF' True  (return 20 :: IO Int) >>= (`shouldBe` Just 20)
+
+    it "`lazyPreserveF'` lazy version of `preserveF'`" $ do
+      lazyPreserveF' True  (return 10 :: IO Int) >>= (`shouldBe` Just 10)
+      lazyPreserveF' False (return 20 :: IO Int) >>= (`shouldBe` Nothing)
+      lazyPreserveF' True  (return 20 :: IO Int) >>= (`shouldBe` Just 20)
+
+    it "`preserveF` executes monad even if predicate is constantly falsy" $ do
       mvar <- newEmptyMVar
       let m = putMVar mvar () >> return (10 :: Int)
-      ifMaybeM (const True) m >>= (`shouldBe` Just 10)
+      preserveF (const True) m >>= (`shouldBe` Just 10)
       tryTakeMVar mvar >>= (`shouldBe` Just ())
       tryTakeMVar mvar >>= (`shouldBe` Nothing)
-      ifMaybeM (const False) m >>= (`shouldBe` Nothing)
+      preserveF (const False) m >>= (`shouldBe` Nothing)
       tryTakeMVar mvar >>= (`shouldBe` Just ())
       tryTakeMVar mvar >>= (`shouldBe` Nothing)
 
-    it "`ifMaybeM'` executes monad only if condition is constantly truly" $ do
+    it "`preserveF'` executes monad even if condition is False" $ do
       mvar <- newEmptyMVar
       let m = putMVar mvar () >> return (10 :: Int)
-      ifMaybeM' True m >>= (`shouldBe` Just 10)
+      preserveF' True m >>= (`shouldBe` Just 10)
       tryTakeMVar mvar >>= (`shouldBe` Just ())
       tryTakeMVar mvar >>= (`shouldBe` Nothing)
-      ifMaybeM' False m >>= (`shouldBe` Nothing)
+      preserveF' False m >>= (`shouldBe` Nothing)
+      tryTakeMVar mvar >>= (`shouldBe` Just ()) -- Monad was executed
+
+    it "`lazyPreserveF'` executes monad only if condition is True" $ do
+      mvar <- newEmptyMVar
+      let m = putMVar mvar () >> return (10 :: Int)
+      lazyPreserveF' True m >>= (`shouldBe` Just 10)
+      tryTakeMVar mvar >>= (`shouldBe` Just ())
       tryTakeMVar mvar >>= (`shouldBe` Nothing)
+      lazyPreserveF' False m >>= (`shouldBe` Nothing)
+      tryTakeMVar mvar >>= (`shouldBe` Nothing) -- Monad was NOT executed
+
+    it "`preserveM` Maybe to Maybe version of `preserve`" $ do
+      preserveM (== 10) (Just 10 :: Maybe Int) `shouldBe` Just 10
+      preserveM (== 10) (Just 20 :: Maybe Int) `shouldBe` Nothing
+      preserveM (== 20) (Just 20 :: Maybe Int) `shouldBe` Just 20
+
+    it "`preserveM'` alternative version of `preserveM`\
+       \ (just Bool instead of predicate)" $ do
+      preserveM' True  (Just 10 :: Maybe Int) `shouldBe` Just 10
+      preserveM' False (Just 20 :: Maybe Int) `shouldBe` Nothing
+      preserveM' True  (Just 20 :: Maybe Int) `shouldBe` Just 20
 
   describe "Function applying helpers" $ do
 

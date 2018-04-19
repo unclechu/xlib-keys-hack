@@ -49,6 +49,7 @@ import "base" Control.Exception (Exception (fromException))
 import "base" Control.Arrow ((&&&))
 import "extra" Control.Monad.Extra (whenJust)
 
+import "base" Data.Monoid ((<>), mempty)
 import "base" Data.Maybe (fromJust)
 import "base" Data.List (intercalate)
 import "base" Data.Typeable (Typeable)
@@ -57,7 +58,7 @@ import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms, qns)
 
 -- local imports
 
-import "xlib-keys-hack" Utils.Sugar ((&), (<&>), (.>), (|?|), (?), ifMaybeM')
+import "xlib-keys-hack" Utils.Sugar ((&), (<&>), (.>), (|?|), (?), preserveF')
 import "xlib-keys-hack" Utils (errPutStrLn, dieWith)
 import "xlib-keys-hack" Utils.StateMonad ( updateState', updateStateM'
                                          , modifyState,  modifyStateM
@@ -116,7 +117,7 @@ main :: IO ()
 main = flip evalStateT ([] :: ThreadsState) $ do
 
   opts <- liftIO $ getArgs >>= parseOpts
-  opts `deepseq` return ()
+  opts `deepseq` pure ()
   let noise = liftIO . O.noise opts
 
   -- We don't need this since we use own X Display instance for every thread
@@ -138,7 +139,7 @@ main = flip evalStateT ([] :: ThreadsState) $ do
                            for window focus handler thread... |]
                liftIO xkbInit
 
-       else return undefined
+       else pure undefined
 
   noise "Getting additional X Display for keyboard state handler thread..."
   dpyForKeyboardStateHandler <- liftIO xkbInit
@@ -165,13 +166,13 @@ main = flip evalStateT ([] :: ThreadsState) $ do
     , (Keys.MMonBrightnessDownKey, XTypes.xF86XK_MonBrightnessDown)
     , (Keys.MMonBrightnessUpKey,   XTypes.xF86XK_MonBrightnessUp)
     ]
-  noise $ "Media keys aliases:" ++
-          foldr (\(a, b) -> ([qm|\n  {a}: {b}|] ++)) "" mediaKeysAliases
+  noise $ "Media keys aliases:" <>
+          foldr (\(a, b) -> ([qm|\n  {a}: {b}|] <>)) mempty mediaKeysAliases
 
   let keyMap = Keys.getKeyMap opts mediaKeysAliases
 
   -- Making it fail at start app time if media keys described incorrectly
-  keyMap `deepseq` return ()
+  keyMap `deepseq` pure ()
 
   when (O.shiftNumericKeys opts) $
     noise "Numeric keys in numbers row are shifted"
@@ -184,17 +185,17 @@ main = flip evalStateT ([] :: ThreadsState) $ do
     (ctActions     :: Chan (ActionType Action))    <- newChan
     (ctKeysActions :: Chan (ActionType KeyAction)) <- newChan
 
-    return CrossThreadVars { stateMVar       = ctState
-                           , actionsChan     = ctActions
-                           , keysActionsChan = ctKeysActions
-                           }
+    pure CrossThreadVars { stateMVar       = ctState
+                         , actionsChan     = ctActions
+                         , keysActionsChan = ctKeysActions
+                         }
 
-  ctVars `deepseq` return ()
+  ctVars `deepseq` pure ()
 
-  ipcHandle <- ifMaybeM' (O.xmobarIndicators opts || O.externalControl opts) $
-    do let for = intercalate " and " $ []
-                   ++ (O.xmobarIndicators opts ? ["xmobar indicators"] $ [])
-                   ++ (O.externalControl opts  ? ["external control"]  $ [])
+  ipcHandle <- preserveF' (O.xmobarIndicators opts || O.externalControl opts) $
+    do let for = intercalate " and "
+                   $  (O.xmobarIndicators opts ? ["xmobar indicators"] $ mempty)
+                   <> (O.externalControl  opts ? ["external control"]  $ mempty)
         in noise [qm| Opening DBus connection for {for}... |]
 
        h <- let flush = Actions.flushXmobar opts ctVars
@@ -253,7 +254,7 @@ main = flip evalStateT ([] :: ThreadsState) $ do
       runThread m = modifyStateM $ \ids -> do
         tIdx <- _getThreadIdx
         tId  <- liftIO (forkFinally m $ _handleFork tIdx)
-        return $ (True, tId) : ids
+        pure $ (True, tId) : ids
 
   noise "Starting keys actions handler thread..."
   runThread $ withData dpyForKeysActionsHanlder processKeysActions
@@ -275,7 +276,7 @@ main = flip evalStateT ([] :: ThreadsState) $ do
                   _dpy <- liftIO xkbInit
                   noise [qm|Starting handle thread for device: {fd}|]
                   runThread $ withData _dpy handleKeyboard fd
-                  return _dpy
+                  pure _dpy
 
      in mapM m $ O.handleDeviceFd opts
 
@@ -287,7 +288,7 @@ main = flip evalStateT ([] :: ThreadsState) $ do
 
     let f :: ActionType Action -> StateT ThreadsState IO ()
         f (Actions.Single a) = m a
-        f (Actions.Sequence []) = return ()
+        f (Actions.Sequence []) = pure ()
         f (Actions.seqHead -> (x, xs)) = m x >> f xs
 
         m :: Action -> StateT ThreadsState IO ()
@@ -355,7 +356,7 @@ main = flip evalStateT ([] :: ThreadsState) $ do
         m (Actions.ThreadIsDead tIdx) = do
 
           let markAsDead (_, []) = []
-              markAsDead (l, (_, x) : xs) = l ++ (False, x) : xs
+              markAsDead (l, (_, x) : xs) = l <> ((False, x) : xs)
 
            in modifyState $ splitAt tIdx .> markAsDead
 
@@ -374,7 +375,7 @@ main = flip evalStateT ([] :: ThreadsState) $ do
             liftIO $ SysIO.hClose fd
 
           let close h = noise "Closing DBus connection..." >> lift (closeIPC h)
-           in maybe (return ()) close ipcHandle
+           in maybe (pure ()) close ipcHandle
 
           noise "Closing X Display descriptors..."
 
@@ -403,7 +404,7 @@ main = flip evalStateT ([] :: ThreadsState) $ do
                          noise [qms| Subprocess '{execFilePath}' terminated
                                      with exit code: {exitCode} |]
 
-                      fm _ = return ()
+                      fm _ = pure ()
 
                    in fm
 
@@ -434,7 +435,7 @@ main = flip evalStateT ([] :: ThreadsState) $ do
               dieWith "At least one device fd path must be specified!"
 
             O.noise opts "Started in verbose mode"
-            return opts
+            pure opts
 
         -- Filters only existing descriptors files of devices,
         -- stores this list to 'availableDevices' option and
@@ -452,7 +453,7 @@ main = flip evalStateT ([] :: ThreadsState) $ do
             >>= liftBetween
                   (noise "Opening devices files descriptors for reading...")
 
-            >>= lift . mapM (flip IOHandleFD.openFile SysIO.ReadMode)
+            >>= lift . mapM (`IOHandleFD.openFile` SysIO.ReadMode)
             >>= updateState' (flip $ set O.handleDeviceFd')
 
           where noise = O.noise opts
@@ -461,12 +462,12 @@ main = flip evalStateT ([] :: ThreadsState) $ do
                                      => s -> [FilePath] -> StateT s IO s
                 logAndStoreAvailable state files = do
 
-                  let devicesList = foldr (("\n  " ++) .> (++)) "" files
+                  let devicesList = foldr (("\n  " <>) .> (<>)) mempty files
                       title = "Devices that will be handled:"
 
-                   in lift $ noise $ title ++ devicesList
+                   in lift $ noise $ title <> devicesList
 
-                  return $ state & O.availableDevices' .~ files
+                  pure $ state & O.availableDevices' .~ files
 
                 -- Checks if we have at least one available device
                 -- and gets files list back.
@@ -477,7 +478,7 @@ main = flip evalStateT ([] :: ThreadsState) $ do
                     dieWith [qns| All specified devices to get events from
                                   is unavailable! |]
 
-                  return files
+                  pure files
 
         -- Lift up a monad and return back original value
         liftBetween :: Monad m => m () -> a -> StateT s m a
@@ -495,7 +496,7 @@ main = flip evalStateT ([] :: ThreadsState) $ do
 
           where logDisabled :: Options -> IO Options
                 logDisabled opts = O.availableXInputDevices opts
-                  & show .> ("XInput devices ids that was disabled: " ++)
+                  & show .> ("XInput devices ids that was disabled: " <>)
                   & (\x -> opts <$ O.noise opts x)
 
         -- For situations when something went wrong and application
@@ -517,10 +518,10 @@ main = flip evalStateT ([] :: ThreadsState) $ do
 xkbInit :: IO Display
 xkbInit = do
 
-  (dpy :: Display) <- xkbGetDisplay >>= flip either return
+  (dpy :: Display) <- xkbGetDisplay >>= flip either pure
     (\err -> dieWith [qm|Xkb open display error: {err}|])
 
-  xkbDescPtr <- xkbGetDescPtr dpy >>= flip either return
+  xkbDescPtr <- xkbGetDescPtr dpy >>= flip either pure
     (\err -> dieWith [qm|Xkb error: get keyboard data error: {err}|])
 
   xkbFetchControls dpy xkbDescPtr
@@ -529,7 +530,7 @@ xkbInit = do
   (> 0) <$> xkbGetGroupsCount xkbDescPtr
     >>= flip unless (dieWith "Xkb error: groups count is 0")
 
-  return dpy
+  pure dpy
 
 
 data MyThreadException = MortifyThreadException deriving (Show, Typeable)

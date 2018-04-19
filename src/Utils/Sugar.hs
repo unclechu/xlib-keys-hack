@@ -4,8 +4,7 @@
 module Utils.Sugar
   ( (&), (<&>), (.>) -- pipes
   , (?), (|?|)       -- conditions helpers
-
-  , ifMaybe, ifMaybeM, ifMaybeM'
+  , module Utils.Maybe.Preserve
   , applyIf, applyUnless
   , dupe
   ) where
@@ -13,6 +12,14 @@ module Utils.Sugar
 import "base" Data.Bool (bool)
 
 import qualified "lens" Control.Lens.Operators as Operators ((&), (<&>))
+
+-- local imports
+
+import Utils.Maybe.Preserve
+     ( preserve,  preserve'
+     , preserveF, preserveF', lazyPreserveF'
+     , preserveM, preserveM'
+     )
 
 
 (&) :: a -> (a -> b) -> b
@@ -57,24 +64,6 @@ infixl 2 |?|
 (?) False _ y = y
 {-# INLINE (?) #-}
 infixl 1 ?
-
-
--- Same as 'partial' from 'Control-Monad-Plus'.
--- Returns given value inside Just only if it passes a predicate.
-ifMaybe :: (a -> Bool) -> a -> Maybe a
-ifMaybe f x = f x ? Just x $ Nothing
-{-# INLINE ifMaybe #-}
-
--- Monadic version of `ifMaybe`
-ifMaybeM :: Monad m => (a -> Bool) -> m a -> m (Maybe a)
-ifMaybeM f m = m >>= \x -> return $ f x ? Just x $ Nothing
-{-# INLINE ifMaybeM #-}
-
--- Like `ifMaybeM` but instead of predicate uses just Bool,
--- also doesn't executes monad if Bool is False
-ifMaybeM' :: Monad m => Bool -> m a -> m (Maybe a)
-ifMaybeM' condition m = condition ? (Just <$> m) $ return Nothing
-{-# INLINE ifMaybeM' #-}
 
 
 applyIf :: (a -> a) -> Bool -> a -> a

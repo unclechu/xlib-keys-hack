@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 9b52c4c79339b7414d65138282cf44e1c1a307aa8a81f4879af2db17904e0a23
+-- hash: 14570250034197c7e19b89488f85d6f9cc59f5dc134c4fe45bd9aa1bb092a17f
 
 name:                xlib-keys-hack
 version:             0.1.0
@@ -47,6 +47,7 @@ library
       Utils.BreakableMonad
       Utils.Instances
       Utils.Lens
+      Utils.Maybe.Preserve
       Utils.StateMonad
       Utils.Sugar
       Utils.X

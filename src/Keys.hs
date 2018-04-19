@@ -32,7 +32,7 @@ import Prelude hiding (lookup)
 import "base" GHC.Generics (Generic)
 
 import "X11" Graphics.X11.Types (KeyCode)
-import "linux-evdev" System.Linux.Input.Event (Key(Key))
+import "linux-evdev" System.Linux.Input.Event (Key (Key))
 
 import "deepseq" Control.DeepSeq (NFData, rnf, deepseq)
 
@@ -445,16 +445,18 @@ getKeyMap opts mediaKeyAliases =
                       | otherwise = alias
 
             shiftNumeric aliases = map f aliases
-              where f alias@(keyName, devNum, _) = fromMaybe alias $
-                      resolve devNum <$> keyName `Map.lookup` numericShift
+              where f alias@(keyName, devNum, _)
+                      = maybe alias (resolve devNum)
+                      $ keyName `Map.lookup` numericShift
+
                     resolve devNum keyName =
                       find (\(x, _, _) -> x == keyName) aliases
                         & fromJust
                         & (\(toName, _, toCode) -> (toName, devNum, toCode))
           in
             defaultKeyAliases ++ map resolveMediaKey mediaKeyAliases
-              & (if O.realCapsLock opts     then makeCapsLockReal else id)
-              & (if O.shiftNumericKeys opts then shiftNumeric     else id)
+              & (makeCapsLockReal `applyIf` O.realCapsLock     opts)
+              & (shiftNumeric     `applyIf` O.shiftNumericKeys opts)
 
         _asNamesMap = fromList _asNames :: Map KeyName KeyName
 
