@@ -4,7 +4,7 @@
 module Utils.Sugar
   ( (&), (<&>), (.>) -- pipes
   , (?), (|?|)       -- conditions helpers
-  , module Utils.Maybe.Preserve
+  , module Data.Maybe.Preserve
   , applyIf, applyUnless
   , dupe
   ) where
@@ -15,7 +15,7 @@ import qualified "lens" Control.Lens.Operators as Operators ((&), (<&>))
 
 -- local imports
 
-import Utils.Maybe.Preserve
+import Data.Maybe.Preserve
      ( preserve,  preserve'
      , preserveF, preserveF', lazyPreserveF'
      , preserveM, preserveM'

@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 14570250034197c7e19b89488f85d6f9cc59f5dc134c4fe45bd9aa1bb092a17f
+-- hash: b5ff3518d7d692a22845966c1cdfd44133e8d39312429a5f7975e283e44c09de
 
 name:                xlib-keys-hack
 version:             0.1.0
@@ -47,7 +47,6 @@ library
       Utils.BreakableMonad
       Utils.Instances
       Utils.Lens
-      Utils.Maybe.Preserve
       Utils.StateMonad
       Utils.Sugar
       Utils.X
@@ -59,6 +58,7 @@ library
     , base
     , containers
     , data-default
+    , data-maybe-preserve
     , dbus
     , deepseq
     , directory
@@ -88,6 +88,7 @@ executable xlib-keys-hack
     , base
     , containers
     , data-default
+    , data-maybe-preserve
     , dbus
     , deepseq
     , directory
@@ -118,6 +119,7 @@ executable xlib-keys-hack-watch-for-window-focus-events
     , base
     , containers
     , data-default
+    , data-maybe-preserve
     , dbus
     , deepseq
     , directory
@@ -155,6 +157,7 @@ test-suite xlib-keys-hack-utils-test
     , base
     , containers
     , data-default
+    , data-maybe-preserve
     , dbus
     , deepseq
     , directory

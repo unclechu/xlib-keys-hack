@@ -4,3 +4,5 @@ packages: [.]
 
 extra-deps:
   - linux-evdev-0.3.2 # getting events from devices files descriptors
+  - git: https://github.com/unclechu/haskell-data-maybe-preserve
+    commit: 705e3e4e85661c6c3c34f43a408b111433abb27e
