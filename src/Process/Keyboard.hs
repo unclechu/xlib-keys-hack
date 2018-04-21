@@ -583,22 +583,31 @@ handleKeyboard ctVars opts keyMap _ fd =
   -- They can't be pressed both in the same time here, it handled above.
   | onAdditionalControlKey ->
 
-    let (withCombosFlagLens, pressedBeforeLens, controlKeyName) =
+    let ( withCombosFlagLens,
+          pressedBeforeLens,
+          controlKeyName,
+          Just controlKeyCode ) =
+
           case keyName of
                Keys.CapsLockKey ->
                  ( State.comboState' . State.isCapsLockUsedWithCombos'
                  , State.comboState' . State.keysPressedBeforeCapsLock'
                  , Keys.ControlLeftKey
+                 , getKeyCodeByName Keys.ControlLeftKey
                  )
                Keys.EnterKey ->
                  ( State.comboState' . State.isEnterUsedWithCombos'
                  , State.comboState' . State.keysPressedBeforeEnter'
                  , Keys.ControlRightKey
+                 , getRealKeyCodeByName Keys.RealControlRightKey
                  )
                _ -> error [qms| Got unexpected key, it supposed to be only
                                 {Keys.CapsLockKey} or {Keys.EnterKey} |]
 
-          :: (Lens' State Bool, Lens' State (Set KeyName), KeyName)
+          :: ( Lens' State Bool,
+               Lens' State (Set KeyName),
+               KeyName,
+               Maybe KeyCode )
      in if
 
         -- Prevent triggering when just pressed.
@@ -617,13 +626,12 @@ handleKeyboard ctVars opts keyMap _ fd =
         -- `CapsLockKey` or `EnterKey` with combo (see below)
         -- it triggers Control pressing.
         | state ^. withCombosFlagLens -> do
-          let ctrlKeyCode = fromJust $ getKeyCodeByName controlKeyName
-          noise' [ [qms| {ctrlKeyCode} released after pressed with combos,
+          noise' [ [qms| {controlKeyCode} released after pressed with combos,
                          it means it was interpreted as {controlKeyName} |]
                  , [qms| Triggering releasing of {controlKeyName}
-                         (X key code: {ctrlKeyCode})... |]
+                         (X key code: {controlKeyCode})... |]
                  ]
-          releaseKey ctrlKeyCode
+          releaseKey controlKeyCode
           return $ state & withCombosFlagLens .~ False
 
         -- Just triggering default aliased key code
@@ -647,18 +655,24 @@ handleKeyboard ctVars opts keyMap _ fd =
   -- They couldn't be pressed both, it handled above.
   | onWithAdditionalControlKey ->
 
-    let _f :: (KeyName, Lens' State Bool, Lens' State (Set KeyName), KeyName)
+    let _f :: ( KeyName,
+                Lens' State Bool,
+                Lens' State (Set KeyName),
+                KeyName, Maybe KeyCode )
+
         _f | Keys.CapsLockKey `Set.member` pressed =
              ( Keys.CapsLockKey
              , State.comboState' . State.isCapsLockUsedWithCombos'
              , State.comboState' . State.keysPressedBeforeCapsLock'
              , Keys.ControlLeftKey
+             , getKeyCodeByName Keys.ControlLeftKey
              )
            | Keys.EnterKey `Set.member` pressed =
              ( Keys.EnterKey
              , State.comboState' . State.isEnterUsedWithCombos'
              , State.comboState' . State.keysPressedBeforeEnter'
              , Keys.ControlRightKey
+             , getRealKeyCodeByName Keys.RealControlRightKey
              )
            | otherwise =
              error [qms| Got unexpected key, it supposed to be only
@@ -667,7 +681,8 @@ handleKeyboard ctVars opts keyMap _ fd =
         ( mainKeyName,
           withCombosFlagLens,
           pressedBeforeLens,
-          controlKeyName ) = _f
+          controlKeyName,
+          Just controlKeyCode ) = _f
 
         pressedBeforeList = state ^. pressedBeforeLens
 
@@ -685,11 +700,10 @@ handleKeyboard ctVars opts keyMap _ fd =
         -- `CapsLockKey` or `EnterKey` pressed with combo,
         -- it means it should be interpreted as Control key.
         | otherwise -> do
-          let ctrlKeyCode = fromJust $ getKeyCodeByName controlKeyName
           noise [qms| {mainKeyName} pressed with combo,
                       triggering {controlKeyName}
-                      (X key code: {ctrlKeyCode})... |]
-          pressKey ctrlKeyCode -- Press Control before current key
+                      (X key code: {controlKeyCode})... |]
+          pressKey controlKeyCode -- Press Control before current key
           smartTrigger
           return $ state & withCombosFlagLens .~ True
 
@@ -722,6 +736,9 @@ handleKeyboard ctVars opts keyMap _ fd =
 
   getKeyCodeByName :: KeyName -> Maybe KeyCode
   getKeyCodeByName = Keys.getKeyCodeByName keyMap
+
+  getRealKeyCodeByName :: KeyName -> Maybe KeyCode
+  getRealKeyCodeByName = Keys.getRealKeyCodeByName keyMap
 
   isAlternative = Keys.isAlternative keyMap :: KeyName -> Bool
   getAlternative :: KeyName -> Maybe (KeyName, KeyCode)

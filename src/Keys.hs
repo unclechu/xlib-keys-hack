@@ -105,7 +105,7 @@ data KeyName = EscapeKey
 
              -- Real original pseudo-keys
 
-             | RealMenuKey | RealCapsLockKey
+             | RealMenuKey | RealCapsLockKey | RealControlRightKey
 
              -- Media keys
 
@@ -126,7 +126,7 @@ type KeyAlias = (KeyName, Word16, KeyCode)
 -- Also with custom remaps for specific keys.
 defaultKeyAliases :: [KeyAlias]
 defaultKeyAliases =
-  [ (EscapeKey,       1,   9)
+  [ (EscapeKey,       1,   escapeKeyCode)
 
   , (F1Key,           59,  67)
   , (F2Key,           60,  68)
@@ -204,7 +204,7 @@ defaultKeyAliases =
 
   -- ASDF line
 
-  , (CapsLockKey,     58,  9) -- 66 but remapped as Escape
+  , (CapsLockKey,     58,  escapeKeyCode) -- Remapped (see `realKeys`)
 
   , (AKey,            30,  38)
   , (SKey,            31,  39)
@@ -254,8 +254,8 @@ defaultKeyAliases =
 
   , (AltRightKey,     100, 108)
   , (SuperRightKey,   126, rightSuperKeyCode)
-  , (MenuKey,         127, rightSuperKeyCode) -- 135 but remapped as Right Super
-  , (ControlRightKey, 97,  105)
+  , (MenuKey,         127, rightSuperKeyCode) -- Remapped (see `realKeys`)
+  , (ControlRightKey, 97,  rightControlKeyCode)
 
 
   -- Right block
@@ -305,12 +305,21 @@ defaultKeyAliases =
   ]
 
 
+rightControlKeyCode = 105 ; rightControlKeyCode :: KeyCode
+{-# INLINE rightControlKeyCode #-}
+rightSuperKeyCode   = 134 ; rightSuperKeyCode   :: KeyCode
+{-# INLINE rightSuperKeyCode #-}
+escapeKeyCode       = 9   ; escapeKeyCode       :: KeyCode
+{-# INLINE escapeKeyCode #-}
+
+
 -- Real standard keys aliases to X key-codes to trigger them
 -- if they were remapped to another keys.
 realKeys :: [(KeyName, KeyCode)]
 realKeys =
-  [ (RealMenuKey,     135)
-  , (RealCapsLockKey, 66)
+  [ (RealMenuKey,         135)
+  , (RealCapsLockKey,     66)
+  , (RealControlRightKey, rightControlKeyCode)
   ]
 
 
@@ -387,12 +396,12 @@ numericShift = Map.fromList
 
 -- Returns Map of aliases list using key name as a Map key
 getByNameMap :: [KeyAlias] -> Map KeyName KeyAlias
-getByNameMap keyMap = fromList $ map f keyMap
+getByNameMap keyMap = fromList $ fmap f keyMap
   where f (name, devNum, xNum) = (name, (name, devNum, xNum))
 
 -- Returns Map of aliases list using device key code as a Map key
 getByDevNumMap :: [KeyAlias] -> Map Word16 KeyAlias
-getByDevNumMap keyMap = fromList $ map f keyMap
+getByDevNumMap keyMap = fromList $ fmap f keyMap
   where f (name, devNum, xNum) = (devNum, (name, devNum, xNum))
 
 
@@ -428,7 +437,7 @@ getKeyMap opts mediaKeyAliases =
          , byNameMediaMap       = byNameMediaAliasesMap
          , byNameRealMap        = realMap
          , asNamesMap           = _asNamesMap
-         , extraByRemaps        = map swap _asNames
+         , extraByRemaps        = fmap swap _asNames
          }
 
   where keyAliases :: [KeyAlias]
@@ -439,13 +448,12 @@ getKeyMap opts mediaKeyAliases =
                    Just devNum -> (keyName, devNum, keyCode)
                    Nothing -> error [qm| Unexpected media key: {keyName} |]
 
-            makeCapsLockReal = map f
-              where capsCode = realMap ! RealCapsLockKey
-                    f alias@(keyName, devNum, _)
-                      | keyName == CapsLockKey = (keyName, devNum, capsCode)
-                      | otherwise = alias
+            makeCapsLockReal = fmap f
+              where f (CapsLockKey, devNum, _) =
+                      (CapsLockKey, devNum, realMap ! RealCapsLockKey)
+                    f x = x
 
-            shiftNumeric aliases = map f aliases
+            shiftNumeric aliases = fmap f aliases
               where f alias@(keyName, devNum, _)
                       = maybe alias (resolve devNum)
                       $ keyName `Map.lookup` numericShift
@@ -459,7 +467,7 @@ getKeyMap opts mediaKeyAliases =
                            (ControlRightKey, devNum, rightSuperKeyCode)
             controlAsSuper x = x
           in
-            defaultKeyAliases <> map resolveMediaKey mediaKeyAliases
+            defaultKeyAliases <> fmap resolveMediaKey mediaKeyAliases
               & makeCapsLockReal    `applyIf` O.realCapsLock             opts
               & shiftNumeric        `applyIf` O.shiftNumericKeys         opts
               & fmap controlAsSuper `applyIf` O.rightControlAsRightSuper opts
@@ -518,7 +526,7 @@ maybeAsName keyMap keyName = fromMaybe keyName $ lookupAsName keyMap keyName
 getRemappedByName :: KeyMap -> KeyName -> Set.Set KeyName
 getRemappedByName keyMap keyName =
   Map.filter (== keyName) (asNamesMap keyMap)
-    & toList & map fst & Set.fromList
+    & toList & fmap fst & Set.fromList
 
 -- Gets specific key and returns a Set that contains extra keys
 -- aliased as this specific key (you get a Set of extra synonyms keys).
@@ -532,7 +540,7 @@ getRemappedByName keyMap keyName =
 -- (this Set can contaion more than one aliases).
 getExtraKeys :: KeyMap -> KeyName -> Set.Set KeyName
 getExtraKeys (extraByRemaps -> extra) keyName =
-  Set.fromList . map snd . filter ((== keyName) . fst) $ extra
+  Set.fromList . fmap snd . filter ((== keyName) . fst) $ extra
 
 
 -- Check if key is media key
@@ -551,11 +559,6 @@ getKeyCodeByName keyMap keyName =
 
 getRealKeyCodeByName :: KeyMap -> KeyName -> Maybe KeyCode
 getRealKeyCodeByName keyMap keyName = keyName `lookup` byNameRealMap keyMap
-
-
-rightSuperKeyCode :: KeyCode
-rightSuperKeyCode = 134
-{-# INLINE rightSuperKeyCode #-}
 
 
 makeApoClassy ''KeyMap
