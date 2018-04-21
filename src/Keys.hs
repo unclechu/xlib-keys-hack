@@ -45,11 +45,12 @@ import "base" Data.List (find)
 import "base" Data.Word (Word16)
 import "base" Data.Tuple (swap)
 import "base" Data.Maybe (fromMaybe, fromJust)
+import "base" Data.Monoid ((<>))
 import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
 
 -- local imports
 
-import Utils.Sugar ((&), (<&>), applyIf, dupe)
+import Utils.Sugar ((&), (<&>), (?), applyIf, dupe)
 import Utils.Lens (makeApoClassy)
 import qualified Options as O
 
@@ -252,8 +253,8 @@ defaultKeyAliases =
   , (SpaceKey,        57,  65)
 
   , (AltRightKey,     100, 108)
-  , (SuperRightKey,   126, 134)
-  , (MenuKey,         127, 134) -- 135 but remapped as Right Super
+  , (SuperRightKey,   126, rightSuperKeyCode)
+  , (MenuKey,         127, rightSuperKeyCode) -- 135 but remapped as Right Super
   , (ControlRightKey, 97,  105)
 
 
@@ -436,7 +437,7 @@ getKeyMap opts mediaKeyAliases =
             resolveMediaKey (keyName, keyCode) =
               case keyName `lookup` mediaMap of
                    Just devNum -> (keyName, devNum, keyCode)
-                   Nothing -> error [qm|Unexpected media key: {keyName}|]
+                   Nothing -> error [qm| Unexpected media key: {keyName} |]
 
             makeCapsLockReal = map f
               where capsCode = realMap ! RealCapsLockKey
@@ -453,15 +454,22 @@ getKeyMap opts mediaKeyAliases =
                       find (\(x, _, _) -> x == keyName) aliases
                         & fromJust
                         & (\(toName, _, toCode) -> (toName, devNum, toCode))
+
+            controlAsSuper (ControlRightKey, devNum, _) =
+                           (ControlRightKey, devNum, rightSuperKeyCode)
+            controlAsSuper x = x
           in
-            defaultKeyAliases ++ map resolveMediaKey mediaKeyAliases
-              & (makeCapsLockReal `applyIf` O.realCapsLock     opts)
-              & (shiftNumeric     `applyIf` O.shiftNumericKeys opts)
+            defaultKeyAliases <> map resolveMediaKey mediaKeyAliases
+              & makeCapsLockReal    `applyIf` O.realCapsLock             opts
+              & shiftNumeric        `applyIf` O.shiftNumericKeys         opts
+              & fmap controlAsSuper `applyIf` O.rightControlAsRightSuper opts
 
         _asNamesMap = fromList _asNames :: Map KeyName KeyName
 
         _asNames :: [(KeyName, KeyName)]
-        _asNames = asNames & (dupe CapsLockKey :) `applyIf` O.realCapsLock opts
+        _asNames = asNames
+          & fmap (\x@(k, _) -> k == CapsLockKey ? dupe CapsLockKey $ x)
+              `applyIf` O.realCapsLock opts
 
         byNameMediaAliasesMap :: Map KeyName KeyCode
         byNameMediaAliasesMap =
@@ -543,6 +551,11 @@ getKeyCodeByName keyMap keyName =
 
 getRealKeyCodeByName :: KeyMap -> KeyName -> Maybe KeyCode
 getRealKeyCodeByName keyMap keyName = keyName `lookup` byNameRealMap keyMap
+
+
+rightSuperKeyCode :: KeyCode
+rightSuperKeyCode = 134
+{-# INLINE rightSuperKeyCode #-}
 
 
 makeApoClassy ''KeyMap

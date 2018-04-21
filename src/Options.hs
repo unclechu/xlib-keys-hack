@@ -24,6 +24,7 @@ import "base" Control.Arrow ((&&&))
 import "lens" Control.Lens (Lens', (.~), (%~), (^.), set)
 import "deepseq" Control.DeepSeq (NFData, rnf, deepseq)
 
+import "base" Data.Monoid ((<>))
 import "base" Data.Maybe (fromJust)
 import "data-default" Data.Default (Default, def)
 import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms, qmb)
@@ -44,6 +45,7 @@ data Options
   , realCapsLock                 :: Bool
   , additionalControls           :: Bool
   , shiftNumericKeys             :: Bool
+  , rightControlAsRightSuper     :: Bool
 
   , toggleAlternativeModeByAlts  :: Bool
   , superDoublePress             :: Bool
@@ -84,6 +86,7 @@ instance NFData Options where
     realCapsLock                 opts `deepseq`
     additionalControls           opts `deepseq`
     shiftNumericKeys             opts `deepseq`
+    rightControlAsRightSuper     opts `deepseq`
 
     toggleAlternativeModeByAlts  opts `deepseq`
     superDoublePress             opts `deepseq`
@@ -126,6 +129,7 @@ instance Default Options where
     , realCapsLock                 = False
     , additionalControls           = True
     , shiftNumericKeys             = False
+    , rightControlAsRightSuper     = False
 
     , toggleAlternativeModeByAlts  = True
     , superDoublePress             = True
@@ -184,8 +188,8 @@ options =
             |]
 
   , GetOpt.Option  [ ]  ["real-capslock"]
-      (GetOpt.NoArg $ (realCapsLock' .~ True)
-                    . (resetByEscapeOnCapsLock' .~ False))
+      (GetOpt.NoArg $ set realCapsLock'            True
+                    . set resetByEscapeOnCapsLock' False)
       [qmb| Use real Caps Lock instead of remapping it to Escape
             Default is: {realCapsLock def ? "On" $ "Off"}
             |]
@@ -201,6 +205,14 @@ options =
               and move 'minus' key to the left side at '1' key position.
             Could be more consistent for 10-fingers typing.
             Default is: {shiftNumericKeys def ? "On" $ "Off"}
+            |]
+  , GetOpt.Option  [ ]  ["right-control-as-super"]
+      (GetOpt.NoArg $ rightControlAsRightSuper' .~ True)
+      [qmb| Remap Right Control as Right Super key.
+            Some keyboards doesn't have neither Right Super nor Menu key \
+              at the right side, since you can have Control key pressing \
+              Enter by "additional controls" feature, this could be a solution.
+            Default is: {rightControlAsRightSuper def ? "On" $ "Off"}
             |]
 
   , GetOpt.Option  [ ]  ["disable-toggling-alternative-mode-by-alts"]
@@ -258,17 +270,17 @@ options =
 
   , GetOpt.Option  [ ]  ["disable-xinput-device-name"]
       (GetOpt.OptArg
-        (\x -> disableXInputDeviceName' %~ (++ [fromJust x]))
+        (\x -> disableXInputDeviceName' %~ (<> [fromJust x]))
         "NAME")
       "Name of device to disable using 'xinput' tool"
   , GetOpt.Option  [ ]  ["disable-xinput-device-id"]
       (GetOpt.OptArg
-        (\x -> disableXInputDeviceId' %~ (++ [fromJust x & read]))
+        (\x -> disableXInputDeviceId' %~ (<> [fromJust x & read]))
         "ID")
       "Id of device to disable using 'xinput' tool"
   , GetOpt.Option  [ ]  ["device-fd-path"]
       (GetOpt.OptArg
-        (\x -> handleDevicePath' %~ (++ [fromJust x]))
+        (\x -> handleDevicePath' %~ (<> [fromJust x]))
         "FDPATH")
       "Path to device file descriptor to get events from"
 
@@ -354,10 +366,10 @@ options =
                               |]
 
         makesSense :: String -> String
-        makesSense = ("This option makes sense only with --" ++)
+        makesSense = ("This option makes sense only with --" <>)
 
         makesNoSense :: String -> String
-        makesNoSense = ("This option makes no sense with --" ++)
+        makesNoSense = ("This option makes no sense with --" <>)
 
         disableSuperDoublePress :: String
         disableSuperDoublePress = "disable-super-double-press"
@@ -389,7 +401,7 @@ extractOptions :: [String] -> Either ErrorMessage Options
 extractOptions argv =
   case GetOpt.getOpt GetOpt.Permute options argv of
     (o, n, []) ->
-      Right $ foldl (flip id) def o & handleDevicePath' %~ (++ n)
+      Right $ foldl (flip id) def o & handleDevicePath' %~ (<> n)
     (_, _, errs) ->
       Left $ case concat errs of
                   (reverse -> '\n':xs) -> reverse xs

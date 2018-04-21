@@ -161,6 +161,9 @@ Usage: xlib-keys-hack [OPTION...] DEVICES-FD-PATHS...
       --shift-numeric-keys                                Shift numeric keys in numbers row one key righter, and move 'minus' key to the left side at '1' key position.
                                                           Could be more consistent for 10-fingers typing.
                                                           Default is: Off
+      --right-control-as-super                            Remap Right Control as Right Super key.
+                                                          Some keyboards doesn't have neither Right Super nor Menu key at the right side, since you can have Control key pressing Enter by "additional controls" feature, this could be a solution.
+                                                          Default is: Off
       --disable-toggling-alternative-mode-by-alts         Disable toggling alternative mode by pressing Alt keys (Left and Right) both at the same time
                                                           Default is: On
       --disable-super-double-press                        Disable handling of double Super key press.
