@@ -50,7 +50,7 @@ import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
 
 -- local imports
 
-import Utils.Sugar ((&), (<&>), (?), applyIf, dupe)
+import Utils.Sugar ((.>), (&), (<&>), applyIf)
 import Utils.Lens (makeApoClassy)
 import qualified Options as O
 
@@ -369,6 +369,8 @@ mediaDevNums =
 -- If you want for example get all Shift keys you must also check this mapping
 -- for alias, because for example `LessKey` is remapped to `ShiftLeftKey`,
 -- to `LessKey` is Shift key too.
+-- TODO Rename it since it's not just about "names"
+--      but also marks remapped keys.
 asNames :: [(KeyName, KeyName)]
 asNames =
   [ (FNKey,       InsertKey)
@@ -463,21 +465,23 @@ getKeyMap opts mediaKeyAliases =
                         & fromJust
                         & (\(toName, _, toCode) -> (toName, devNum, toCode))
 
-            controlAsSuper (ControlRightKey, devNum, _) =
-                           (ControlRightKey, devNum, rightSuperKeyCode)
-            controlAsSuper x = x
+            controlAsSuper = fmap f
+              where f (ControlRightKey, devNum, _) =
+                      (ControlRightKey, devNum, rightSuperKeyCode)
+                    f x = x
           in
             defaultKeyAliases <> fmap resolveMediaKey mediaKeyAliases
-              & makeCapsLockReal    `applyIf` O.realCapsLock             opts
-              & shiftNumeric        `applyIf` O.shiftNumericKeys         opts
-              & fmap controlAsSuper `applyIf` O.rightControlAsRightSuper opts
+              & makeCapsLockReal `applyIf` O.realCapsLock             opts
+              & shiftNumeric     `applyIf` O.shiftNumericKeys         opts
+              & controlAsSuper   `applyIf` O.rightControlAsRightSuper opts
 
         _asNamesMap = fromList _asNames :: Map KeyName KeyName
 
         _asNames :: [(KeyName, KeyName)]
         _asNames = asNames
-          & fmap (\x@(k, _) -> k == CapsLockKey ? dupe CapsLockKey $ x)
-              `applyIf` O.realCapsLock opts
+          & filter (fst .> (/= CapsLockKey)) `applyIf` O.realCapsLock opts
+          & ((ControlRightKey, SuperRightKey) :)
+              `applyIf` O.rightControlAsRightSuper opts
 
         byNameMediaAliasesMap :: Map KeyName KeyCode
         byNameMediaAliasesMap =
