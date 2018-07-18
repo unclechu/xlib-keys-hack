@@ -7,6 +7,7 @@ build:
 dist: clean build
 
 clean:
+	stack clean --full
 	rm -rf dist/ .stack-work/ .hpc/
 
 test-command:
