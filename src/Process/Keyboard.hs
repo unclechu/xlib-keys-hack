@@ -3,6 +3,8 @@
 
 {-# LANGUAGE ImpredicativeTypes #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 
 module Process.Keyboard
   ( handleKeyboard
@@ -18,13 +20,17 @@ import "base" Control.Monad ((>=>), when, unless, forM_, forever)
 import "base" Control.Concurrent.MVar (modifyMVar_)
 import "transformers" Control.Monad.Trans.State (execStateT)
 import "transformers" Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
-import "base" Control.Concurrent (forkIO)
+import "base" Control.Concurrent (forkIO, threadDelay)
+import qualified "stm" Control.Monad.STM as STM
+import qualified "stm" Control.Concurrent.STM.TVar as STM
+import qualified "stm" Control.Concurrent.STM.TChan as STM
 
 import "lens" Control.Lens ( (.~), (%~), (^.), (&~), (.=), (%=)
                            , set, mapped, view, _1, _2, _3
                            , Lens'
                            )
 
+import "base" Data.Word (Word8, Word16)
 import "base" Data.Maybe (fromMaybe, fromJust, isJust, isNothing)
 import qualified "containers" Data.Set as Set
 import "containers" Data.Set (type Set, (\\))
@@ -38,7 +44,7 @@ import "X11" Graphics.X11.Xlib.Types (Display)
 -- local imports
 
 import           Utils.StateMonad (ExceptStateT)
-import           Utils.Sugar ((&), (?), (<&>))
+import           Utils.Sugar ((&), (?), (<&>), (.>))
 import           Utils.Lens ((%=<&~>))
 import           Options (type Options)
 import qualified Options as O
@@ -781,20 +787,121 @@ handleKeyboard ctVars opts keyMap _ fd =
           !time <- getPOSIXTime
           m time name code isPressed state
 
-    forever $ EvdevEvent.hReadEvent fd >>= \case
+    if not isDebouncerOn
 
-      Just EvdevEvent.KeyEvent
-             { EvdevEvent.evKeyCode      = (getAlias -> Just (name, _, code))
-             , EvdevEvent.evKeyEventType = (checkPress -> Just isPressed)
-             }
-               -> chain (name, isPressed) (process name code isPressed)
+       then forever $ EvdevEvent.hReadEvent fd >>= \case
 
-      _ -> return ()
+              Just EvdevEvent.KeyEvent
+                     { EvdevEvent.evKeyCode =
+                         (getAlias -> Just (!name, _, !code))
+                     , EvdevEvent.evKeyEventType =
+                         (checkPress -> Just !isPressed)
+                     }
+                       -> chain (name, isPressed) (process name code isPressed)
 
-    where checkPress :: EvdevEvent.KeyEventType -> Maybe Bool
-          checkPress = \case EvdevEvent.Depressed -> Just True
-                             EvdevEvent.Released  -> Just False
-                             _ -> Nothing
+              _ -> pure ()
+
+       else do -- TODO Refactor all this debouncing stuff
+
+            ( -- Hardware actual pressed keys set
+              hwPressedKeysVar :: STM.TVar (Set Word16),
+              -- Set of keys which events temporarily ignored (debounced)
+              debouncingKeysVar :: STM.TVar (Set Word16),
+              -- FIFO to handle event of a key again after some amount of time
+              debouncedChan :: STM.TChan (Word16, Bool, Int, KeyName, KeyCode) )
+                 <- STM.atomically $ (,,)
+                <$> STM.newTVar mempty <*> STM.newTVar mempty <*> STM.newTChan
+
+            -- Debouncer thread
+            -- TODO Catch thread failure
+            -- TODO Kill this thread in application termination hook
+            _ <- forkIO $ forever $ do
+
+              -- Getting next event
+              (keyNum, isPressed, debouncedTime, name, code) <-
+                STM.atomically $ STM.readTChan debouncedChan
+
+              currentTime <- getPOSIXTime
+
+              -- Delayed time threshold - current time
+              let diffTime = debouncedTime - posixTimeToMicroseconds currentTime
+
+              -- Wait for threshold if not reached it already
+              -- (in case of a lag or next event which was very close to
+              -- previous one).
+              when (diffTime > 0) $ threadDelay diffTime
+
+              isItInverted <- STM.atomically $ do
+                isPhysicallyPressed <-
+                  Set.member keyNum <$> STM.readTVar hwPressedKeysVar
+
+                if isPressed == isPhysicallyPressed
+
+                   then False <$
+                          STM.modifyTVar' debouncingKeysVar (Set.delete keyNum)
+
+                   else do
+                        let t = currentTime + debouncerTiming
+                        let x = posixTimeToMicroseconds t
+
+                        True <$
+                          STM.writeTChan debouncedChan
+                            (keyNum, isPhysicallyPressed, x, name, code)
+
+              when isItInverted $
+                let x = not isPressed
+                 in chain (name, x) $ process name code x
+
+            forever $ EvdevEvent.hReadEvent fd >>= \case
+
+              Just EvdevEvent.KeyEvent
+                     { EvdevEvent.evKeyCode =
+                         k@(getAlias -> Just (!name, _, !code))
+                     , EvdevEvent.evKeyEventType =
+                         (checkPress -> Just !isPressed)
+                     } -> do
+
+                          let keyNum = fromKey k
+
+                          debouncedTime <- getPOSIXTime <&>
+                            (+ debouncerTiming) .> posixTimeToMicroseconds
+
+                          isIgnored <- STM.atomically $ do
+                            STM.modifyTVar' hwPressedKeysVar $
+                              (isPressed ? Set.insert $ Set.delete) keyNum
+
+                            -- Indicates that debouncing in process for that key
+                            isIgnored <-
+                              Set.member keyNum <$>
+                                STM.readTVar debouncingKeysVar
+
+                            unless isIgnored $ do
+                              -- Temporarily ignoring that key from now
+                              STM.modifyTVar' debouncingKeysVar $
+                                Set.insert keyNum
+
+                              -- Debounce/delay next handle
+                              STM.writeTChan debouncedChan
+                                (keyNum, isPressed, debouncedTime, name, code)
+
+                            pure isIgnored
+
+                          unless isIgnored
+                            $ chain (name, isPressed)
+                            $ process name code isPressed
+
+              _ -> pure ()
+
+    where
+      checkPress :: EvdevEvent.KeyEventType -> Maybe Bool
+      checkPress = \case EvdevEvent.Depressed -> Just True
+                         EvdevEvent.Released  -> Just False
+                         _ -> Nothing
+
+      fromKey = \case EvdevEvent.Key x -> x
+      isDebouncerOn = True -- TODO take it from CLI options
+      debouncerTiming = 0.025 :: POSIXTime -- In seconds TODO from CLI options
+      posixTimeToMicroseconds = round . (* 10 ^ (6 :: Word8))
 
   -- Composed prepare actions
   chain :: (KeyName, Bool) -> (State -> IO State) -> IO ()

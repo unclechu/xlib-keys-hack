@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 92e9c5fdf7428b4d654c3ead253b80d889e38f03c94ba793e0f928d15285b88b
+-- hash: 005bc684c60dd1032e6d07a757ef2794d1ad54fdf9a8efd934cf1a83538ca64d
 
 name:                xlib-keys-hack
 version:             0.1.0
@@ -68,6 +68,7 @@ library
     , mtl
     , process
     , qm-interpolated-string
+    , stm
     , template-haskell
     , text
     , time
@@ -98,6 +99,7 @@ executable xlib-keys-hack
     , mtl
     , process
     , qm-interpolated-string
+    , stm
     , template-haskell
     , text
     , time
@@ -129,6 +131,7 @@ executable xlib-keys-hack-watch-for-window-focus-events
     , mtl
     , process
     , qm-interpolated-string
+    , stm
     , template-haskell
     , text
     , time
@@ -168,6 +171,7 @@ test-suite xlib-keys-hack-utils-test
     , mtl
     , process
     , qm-interpolated-string
+    , stm
     , template-haskell
     , text
     , time
