@@ -900,7 +900,7 @@ handleKeyboard ctVars opts keyMap _ fd =
 
       fromKey = \case EvdevEvent.Key x -> x
       isDebouncerOn = True -- TODO take it from CLI options
-      debouncerTiming = 0.025 :: POSIXTime -- In seconds TODO from CLI options
+      debouncerTiming = 0.03 :: POSIXTime -- In seconds TODO from CLI options
       posixTimeToMicroseconds = round . (* 10 ^ (6 :: Word8))
 
   -- Composed prepare actions
