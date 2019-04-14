@@ -39,7 +39,6 @@ import "time" Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms, qns)
 
 import "X11" Graphics.X11.Types (type KeyCode)
-import "X11" Graphics.X11.Xlib.Types (Display)
 
 -- local imports
 
@@ -67,9 +66,8 @@ import qualified Process.CrossThread as CrossThread
 
 
 -- Wait for key events and simulate them in X server.
-handleKeyboard :: CrossThreadVars -> Options -> KeyMap -> Display -> Handle
-               -> IO ()
-handleKeyboard ctVars opts keyMap _ fd =
+handleKeyboard :: CrossThreadVars -> Options -> KeyMap -> Handle -> IO ()
+handleKeyboard ctVars opts keyMap fd =
   onEv $ fix $ \again time keyName keyCode isPressed state ->
 
   let reprocess :: State -> IO State

@@ -16,7 +16,6 @@ import "base" System.Exit (die)
 import "base" System.IO (stderr, hPutStrLn)
 
 import "base" Data.List (intercalate)
-import "base" Data.Maybe (fromMaybe)
 import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qmb)
 
 import "base" Control.Monad (when)
@@ -236,12 +235,11 @@ logView IPCHandle { xmobarIPC       = xmobar
                   } =
 
   intercalate "\n" $ mconcat
-    [["IPC data (DBus):"], xmobarView xmobar, externalCtrlView externalCtrl]
+    [pure "IPC data (DBus):", xmobarView xmobar, externalCtrlView externalCtrl]
 
-  where _xmobarBusView = fromMaybe "any (broadcasting to everyone)" . fmap show
-        _if f = maybe [] $ (: []) . f
+  where _xmobarBusView = maybe "any (broadcasting to everyone)" show
 
-        xmobarView = _if $
+        xmobarView = maybe mempty $ pure .
           \XmobarIPC { xmobarObjectPath      = objPath
                      , xmobarBus             = bus
                      , xmobarInterface       = iface
@@ -257,7 +255,7 @@ logView IPCHandle { xmobarIPC       = xmobar
                       {flushIface}
                  |]
 
-        externalCtrlView = _if $
+        externalCtrlView = maybe mempty $ pure .
           \ExternalCtrlIPC { externalCtrlObjectPath = objPath
                            , externalCtrlBus        = bus
                            , externalCtrlInterface  = iface
