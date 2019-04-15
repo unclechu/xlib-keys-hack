@@ -30,7 +30,7 @@ data Action = Noise        String
 
             -- Parts of application termination process
             | InitTerminate
-            | ThreadIsDead Int
+            | ThreadIsDead String Int
             | JustDie -- Ask main thread to die
               deriving (Show, Eq)
 

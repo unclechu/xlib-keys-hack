@@ -225,48 +225,50 @@ main = flip evalStateT ([] :: ThreadsState) $ do
 
   let _getThreadIdx = St.gets length :: StateT ThreadsState IO Int
 
-      _handleFork idx (Left e) =
+      _handleFork threadName idx (Left e) =
 
         case fromException e of
 
-             Just MortifyThreadException -> Actions.threadIsDeath ctVars idx
+             Just MortifyThreadException ->
+               Actions.threadIsDeath ctVars threadName idx
 
              _ -> do Actions.panicNoise ctVars
-                       [qm|Unexpected thread #{idx} exception: {e}|]
+                       [qms| Unexpected thread #{idx} "{threadName}"
+                             exception: {e} |]
 
                      Actions.overthrow ctVars
 
-      _handleFork idx (Right _) = do
-        Actions.panicNoise ctVars [qm|Thread #{idx} unexpectedly terminated|]
+      _handleFork threadName idx (Right _) = do
+        Actions.panicNoise ctVars
+          [qm| Thread #{idx} "{threadName}" unexpectedly terminated |]
+
         Actions.overthrow ctVars
 
-      -- TODO Give some names to the threads
-      --      to be able to identify them in verbose log.
-      runThread m = modifyStateM $ \ids -> do
-        tIdx <- _getThreadIdx
-        tId  <- liftIO (forkFinally m $ _handleFork tIdx)
-        pure $ (True, tId) : ids
+      runThread threadName m = do
+        noise [qm| Starting {threadName} thread... |]
 
-  noise "Starting keys actions handler thread..."
-  runThread $ processKeysActions ctVars keyMap dpyForKeysActionsHanlder
+        modifyStateM $ \ids -> do
+          tIdx <- _getThreadIdx
+          tId  <- liftIO (forkFinally m $ _handleFork threadName tIdx)
+          pure $ (True, tId) : ids
 
-  -- noise "Starting software debouncer thread..."
-  -- runThread $ TODO move it here
+  runThread "keys actions handler" $
+            processKeysActions ctVars keyMap dpyForKeysActionsHanlder
 
-  noise "Starting keyboard state handler thread..."
-  runThread $ processKeyboardState ctVars opts dpyForKeyboardStateHandler
+  -- runThread "software debouncer" $ TODO move it here
 
-  when (O.resetByWindowFocusEvent opts) $ do
-    noise "Starting window focus handler thread..."
-    runThread $ processWindowFocus ctVars opts
+  runThread "keyboard state handler" $
+            processKeyboardState ctVars opts dpyForKeyboardStateHandler
 
-  noise "Starting leds watcher thread..."
-  runThread $ watchLeds ctVars opts dpyForLedsWatcher
+  when (O.resetByWindowFocusEvent opts) $
+    runThread "window focus handler" $ processWindowFocus ctVars opts
+
+  runThread "leds watcher" $ watchLeds ctVars opts dpyForLedsWatcher
 
   noise "Starting device handle threads (one thread per device)..."
-  O.handleDeviceFd opts `forM_` \fd -> do
-    noise [qm| Starting handle thread for device: {fd} |]
-    runThread $ handleKeyboard ctVars opts keyMap fd
+  O.handleDeviceFd opts `forM_` \fd ->
+    runThread [qm| handler for device: {fd} |] $
+              handleKeyboard ctVars opts keyMap fd
 
   modifyState reverse -- Threads in order they have been forked
 
@@ -341,7 +343,7 @@ main = flip evalStateT ([] :: ThreadsState) $ do
 
             liftIO $ forM_ threads $ snd .> flip throwTo MortifyThreadException
 
-        m (Actions.ThreadIsDead tIdx) = do
+        m (Actions.ThreadIsDead threadName tIdx) = do
 
           let markAsDead (_, []) = []
               markAsDead (l, (_, x) : xs) = l <> ((False, x) : xs)
@@ -349,7 +351,8 @@ main = flip evalStateT ([] :: ThreadsState) $ do
            in modifyState $ splitAt tIdx .> markAsDead
 
           (dead, total) <- St.gets $ length . filter not . map fst &&& length
-          noise [qm| Thread #{tIdx + 1} is dead ({dead} of {total} is dead) |]
+          noise [qms| Thread #{tIdx + 1} "{threadName}" is dead
+                      ({dead} of {total} is dead) |]
           when (dead == total) $ liftIO $ Actions.overthrow ctVars
 
         m Actions.JustDie = do
@@ -358,8 +361,8 @@ main = flip evalStateT ([] :: ThreadsState) $ do
           noise "Application is going to die"
           noise "Closing devices files descriptors..."
 
-          forM_ (O.handleDeviceFd opts) $ \fd -> do
-            noise [qm|Closing device file descriptor: {fd}...|]
+          O.handleDeviceFd opts `forM_` \fd -> do
+            noise [qm| Closing device file descriptor: {fd}... |]
             liftIO $ SysIO.hClose fd
 
           let close h = noise "Closing DBus connection..." >> lift (closeIPC h)
