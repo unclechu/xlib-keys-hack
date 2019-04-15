@@ -29,11 +29,12 @@ module Process.CrossThread
 
 import "X11" Graphics.X11.Xlib (Display)
 
-import "lens" Control.Lens ((.~), (^.), view, Lens')
+import "base" Control.Monad (unless)
 import "transformers" Control.Monad.Trans.State (execStateT)
 import "transformers" Control.Monad.Trans.Except (runExceptT, throwE)
 import qualified "mtl" Control.Monad.State.Class as St (MonadState)
 import "base" Control.Monad.IO.Class (MonadIO, liftIO)
+import "lens" Control.Lens ((.~), (^.), view, Lens')
 
 import qualified "containers" Data.Set as Set (null)
 import "base" Data.Maybe (fromJust, isJust)
@@ -42,7 +43,6 @@ import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms, qns)
 -- local imports
 
 import           Utils.StateMonad (modifyState, modifyStateM)
-import           Utils.BreakableMonad (continueIf)
 import           Utils.Sugar ((?), (|?|), (.>))
 import           Bindings.XTest (fakeKeyCodeEvent)
 import           Bindings.MoreXlib (getLeds)
@@ -88,7 +88,7 @@ handleModeChange mcLens (doingItMsg, alreadyMsg) doHandle isNowOn
 
   -- Do nothing if Caps Lock mode changing is not requested
   -- or if all another keys isn't released yet.
-  continueIf $ hasDelayed && everyKeyIsReleased
+  unless (hasDelayed && everyKeyIsReleased) $ throwE ()
 
   -- Handling it!
   liftIO $ noise' [doingItMsg]
@@ -326,7 +326,7 @@ handleResetKbdLayout ctVars noise' state =
   flip execStateT state . runExceptT $ do
 
   -- Break if we don't have to do anything
-  continueIf hasDelayed
+  unless hasDelayed $ throwE ()
 
   -- Skip if it's already done
   if State.kbdLayout state == 0
@@ -339,7 +339,7 @@ handleResetKbdLayout ctVars noise' state =
      else pure ()
 
   -- Do nothing right now if we have some not released keys yet
-  continueIf everyKeyIsReleased
+  unless everyKeyIsReleased $ throwE ()
 
   -- Perfect time to do it!
   liftIO $ noise' [ [qns| Delayed resetting keyboard layout to default

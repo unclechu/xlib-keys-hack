@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 005bc684c60dd1032e6d07a757ef2794d1ad54fdf9a8efd934cf1a83538ca64d
+-- hash: 7a0bdd2e852b29669700984c884b78f62f558ee09d817edc9c5772611db67d5e
 
 name:                xlib-keys-hack
 version:             0.1.0
@@ -44,7 +44,6 @@ library
       Process.KeysActions
       State
       Utils
-      Utils.BreakableMonad
       Utils.Instances
       Utils.Lens
       Utils.StateMonad
@@ -150,7 +149,6 @@ test-suite xlib-keys-hack-utils-test
       test
   main-is: UtilsSpec.hs
   other-modules:
-      Utils.BreakableMonad
       Utils.Lens
       Utils.StateMonad
       Utils.Sugar
