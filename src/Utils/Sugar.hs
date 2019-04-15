@@ -6,12 +6,11 @@ module Utils.Sugar
   , (?), (|?|)       -- conditions helpers
   , module Data.Maybe.Preserve
   , applyIf, applyUnless
-  , dupe
   ) where
 
 import "base" Data.Bool (bool)
-
-import qualified "lens" Control.Lens.Operators as Operators ((&), (<&>))
+import qualified "base" Data.Function as Operators ((&))
+import qualified "base" Data.Functor as Operators ((<&>))
 
 -- local imports
 
@@ -60,8 +59,7 @@ infixl 2 |?|
 --   isBar ? "bar" $
 --    "default"
 (?) :: Bool -> a -> a -> a
-(?) True  x _ = x
-(?) False _ y = y
+(?) c x y = if c then x else y
 {-# INLINE (?) #-}
 infixl 1 ?
 
@@ -73,8 +71,3 @@ applyIf = (|?| id)
 applyUnless :: (a -> a) -> Bool -> a -> a
 applyUnless = (id |?|)
 {-# INLINE applyUnless #-}
-
-
-dupe :: a -> (a, a)
-dupe x = (x, x)
-{-# INLINE dupe #-}
