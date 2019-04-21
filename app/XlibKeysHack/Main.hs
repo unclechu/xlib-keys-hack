@@ -49,7 +49,7 @@ import "base" Control.Exception (Exception (fromException))
 import "base" Control.Arrow ((&&&))
 import "extra" Control.Monad.Extra (whenJust)
 
-import "base" Data.Monoid ((<>), mempty)
+import "base" Data.Word (Word8)
 import "base" Data.Maybe (fromJust)
 import "base" Data.List (intercalate)
 import "base" Data.Typeable (Typeable)
@@ -81,15 +81,23 @@ import "xlib-keys-hack" IPC ( openIPC
                             )
 import "xlib-keys-hack" Process ( initReset
                                 , watchLeds
-                                , handleKeyboard
+
+                                , handleKeyEvent
+                                , getNextKeyboardDeviceKeyEvent
+
+                                , getSoftwareDebouncer
+                                , getSoftwareDebouncerTiming
+                                , moveKeyThroughSoftwareDebouncer
+                                , handleNextSoftwareDebouncerEvent
+
                                 , processWindowFocus
                                 , processKeysActions
                                 , processKeyboardState
                                 )
 import qualified "xlib-keys-hack" Process.CrossThread as CrossThread
-  ( toggleAlternative
-  , turnAlternativeMode
-  )
+                                ( toggleAlternative
+                                , turnAlternativeMode
+                                )
 import "xlib-keys-hack" State ( CrossThreadVars ( CrossThreadVars
                                                 , stateMVar
                                                 , actionsChan
@@ -255,8 +263,6 @@ main = flip evalStateT ([] :: ThreadsState) $ do
   runThread "keys actions handler" $
             processKeysActions ctVars keyMap dpyForKeysActionsHanlder
 
-  -- runThread "software debouncer" $ TODO move it here
-
   runThread "keyboard state handler" $
             processKeyboardState ctVars opts dpyForKeyboardStateHandler
 
@@ -266,9 +272,29 @@ main = flip evalStateT ([] :: ThreadsState) $ do
   runThread "leds watcher" $ watchLeds ctVars opts dpyForLedsWatcher
 
   noise "Starting device handle threads (one thread per device)..."
-  O.handleDeviceFd opts `forM_` \fd ->
-    runThread [qm| handler for device: {fd} |] $
-              handleKeyboard ctVars opts keyMap fd
+  let keyEventHandler = handleKeyEvent ctVars opts keyMap
+  O.handleDeviceFd opts `forM_` \fd -> do
+    liftIO (getSoftwareDebouncer opts) >>= \case
+      Nothing ->
+        runThread [qm| handler for device: {fd} |] $ forever $
+          getNextKeyboardDeviceKeyEvent keyMap fd >>= keyEventHandler
+
+      Just softwareDebouncer -> do
+        let timing = round $
+              getSoftwareDebouncerTiming softwareDebouncer * 1000 :: Word8
+
+        runThread [qms| software debouncer (with timing: {timing}ms)
+                        debounced events handling for device: {fd} |]
+          $ forever
+          $ handleNextSoftwareDebouncerEvent softwareDebouncer
+              >>= pure () `maybe` keyEventHandler
+
+        runThread [qms| handler for device
+                        (with software debouncer timing: {timing}ms): {fd} |]
+          $ forever
+          $ getNextKeyboardDeviceKeyEvent keyMap fd
+              >>= moveKeyThroughSoftwareDebouncer softwareDebouncer
+              >>= pure () `maybe` keyEventHandler
 
   modifyState reverse -- Threads in order they have been forked
 

@@ -17,18 +17,22 @@ module Options
   ) where
 
 import "base" GHC.Generics (Generic)
-import "base" System.IO (Handle)
-import qualified "base" System.Console.GetOpt as GetOpt
-
-import "base" Control.Arrow ((&&&))
-import "lens" Control.Lens (Lens', (.~), (%~), (^.), set)
-import "deepseq" Control.DeepSeq (NFData, rnf, deepseq)
 
 import "base" Data.Monoid ((<>))
 import "base" Data.Maybe (fromJust)
 import "data-default" Data.Default (Default, def)
-import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms, qmb)
+import "base" Data.Word (Word8)
 import qualified "text" Data.Text as T (pack, unpack, replace)
+import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms, qmb)
+import "time" Data.Time.Clock.POSIX (POSIXTime)
+
+import "base" Control.Arrow ((&&&))
+import "base" Control.Applicative ((<|>))
+import "lens" Control.Lens (Lens', (.~), (%~), (^.), set)
+import "deepseq" Control.DeepSeq (NFData, rnf, deepseq)
+
+import "base" System.IO (Handle)
+import qualified "base" System.Console.GetOpt as GetOpt
 
 -- local imports
 
@@ -54,6 +58,8 @@ data Options
 
   , resetByEscapeOnCapsLock      :: Bool
   , resetByWindowFocusEvent      :: Bool
+
+  , debouncerTiming              :: Maybe POSIXTime
 
   , disableXInputDeviceName      :: [String]
   , disableXInputDeviceId        :: [Int]
@@ -95,6 +101,8 @@ instance NFData Options where
 
     resetByEscapeOnCapsLock      opts `deepseq`
     resetByWindowFocusEvent      opts `deepseq`
+
+    debouncerTiming              opts `deepseq`
 
     disableXInputDeviceName      opts `deepseq`
     disableXInputDeviceId        opts `deepseq`
@@ -138,6 +146,8 @@ instance Default Options where
 
     , resetByEscapeOnCapsLock      = True
     , resetByWindowFocusEvent      = True
+
+    , debouncerTiming              = Nothing
 
     , disableXInputDeviceName      = []
     , disableXInputDeviceId        = []
@@ -186,6 +196,8 @@ options =
       [qmb| Start in verbose-mode
             Default is: {verboseMode def ? "On" $ "Off"}
             |]
+
+  -- Features options
 
   , GetOpt.Option  [ ]  ["real-capslock"]
       (GetOpt.NoArg $ set realCapsLock'            True
@@ -268,6 +280,35 @@ options =
             Default is: {resetByWindowFocusEvent def ? "On" $ "Off"}
             |]
 
+  , let defaultValue = 0.03 :: POSIXTime
+        convertFn x = fromRational $ toRational (read x :: Word8) / 1000
+        setter x = set debouncerTiming' $ fmap convertFn x <|> Just defaultValue
+
+        defaultIs Nothing  = "Off"
+        defaultIs (Just x) = [qm| On ({ floor $ x * 1000 :: Word8 }ms) |]
+
+     in GetOpt.Option  [ ]  ["software-debouncer"]
+          (GetOpt.OptArg setter "MILLISECONDS")
+          [qmb| Enable software debouncer feature.
+                Debouncing is usually done on hardware or firmware level of a \
+                  keyboard but timing could be not configurable. \
+                  Some keyboards may have issues with doubling or just \
+                  shrapnelling some keys (triggering a key pressing more than \
+                  once per one physical press) especially after long use time. \
+                  By using this feature you could use your keyboard longer, \
+                  give it a second life.
+                How this feature works: when you press/release a key only \
+                  first event is handled and then it waits for specified or \
+                  default timing ignoring any other events of that key in that \
+                  gap and only after that it handles next state of that key.
+                If this feature is turned on but timing is not specified then \
+                  default timing would be: \
+                  { floor $ defaultValue * 1000 :: Word8 }ms.
+                Default is: {defaultIs $ debouncerTiming def}
+                |]
+
+  -- Devices handling and disabling xinput devices options
+
   , GetOpt.Option  [ ]  ["disable-xinput-device-name"]
       (GetOpt.OptArg
         (\x -> disableXInputDeviceName' %~ (<> [fromJust x]))
@@ -283,6 +324,8 @@ options =
         (\x -> handleDevicePath' %~ (<> [fromJust x]))
         "FDPATH")
       "Path to device file descriptor to get events from"
+
+  -- "xmobar indicators" options
 
   , GetOpt.Option  [ ]  [xmobarIndicatorsOptName]
       (GetOpt.NoArg $ xmobarIndicators' .~ True)
@@ -325,6 +368,8 @@ options =
             {explainDef xmobarIndicatorsFlushIface'}
             {makesSense xmobarIndicatorsOptName}
             |]
+
+  -- "External control" options
 
   , GetOpt.Option  [ ]  [externalControlOptName]
       (GetOpt.NoArg $ externalControl' .~ True)

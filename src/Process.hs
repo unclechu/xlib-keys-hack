@@ -8,7 +8,17 @@ module Process
   ( initReset
   , processWindowFocus
   , watchLeds
-  , handleKeyboard
+
+  , HandledKey
+  , handleKeyEvent
+  , getNextKeyboardDeviceKeyEvent
+
+  , SoftwareDebouncer
+  , getSoftwareDebouncer
+  , getSoftwareDebouncerTiming
+  , moveKeyThroughSoftwareDebouncer
+  , handleNextSoftwareDebouncerEvent
+
   , processKeysActions
   , processKeyboardState
   ) where
@@ -63,7 +73,16 @@ import           State (type State, type LedModes, type CrossThreadVars)
 import qualified State
 import           Keys (type KeyMap)
 
-import           Process.Keyboard (handleKeyboard)
+import           Process.Keyboard ( HandledKey
+                                  , handleKeyEvent
+                                  , getNextKeyboardDeviceKeyEvent
+
+                                  , SoftwareDebouncer
+                                  , getSoftwareDebouncer
+                                  , getSoftwareDebouncerTiming
+                                  , moveKeyThroughSoftwareDebouncer
+                                  , handleNextSoftwareDebouncerEvent
+                                  )
 import           Process.KeysActions (processKeysActions)
 import qualified Process.CrossThread as CrossThread ( justTurnCapsLockMode
                                                     , resetAll

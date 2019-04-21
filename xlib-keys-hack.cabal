@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 7a0bdd2e852b29669700984c884b78f62f558ee09d817edc9c5772611db67d5e
+-- hash: 3ce47325ae5c701081d5a3b1f3cdf63e52471f387735084bc6b2c755dfe2db0a
 
 name:                xlib-keys-hack
 version:             0.1.0
@@ -27,7 +27,7 @@ library
   hs-source-dirs:
       src
   ghc-options: -Wall -O2
-  default-extensions: ExplicitNamespaces PackageImports BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
+  default-extensions: ExplicitNamespaces PackageImports TypeOperators BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
   exposed-modules:
       Actions
       Actions.Types
@@ -72,12 +72,13 @@ library
     , text
     , time
     , transformers
+    , type-operators
     , unix
 
 executable xlib-keys-hack
   default-language: Haskell2010
   ghc-options: -Wall -O2 -threaded
-  default-extensions: ExplicitNamespaces PackageImports BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
+  default-extensions: ExplicitNamespaces PackageImports TypeOperators BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
   hs-source-dirs:
       app/XlibKeysHack
   main-is: Main.hs
@@ -103,6 +104,7 @@ executable xlib-keys-hack
     , text
     , time
     , transformers
+    , type-operators
     , unix
     , xlib-keys-hack
   other-modules:
@@ -111,7 +113,7 @@ executable xlib-keys-hack
 executable xlib-keys-hack-watch-for-window-focus-events
   default-language: Haskell2010
   ghc-options: -Wall -O2 -threaded
-  default-extensions: ExplicitNamespaces PackageImports BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
+  default-extensions: ExplicitNamespaces PackageImports TypeOperators BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
   hs-source-dirs:
       app/WindowFocusWatcher
   main-is: Main.hs
@@ -135,6 +137,7 @@ executable xlib-keys-hack-watch-for-window-focus-events
     , text
     , time
     , transformers
+    , type-operators
     , unix
     , xlib-keys-hack
   other-modules:
@@ -144,7 +147,7 @@ test-suite xlib-keys-hack-utils-test
   type: exitcode-stdio-1.0
   default-language: Haskell2010
   ghc-options: -Wall -O2
-  default-extensions: ExplicitNamespaces PackageImports BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
+  default-extensions: ExplicitNamespaces PackageImports TypeOperators BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
   hs-source-dirs:
       test
   main-is: UtilsSpec.hs
@@ -174,5 +177,6 @@ test-suite xlib-keys-hack-utils-test
     , text
     , time
     , transformers
+    , type-operators
     , unix
     , xlib-keys-hack

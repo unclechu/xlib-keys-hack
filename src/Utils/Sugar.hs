@@ -2,8 +2,8 @@
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
 module Utils.Sugar
-  ( (&), (<&>), (.>) -- pipes
-  , (?), (|?|)       -- conditions helpers
+  ( (&), (<&>), (.&>), (<$.), (.>)
+  , (?), (|?|) -- condition helpers
   , module Data.Maybe.Preserve
   , applyIf, applyUnless
   ) where
@@ -30,6 +30,20 @@ infixl 1 &
 (<&>) = (Operators.<&>)
 {-# INLINE (<&>) #-}
 infixr 5 <&>
+
+-- Point-free fmap (left-to-right version).
+-- Mix of (.>) and (<&>).
+(.&>) :: Functor f => (a -> f b) -> (b -> c) -> a -> f c
+f .&> g = f .> fmap g
+{-# INLINE (.&>) #-}
+infixl 9 .&> -- Precedence of (.>)
+
+-- Point-free fmap.
+-- Mix of (<$>) and (.).
+(<$.) :: Functor f => (b -> c) -> (a -> f b) -> a -> f c
+f <$. g = fmap f . g
+{-# INLINE (<$.) #-}
+infixr 9 <$. -- Precedence of (.)
 
 
 -- Pipe composition operator.
