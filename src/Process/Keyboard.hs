@@ -110,6 +110,11 @@ getNextKeyboardDeviceKeyEvent keyMap fd = fix $ \again ->
 -- forkIO $ forever $
 --   getNextKeyboardDeviceKeyEvent keyMap deviceFd >>= keyEventHandler
 -- @
+--
+-- TODO Better logging by mentioning exact device file descriptor an event came
+--      from or by a thread name marker which already has it
+--      (in this case we don't have to pass device file descriptor here
+--      but just a string).
 handleKeyEvent :: CrossThreadVars -> Options -> KeyMap -> HandledKey -> IO ()
 handleKeyEvent ctVars opts keyMap =
   onEv $ fix $ \again time keyName keyCode isPressed state ->
@@ -1090,6 +1095,8 @@ getSoftwareDebouncer = O.debouncerTiming .> go where
 --     >>= moveKeyThroughSoftwareDebouncer softwareDebouncer
 --     >>= pure () `maybe` keyEventHandler
 -- @
+--
+-- TODO Add logging of events handling.
 moveKeyThroughSoftwareDebouncer
   :: SoftwareDebouncer
   -> HandledKey
@@ -1136,6 +1143,8 @@ moveKeyThroughSoftwareDebouncer
 --   handleNextSoftwareDebouncerEvent softwareDebouncer >>=
 --     pure () `maybe` keyEventHandler
 -- @
+--
+-- TODO Add logging of events handling.
 handleNextSoftwareDebouncerEvent :: SoftwareDebouncer -> IO $ Maybe HandledKey
 handleNextSoftwareDebouncerEvent SoftwareDebouncer {..} = do
   -- Getting next event
