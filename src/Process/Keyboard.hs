@@ -25,7 +25,7 @@ import "type-operators" Control.Type.Operator (type ($))
 import "transformers" Control.Monad.Trans.Class (lift)
 import "base" Control.Monad ((>=>), when, unless, forM_)
 import "base" Control.Concurrent.MVar (modifyMVar_)
-import "transformers" Control.Monad.Trans.State (execStateT)
+import "transformers" Control.Monad.Trans.State (StateT, execStateT)
 import "transformers" Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
 import "base" Control.Concurrent (forkIO, threadDelay)
 import qualified "stm" Control.Monad.STM as STM
@@ -49,7 +49,6 @@ import "X11" Graphics.X11.Types (type KeyCode)
 
 -- local imports
 
-import           Utils.StateMonad (ExceptStateT)
 import           Utils.Sugar ((&), (?), (<&>), (<$.), (.>), preserve')
 import           Utils.Lens ((%=<&~>))
 import           Options (type Options)
@@ -818,7 +817,7 @@ handleKeyEvent ctVars opts keyMap =
   handleResetKbdLayout :: State -> IO State
   handleResetKbdLayout = CrossThread.handleResetKbdLayout ctVars noise'
 
-  resetAll :: ExceptStateT State () IO ()
+  resetAll :: ExceptT () (StateT State IO) ()
   resetAll = CrossThread.resetAll opts ctVars noise' notify'
 
   -- Wait and extract event, make preparations and call handler

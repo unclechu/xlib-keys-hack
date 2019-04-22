@@ -29,12 +29,12 @@ import "X11" Graphics.X11.Xlib.Misc (keysymToKeycode)
 import "X11" Graphics.X11.Xlib (displayString)
 
 import "deepseq" Control.DeepSeq (deepseq, force)
-import qualified "mtl" Control.Monad.State as St (get, gets)
+import qualified "mtl" Control.Monad.State as St (get, gets, put, modify)
 import "mtl" Control.Monad.State (StateT, execStateT, evalStateT)
 import "base" Control.Monad.IO.Class (liftIO)
 import "transformers" Control.Monad.Trans.Class (lift)
 import "transformers" Control.Monad.Trans.Except (runExceptT, throwE)
-import "base" Control.Monad (when, unless, filterM, forever, forM_, void)
+import "base" Control.Monad ((>=>), when, unless, filterM, forever, forM_, void)
 import "lens" Control.Lens ((.~), (^.), set, view)
 import "base" Control.Concurrent ( forkIO
                                  , forkFinally
@@ -58,11 +58,11 @@ import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms, qns)
 
 -- local imports
 
-import "xlib-keys-hack" Utils.Sugar ((&), (<&>), (.>), (|?|), (?), preserveF')
+import "xlib-keys-hack" Utils.Sugar
+                      ( (&), (<&>), (.>), (|?|), (?)
+                      , preserveF', unnoticed, apart
+                      )
 import "xlib-keys-hack" Utils (errPutStrLn, dieWith)
-import "xlib-keys-hack" Utils.StateMonad ( updateState', updateStateM'
-                                         , modifyState,  modifyStateM
-                                         )
 import "xlib-keys-hack" Bindings.Xkb ( xkbGetDescPtr
                                      , xkbFetchControls
                                      , xkbGetGroupsCount
@@ -164,8 +164,9 @@ main = flip evalStateT ([] :: ThreadsState) $ do
     , (Keys.MMonBrightnessDownKey, XTypes.xF86XK_MonBrightnessDown)
     , (Keys.MMonBrightnessUpKey,   XTypes.xF86XK_MonBrightnessUp)
     ]
-  noise $ "Media keys aliases:" <>
-          foldr (\(a, b) -> ([qm|\n  {a}: {b}|] <>)) mempty mediaKeysAliases
+  noise
+    $ "Media keys aliases:"
+    <> foldMap (\(a, b) -> [qm|\n  {a}: {b}|]) mediaKeysAliases
 
   let keyMap = Keys.getKeyMap opts mediaKeysAliases
 
@@ -231,34 +232,29 @@ main = flip evalStateT ([] :: ThreadsState) $ do
       catch sig = installHandler sig (Catch termHook) Nothing
    in liftIO $ mapM_ catch [sigINT, sigTERM]
 
-  let _getThreadIdx = St.gets length :: StateT ThreadsState IO Int
+  let runThread :: String -> IO () -> StateT ThreadsState IO ()
+      runThread threadName m = go where
+        go = do
+          noise [qm| Starting {threadName} thread... |]
+          (ids, tIdx) <- St.gets $ id &&& length
+          tId <- liftIO $ forkFinally m $ handleFork tIdx
+          St.put $ (True, tId) : ids
 
-      _handleFork threadName idx (Left e) =
+        handleFork idx = \case
+          Left e ->
+            case fromException e of
+              Just MortifyThreadException ->
+                Actions.threadIsDeath ctVars threadName idx
 
-        case fromException e of
+              _ -> do
+                Actions.panicNoise ctVars
+                  [qm| Unexpected thread #{idx} "{threadName}" exception: {e} |]
+                Actions.overthrow ctVars
 
-             Just MortifyThreadException ->
-               Actions.threadIsDeath ctVars threadName idx
-
-             _ -> do Actions.panicNoise ctVars
-                       [qms| Unexpected thread #{idx} "{threadName}"
-                             exception: {e} |]
-
-                     Actions.overthrow ctVars
-
-      _handleFork threadName idx (Right _) = do
-        Actions.panicNoise ctVars
-          [qm| Thread #{idx} "{threadName}" unexpectedly terminated |]
-
-        Actions.overthrow ctVars
-
-      runThread threadName m = do
-        noise [qm| Starting {threadName} thread... |]
-
-        modifyStateM $ \ids -> do
-          tIdx <- _getThreadIdx
-          tId  <- liftIO (forkFinally m $ _handleFork threadName tIdx)
-          pure $ (True, tId) : ids
+          Right _ -> do
+            Actions.panicNoise ctVars
+              [qm| Thread #{idx} "{threadName}" unexpectedly terminated |]
+            Actions.overthrow ctVars
 
   runThread "keys actions handler" $
             processKeysActions ctVars keyMap dpyForKeysActionsHanlder
@@ -296,7 +292,7 @@ main = flip evalStateT ([] :: ThreadsState) $ do
               >>= moveKeyThroughSoftwareDebouncer softwareDebouncer
               >>= pure () `maybe` keyEventHandler
 
-  modifyState reverse -- Threads in order they have been forked
+  St.modify reverse -- Threads in order they have been forked
 
   noise "Listening for actions in main thread..."
   forever $ do
@@ -364,7 +360,7 @@ main = flip evalStateT ([] :: ThreadsState) $ do
                                             already initialized was skipped |]
                                in noise s >> throwE ()
 
-            modifyState $ State.isTerminating' .~ True
+            St.modify $ State.isTerminating' .~ True
             noise "Application termination process initialization..."
 
             liftIO $ forM_ threads $ snd .> flip throwTo MortifyThreadException
@@ -374,7 +370,7 @@ main = flip evalStateT ([] :: ThreadsState) $ do
           let markAsDead (_, []) = []
               markAsDead (l, (_, x) : xs) = l <> ((False, x) : xs)
 
-           in modifyState $ splitAt tIdx .> markAsDead
+           in St.modify $ splitAt tIdx .> markAsDead
 
           (dead, total) <- St.gets $ length . filter not . map fst &&& length
           noise [qms| Thread #{tIdx + 1} "{threadName}" is dead
@@ -458,61 +454,47 @@ main = flip evalStateT ([] :: ThreadsState) $ do
         -- 'handleDeviceFd' option or fail the application
         -- if there's no available devices.
         extractAvailableDevices :: Options -> IO Options
-        extractAvailableDevices opts = flip execStateT opts $
+        extractAvailableDevices
+           =  execStateT
+           $  St.gets O.noise
+          >>= \noise -> St.gets (view O.handleDevicePath')
+          >>= lift . filterM doesFileExist
 
-          St.gets (view O.handleDevicePath')
-            >>= lift . filterM doesFileExist
-            >>= lift . checkForCount
-            >>= updateStateM' logAndStoreAvailable
+          >>= ( unnoticed $ length .> \availableDevicesCount ->
+                  unless (availableDevicesCount > 0) $ lift $ dieWith
+                    "All specified devices to get events from is unavailable!"
+              )
 
-            >>= liftBetween
-                  (noise "Opening devices files descriptors for reading...")
+          >>= ( unnoticed $ lift . noise
+              . ("Devices that will be handled:" <>) . foldMap ("\n  " <>)
+              )
 
-            >>= lift . mapM (`IOHandleFD.openFile` SysIO.ReadMode)
-            >>= updateState' (flip $ set O.handleDeviceFd')
+          >>= unnoticed (St.modify . set O.availableDevices')
 
-          where noise = O.noise opts
+          >>= ( apart $ lift
+              $ noise "Opening devices files descriptors for reading..."
+              )
 
-                logAndStoreAvailable :: O.HasOptions s
-                                     => s -> [FilePath] -> StateT s IO s
-                logAndStoreAvailable state files = do
+          >>= lift . mapM (`IOHandleFD.openFile` SysIO.ReadMode)
+          >>= St.modify . set O.handleDeviceFd'
 
-                  let devicesList = foldr (("\n  " <>) .> (<>)) mempty files
-                      title = "Devices that will be handled:"
-
-                   in lift $ noise $ title <> devicesList
-
-                  pure $ state & O.availableDevices' .~ files
-
-                -- Checks if we have at least one available device
-                -- and gets files list back.
-                checkForCount :: [FilePath] -> IO [FilePath]
-                checkForCount files = do
-
-                  when (length files < 1) $
-                    dieWith [qns| All specified devices to get events from
-                                  is unavailable! |]
-
-                  pure files
-
-        -- Lift up a monad and return back original value
-        liftBetween :: Monad m => m () -> a -> StateT s m a
-        liftBetween monad x = x <$ lift monad
 
         -- Completely parse input arguments and returns options
         -- data structure based on them.
         parseOpts :: [String] -> IO Options
-        parseOpts argv =
-          getOptsFromArgs argv
-            >>= extractAvailableDevices
-            >>= XInput.getAvailable
-            >>= (\opts -> opts <$ XInput.disable opts)
-            >>= logDisabled
+        parseOpts = go where
+          go
+             =  getOptsFromArgs
+            >=> extractAvailableDevices
+            >=> XInput.getAvailable
+            >=> unnoticed XInput.disable
+            >=> logDisabled
 
-          where logDisabled :: Options -> IO Options
-                logDisabled opts = O.availableXInputDevices opts
-                  & show .> ("XInput devices ids that was disabled: " <>)
-                  & (\x -> opts <$ O.noise opts x)
+          logDisabled :: Options -> IO Options
+          logDisabled opts
+            = O.availableXInputDevices opts
+            & ("XInput devices ids that was disabled: " <>) . show
+            & (\x -> opts <$ O.noise opts x)
 
         -- For situations when something went wrong and application
         -- can't finish its stuff correctly.

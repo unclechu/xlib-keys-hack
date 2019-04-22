@@ -7,13 +7,11 @@ import "hspec" Test.Hspec (hspec, describe)
 
 -- local imports
 
-import qualified Utils.StateMonad
 import qualified Utils.Sugar
 import qualified Utils.Lens
 
 
 main :: IO ()
 main = hspec $ do
-  describe "State monad helpers" Utils.StateMonad.spec
   describe "Sugar operators" Utils.Sugar.spec
   describe "Lenses helpers" Utils.Lens.spec

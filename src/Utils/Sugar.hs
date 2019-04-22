@@ -6,11 +6,13 @@ module Utils.Sugar
   , (?), (|?|) -- condition helpers
   , module Data.Maybe.Preserve
   , applyIf, applyUnless
+  , unnoticed, apart
   ) where
 
 import "base" Data.Bool (bool)
 import qualified "base" Data.Function as Operators ((&))
 import qualified "base" Data.Functor as Operators ((<&>))
+import "base" Data.Functor (($>))
 
 -- local imports
 
@@ -85,3 +87,48 @@ applyIf = (|?| id)
 applyUnless :: (a -> a) -> Bool -> a -> a
 applyUnless = (id |?|)
 {-# INLINE applyUnless #-}
+
+
+-- | A helper to do some stuff with incoming value, just by reading it
+--   or looking at it but always returning it back unchanged.
+--
+-- "unnoticed" means we don't notice if we remove whole call,
+-- types won't change and original value will be the same.
+--
+-- It helps to avoid noisy code patterns like this one:
+--
+-- @
+-- foo >>= \bar -> bar <$ f bar
+-- @
+--
+-- To replace them with:
+--
+-- @
+-- foo >>= unnoticed f
+-- @
+unnoticed :: Functor f => (a -> f b) -> a -> f a
+unnoticed f x = x <$ f x
+{-# INLINE unnoticed #-}
+
+
+-- | Just an alias for the "$>" operator.
+--
+-- Kinda alternative version of "unnoticed", when we want to do something and
+-- return back incoming value unchanged. But also we don't need that incoming
+-- value at all in our function, so that function doesn't even care what type
+-- of incoming value is and in some sense it lives "apart" from that context.
+--
+-- Writing it like this is not very readable:
+--
+-- @
+-- foo >>= (($>) $ bar $ baz bzz)
+-- @
+--
+-- This I think is better:
+--
+-- @
+-- foo >>= apart (bar $ baz bzz)
+-- @
+apart :: Functor f => f a -> b -> f b
+apart = ($>)
+{-# INLINE apart #-}

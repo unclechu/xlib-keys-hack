@@ -62,7 +62,7 @@ data Options
   , debouncerTiming              :: Maybe POSIXTime
 
   , disableXInputDeviceName      :: [String]
-  , disableXInputDeviceId        :: [Int]
+  , disableXInputDeviceId        :: [Word]
   , handleDevicePath             :: [FilePath]
 
   , xmobarIndicators             :: Bool
@@ -79,7 +79,7 @@ data Options
 
   , handleDeviceFd               :: [Handle]
   , availableDevices             :: [FilePath]
-  , availableXInputDevices       :: [Int]
+  , availableXInputDevices       :: [Word]
   }
 
   deriving (Show, Eq, Generic)

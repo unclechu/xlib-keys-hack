@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 3ce47325ae5c701081d5a3b1f3cdf63e52471f387735084bc6b2c755dfe2db0a
+-- hash: 3b71ccea98ac0f71036cb4648cecb87a8a5dd4b1fe5e5b0a7f0f836038af9dbb
 
 name:                xlib-keys-hack
 version:             0.1.0
@@ -46,7 +46,6 @@ library
       Utils
       Utils.Instances
       Utils.Lens
-      Utils.StateMonad
       Utils.Sugar
       Utils.X
       XInput
@@ -153,7 +152,6 @@ test-suite xlib-keys-hack-utils-test
   main-is: UtilsSpec.hs
   other-modules:
       Utils.Lens
-      Utils.StateMonad
       Utils.Sugar
       Paths_xlib_keys_hack
   build-depends:
