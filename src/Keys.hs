@@ -1,8 +1,7 @@
 -- Author: Viacheslav Lotsmanov
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric, DeriveAnyClass, TemplateHaskell #-}
 
 module Keys
   ( KeyName(..)
@@ -34,7 +33,7 @@ import "base" GHC.Generics (Generic)
 import "X11" Graphics.X11.Types (KeyCode)
 import "linux-evdev" System.Linux.Input.Event (Key (Key))
 
-import "deepseq" Control.DeepSeq (NFData, rnf, deepseq)
+import "deepseq" Control.DeepSeq (NFData)
 
 import "containers" Data.Map.Strict ( Map, (!), fromList, toList
                                     , lookup, empty, member, insert
@@ -55,68 +54,67 @@ import Utils.Lens (makeApoClassy)
 import qualified Options as O
 
 
-data KeyName = EscapeKey
+data KeyName
+   = EscapeKey
 
-             | F1Key  | F2Key  | F3Key  | F4Key
-             | F5Key  | F6Key  | F7Key  | F8Key
-             | F9Key  | F10Key | F11Key | F12Key
+   | F1Key  | F2Key  | F3Key  | F4Key
+   | F5Key  | F6Key  | F7Key  | F8Key
+   | F9Key  | F10Key | F11Key | F12Key
 
-             | PrintScreenKey | ScrollLockKey | PauseKey
+   | PrintScreenKey | ScrollLockKey | PauseKey
 
-             -- Apple keyboard additional fn keys
-             | F13Key | F14Key | F15Key
-             | F16Key | F17Key | F18Key | F19Key
+   -- Apple keyboard additional fn keys
+   | F13Key | F14Key | F15Key
+   | F16Key | F17Key | F18Key | F19Key
 
-             | GraveKey
-             | Number1Key | Number2Key | Number3Key | Number4Key | Number5Key
-             | Number6Key | Number7Key | Number8Key | Number9Key | Number0Key
-             | MinusKey   | EqualKey   | BackSpaceKey
+   | GraveKey
+   | Number1Key | Number2Key | Number3Key | Number4Key | Number5Key
+   | Number6Key | Number7Key | Number8Key | Number9Key | Number0Key
+   | MinusKey   | EqualKey   | BackSpaceKey
 
-             | TabKey
-             | QKey | WKey | EKey | RKey | TKey
-             | YKey | UKey | IKey | OKey | PKey
-             | BracketLeftKey | BracketRightKey | BackslashKey
+   | TabKey
+   | QKey | WKey | EKey | RKey | TKey
+   | YKey | UKey | IKey | OKey | PKey
+   | BracketLeftKey | BracketRightKey | BackslashKey
 
-             | CapsLockKey
-             | AKey | SKey | DKey | FKey | GKey
-             | HKey | JKey | KKey | LKey
-             | SemicolonKey | ApostropheKey | EnterKey
+   | CapsLockKey
+   | AKey | SKey | DKey | FKey | GKey
+   | HKey | JKey | KKey | LKey
+   | SemicolonKey | ApostropheKey | EnterKey
 
-             | ShiftLeftKey
-             | LessKey -- Near left shift
-             | ZKey | XKey | CKey | VKey | BKey | NKey | MKey
-             | CommaKey | PeriodKey | SlashKey | ShiftRightKey
+   | ShiftLeftKey
+   | LessKey -- Near left shift
+   | ZKey | XKey | CKey | VKey | BKey | NKey | MKey
+   | CommaKey | PeriodKey | SlashKey | ShiftRightKey
 
-             | ControlLeftKey | SuperLeftKey | AltLeftKey
-             | SpaceKey
-             | AltRightKey | SuperRightKey | MenuKey | ControlRightKey
+   | ControlLeftKey | SuperLeftKey | AltLeftKey
+   | SpaceKey
+   | AltRightKey | SuperRightKey | MenuKey | ControlRightKey
 
-             | FNKey -- On apple keyboard
-             | InsertKey | HomeKey | PageUpKey
-             | DeleteKey | EndKey  | PageDownKey
+   | FNKey -- On apple keyboard
+   | InsertKey | HomeKey | PageUpKey
+   | DeleteKey | EndKey  | PageDownKey
 
-             | ArrowLeftKey | ArrowRightKey | ArrowUpKey | ArrowDownKey
+   | ArrowLeftKey | ArrowRightKey | ArrowUpKey | ArrowDownKey
 
-             | NumLockKey   | KPEqualKey   | KPDivideKey  | KPMultiplyKey
-             | KPNumber7Key | KPNumber8Key | KPNumber9Key | KPSubtractKey
-             | KPNumber4Key | KPNumber5Key | KPNumber6Key | KPAddKey
-             | KPNumber1Key | KPNumber2Key | KPNumber3Key | KPEnterKey
-             | KPNumber0Key | KPDecimalKey
+   | NumLockKey   | KPEqualKey   | KPDivideKey  | KPMultiplyKey
+   | KPNumber7Key | KPNumber8Key | KPNumber9Key | KPSubtractKey
+   | KPNumber4Key | KPNumber5Key | KPNumber6Key | KPAddKey
+   | KPNumber1Key | KPNumber2Key | KPNumber3Key | KPEnterKey
+   | KPNumber0Key | KPDecimalKey
 
-             -- Real original pseudo-keys
+   -- Real original pseudo-keys
 
-             | RealMenuKey | RealCapsLockKey | RealControlRightKey
+   | RealMenuKey | RealCapsLockKey | RealControlRightKey
 
-             -- Media keys
+   -- Media keys
 
-             | MCalculatorKey | MEjectKey
-             | MAudioMuteKey | MAudioLowerVolumeKey | MAudioRaiseVolumeKey
-             | MAudioPlayKey | MAudioStopKey | MAudioPrevKey | MAudioNextKey
-             | MMonBrightnessDownKey | MMonBrightnessUpKey
+   | MCalculatorKey | MEjectKey
+   | MAudioMuteKey | MAudioLowerVolumeKey | MAudioRaiseVolumeKey
+   | MAudioPlayKey | MAudioStopKey | MAudioPrevKey | MAudioNextKey
+   | MMonBrightnessDownKey | MMonBrightnessUpKey
 
-               deriving (Eq, Show, Ord, Generic)
-
-instance NFData KeyName
+     deriving (Eq, Show, Ord, Generic, NFData)
 
 
 type KeyAlias = (KeyName, Word16, KeyCode)
@@ -398,116 +396,107 @@ numericShift = Map.fromList
 
 -- Returns Map of aliases list using key name as a Map key
 getByNameMap :: [KeyAlias] -> Map KeyName KeyAlias
-getByNameMap keyMap = fromList $ fmap f keyMap
-  where f (name, devNum, xNum) = (name, (name, devNum, xNum))
+getByNameMap keyMap = fromList $ fmap f keyMap where
+  f (name, devNum, xNum) = (name, (name, devNum, xNum))
 
 -- Returns Map of aliases list using device key code as a Map key
 getByDevNumMap :: [KeyAlias] -> Map Word16 KeyAlias
-getByDevNumMap keyMap = fromList $ fmap f keyMap
-  where f (name, devNum, xNum) = (devNum, (name, devNum, xNum))
+getByDevNumMap keyMap = fromList $ fmap f keyMap where
+  f (name, devNum, xNum) = (devNum, (name, devNum, xNum))
 
 
-data KeyMap =
-  KeyMap { byNameMap            :: Map KeyName KeyAlias
-         , byDevNumMap          :: Map Word16  KeyAlias
-         , byNameAlternativeMap :: Map KeyName (KeyName, KeyCode)
-         , byNameMediaMap       :: Map KeyName KeyCode
-         , byNameRealMap        :: Map KeyName KeyCode
-         , asNamesMap           :: Map KeyName KeyName
-         , extraByRemaps        :: [(KeyName, KeyName)]
-         }
-  deriving (Show, Eq, Generic)
-
-instance NFData KeyMap where
-  rnf x =
-    byNameMap            x `deepseq`
-    byDevNumMap          x `deepseq`
-    byNameAlternativeMap x `deepseq`
-    byNameMediaMap       x `deepseq`
-    byNameRealMap        x `deepseq`
-    asNamesMap           x `deepseq`
-    extraByRemaps        x `deepseq`
-      ()
+data KeyMap
+   = KeyMap
+   { byNameMap            :: Map KeyName KeyAlias
+   , byDevNumMap          :: Map Word16  KeyAlias
+   , byNameAlternativeMap :: Map KeyName (KeyName, KeyCode)
+   , byNameMediaMap       :: Map KeyName KeyCode
+   , byNameRealMap        :: Map KeyName KeyCode
+   , asNamesMap           :: Map KeyName KeyName
+   , extraByRemaps        :: [(KeyName, KeyName)]
+   } deriving (Show, Eq, Generic, NFData)
 
 
 -- `moreAliases` supposed to contain media keys
 getKeyMap :: O.Options -> [(KeyName, KeyCode)] -> KeyMap
-getKeyMap opts mediaKeyAliases =
-  KeyMap { byNameMap            = nameMap
-         , byDevNumMap          = getByDevNumMap keyAliases
-         , byNameAlternativeMap = getAltMap alternativeModeRemaps empty
-         , byNameMediaMap       = byNameMediaAliasesMap
-         , byNameRealMap        = realMap
-         , asNamesMap           = _asNamesMap
-         , extraByRemaps        = fmap swap _asNames
-         }
+getKeyMap opts mediaKeyAliases = go where
+  go
+    = KeyMap
+    { byNameMap            = nameMap
+    , byDevNumMap          = getByDevNumMap keyAliases
+    , byNameAlternativeMap = getAltMap alternativeModeRemaps empty
+    , byNameMediaMap       = byNameMediaAliasesMap
+    , byNameRealMap        = realMap
+    , asNamesMap           = _asNamesMap
+    , extraByRemaps        = fmap swap _asNames
+    }
 
-  where keyAliases :: [KeyAlias]
-        keyAliases =
-          let
-            resolveMediaKey (keyName, keyCode) =
-              case keyName `lookup` mediaMap of
-                   Just devNum -> (keyName, devNum, keyCode)
-                   Nothing -> error [qm| Unexpected media key: {keyName} |]
+  keyAliases :: [KeyAlias]
+  keyAliases =
+    let
+      resolveMediaKey (keyName, keyCode) =
+        case keyName `lookup` mediaMap of
+             Just devNum -> (keyName, devNum, keyCode)
+             Nothing -> error [qm| Unexpected media key: {keyName} |]
 
-            makeCapsLockReal = fmap f
-              where f (CapsLockKey, devNum, _) =
-                      (CapsLockKey, devNum, realMap ! RealCapsLockKey)
-                    f x = x
+      makeCapsLockReal = fmap f
+        where f (CapsLockKey, devNum, _) =
+                (CapsLockKey, devNum, realMap ! RealCapsLockKey)
+              f x = x
 
-            shiftNumeric aliases = fmap f aliases
-              where f alias@(keyName, devNum, _)
-                      = maybe alias (resolve devNum)
-                      $ keyName `Map.lookup` numericShift
+      shiftNumeric aliases = fmap f aliases
+        where f alias@(keyName, devNum, _)
+                = maybe alias (resolve devNum)
+                $ keyName `Map.lookup` numericShift
 
-                    resolve devNum keyName =
-                      find (\(x, _, _) -> x == keyName) aliases
-                        & fromJust
-                        & (\(toName, _, toCode) -> (toName, devNum, toCode))
+              resolve devNum keyName =
+                find (\(x, _, _) -> x == keyName) aliases
+                  & fromJust
+                  & (\(toName, _, toCode) -> (toName, devNum, toCode))
 
-            controlAsSuper = fmap f
-              where f (ControlRightKey, devNum, _) =
-                      (ControlRightKey, devNum, rightSuperKeyCode)
-                    f x = x
-          in
-            defaultKeyAliases <> fmap resolveMediaKey mediaKeyAliases
-              & makeCapsLockReal `applyIf` O.realCapsLock             opts
-              & shiftNumeric     `applyIf` O.shiftNumericKeys         opts
-              & controlAsSuper   `applyIf` O.rightControlAsRightSuper opts
+      controlAsSuper = fmap f
+        where f (ControlRightKey, devNum, _) =
+                (ControlRightKey, devNum, rightSuperKeyCode)
+              f x = x
+    in
+      defaultKeyAliases <> fmap resolveMediaKey mediaKeyAliases
+        & makeCapsLockReal `applyIf` O.realCapsLock             opts
+        & shiftNumeric     `applyIf` O.shiftNumericKeys         opts
+        & controlAsSuper   `applyIf` O.rightControlAsRightSuper opts
 
-        _asNamesMap = fromList _asNames :: Map KeyName KeyName
+  _asNamesMap = fromList _asNames :: Map KeyName KeyName
 
-        _asNames :: [(KeyName, KeyName)]
-        _asNames = asNames
-          & filter (fst .> (/= CapsLockKey)) `applyIf` O.realCapsLock opts
-          & ((ControlRightKey, SuperRightKey) :)
-              `applyIf` O.rightControlAsRightSuper opts
+  _asNames :: [(KeyName, KeyName)]
+  _asNames
+    = asNames
+    & filter (fst .> (/= CapsLockKey)) `applyIf` O.realCapsLock opts
+    & ((ControlRightKey, SuperRightKey) :)
+        `applyIf` O.rightControlAsRightSuper opts
 
-        byNameMediaAliasesMap :: Map KeyName KeyCode
-        byNameMediaAliasesMap =
-          fromList [(a, b) | (a, _, b) <- keyAliases, a `member` mediaMap]
+  byNameMediaAliasesMap :: Map KeyName KeyCode
+  byNameMediaAliasesMap =
+    fromList [(a, b) | (a, _, b) <- keyAliases, a `member` mediaMap]
 
-        mediaMap = fromList mediaDevNums   :: Map KeyName Word16
-        nameMap  = getByNameMap keyAliases :: Map KeyName KeyAlias
-        realMap  = fromList realKeys       :: Map KeyName KeyCode
+  mediaMap = fromList mediaDevNums   :: Map KeyName Word16
+  nameMap  = getByNameMap keyAliases :: Map KeyName KeyAlias
+  realMap  = fromList realKeys       :: Map KeyName KeyCode
 
-        getAltMap :: [(KeyName, KeyName)]
-                  -> Map KeyName (KeyName, KeyCode)
-                  -> Map KeyName (KeyName, KeyCode)
-        getAltMap [] altMap = altMap
-        getAltMap ((nameFrom, nameTo):xs) altMap
-          | nameTo `member` nameMap =
-            let (_, _, keyCode) = nameMap ! nameTo
-             in getAltMap xs $ insert nameFrom (nameTo, keyCode) altMap
-          | otherwise = getAltMap xs
-                      $ insert nameFrom (nameTo, realMap ! nameTo) altMap
+  getAltMap
+    :: [(KeyName, KeyName)]
+    -> Map KeyName (KeyName, KeyCode)
+    -> Map KeyName (KeyName, KeyCode)
+
+  getAltMap [] altMap = altMap
+  getAltMap ((nameFrom, nameTo):xs) altMap
+    | nameTo `member` nameMap =
+      let (_, _, keyCode) = nameMap ! nameTo
+       in getAltMap xs $ insert nameFrom (nameTo, keyCode) altMap
+    | otherwise = getAltMap xs
+                $ insert nameFrom (nameTo, realMap ! nameTo) altMap
 
 
 getAliasByKey :: KeyMap -> Key -> Maybe KeyAlias
-getAliasByKey keyMap devKey =
-  fromKey devKey `lookup` byDevNumMap keyMap
-  where fromKey :: Key -> Word16
-        fromKey (Key x) = x
+getAliasByKey keyMap (Key x) = x `lookup` byDevNumMap keyMap
 
 
 getAlternative :: KeyMap -> KeyName -> Maybe (KeyName, KeyCode)
@@ -528,9 +517,9 @@ maybeAsName :: KeyMap -> KeyName -> KeyName
 maybeAsName keyMap keyName = fromMaybe keyName $ lookupAsName keyMap keyName
 
 getRemappedByName :: KeyMap -> KeyName -> Set.Set KeyName
-getRemappedByName keyMap keyName =
-  Map.filter (== keyName) (asNamesMap keyMap)
-    & toList & fmap fst & Set.fromList
+getRemappedByName keyMap keyName
+  = asNamesMap keyMap
+  & Map.filter (== keyName) & toList & fmap fst & Set.fromList
 
 -- Gets specific key and returns a Set that contains extra keys
 -- aliased as this specific key (you get a Set of extra synonyms keys).

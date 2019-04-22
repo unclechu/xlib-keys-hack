@@ -1,11 +1,8 @@
 -- Author: Viacheslav Lotsmanov
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables, RankNTypes, BangPatterns #-}
+{-# LANGUAGE DeriveGeneric, DeriveAnyClass, TemplateHaskell #-}
 
 module Options
   ( Options (..)
@@ -29,7 +26,7 @@ import "time" Data.Time.Clock.POSIX (POSIXTime)
 import "base" Control.Arrow ((&&&))
 import "base" Control.Applicative ((<|>))
 import "lens" Control.Lens (Lens', (.~), (%~), (^.), set)
-import "deepseq" Control.DeepSeq (NFData, rnf, deepseq)
+import "deepseq" Control.DeepSeq (NFData)
 
 import "base" System.IO (Handle)
 import qualified "base" System.Console.GetOpt as GetOpt
@@ -42,89 +39,46 @@ import Utils.Lens (makeApoClassy)
 
 
 data Options
-  = Options
-  { showHelp                     :: Bool
-  , verboseMode                  :: Bool
+   = Options
+   { showHelp                     :: Bool
+   , verboseMode                  :: Bool
 
-  , realCapsLock                 :: Bool
-  , additionalControls           :: Bool
-  , shiftNumericKeys             :: Bool
-  , rightControlAsRightSuper     :: Bool
+   , realCapsLock                 :: Bool
+   , additionalControls           :: Bool
+   , shiftNumericKeys             :: Bool
+   , rightControlAsRightSuper     :: Bool
 
-  , toggleAlternativeModeByAlts  :: Bool
-  , superDoublePress             :: Bool
-  , leftSuperDoublePressCmd      :: Maybe String
-  , rightSuperDoublePressCmd     :: Maybe String
+   , toggleAlternativeModeByAlts  :: Bool
+   , superDoublePress             :: Bool
+   , leftSuperDoublePressCmd      :: Maybe String
+   , rightSuperDoublePressCmd     :: Maybe String
 
-  , resetByEscapeOnCapsLock      :: Bool
-  , resetByWindowFocusEvent      :: Bool
+   , resetByEscapeOnCapsLock      :: Bool
+   , resetByWindowFocusEvent      :: Bool
 
-  , debouncerTiming              :: Maybe POSIXTime
+   , debouncerTiming              :: Maybe POSIXTime
 
-  , disableXInputDeviceName      :: [String]
-  , disableXInputDeviceId        :: [Word]
-  , handleDevicePath             :: [FilePath]
+   , disableXInputDeviceName      :: [String]
+   , disableXInputDeviceId        :: [Word]
+   , handleDevicePath             :: [FilePath]
 
-  , xmobarIndicators             :: Bool
-  , xmobarIndicatorsObjPath      :: String
-  , xmobarIndicatorsBusName      :: String
-  , xmobarIndicatorsIface        :: String
-  , xmobarIndicatorsFlushObjPath :: String
-  , xmobarIndicatorsFlushIface   :: String
+   , xmobarIndicators             :: Bool
+   , xmobarIndicatorsObjPath      :: String
+   , xmobarIndicatorsBusName      :: String
+   , xmobarIndicatorsIface        :: String
+   , xmobarIndicatorsFlushObjPath :: String
+   , xmobarIndicatorsFlushIface   :: String
 
-  , externalControl              :: Bool
-  , externalControlObjPath       :: String
-  , externalControlBusName       :: String
-  , externalControlIface         :: String
+   , externalControl              :: Bool
+   , externalControlObjPath       :: String
+   , externalControlBusName       :: String
+   , externalControlIface         :: String
 
-  , handleDeviceFd               :: [Handle]
-  , availableDevices             :: [FilePath]
-  , availableXInputDevices       :: [Word]
-  }
+   , handleDeviceFd               :: [Handle]
+   , availableDevices             :: [FilePath]
+   , availableXInputDevices       :: [Word]
 
-  deriving (Show, Eq, Generic)
-
-instance NFData Options where
-  rnf opts =
-    showHelp                     opts `deepseq`
-    verboseMode                  opts `deepseq`
-
-    realCapsLock                 opts `deepseq`
-    additionalControls           opts `deepseq`
-    shiftNumericKeys             opts `deepseq`
-    rightControlAsRightSuper     opts `deepseq`
-
-    toggleAlternativeModeByAlts  opts `deepseq`
-    superDoublePress             opts `deepseq`
-    leftSuperDoublePressCmd      opts `deepseq`
-    rightSuperDoublePressCmd     opts `deepseq`
-
-    resetByEscapeOnCapsLock      opts `deepseq`
-    resetByWindowFocusEvent      opts `deepseq`
-
-    debouncerTiming              opts `deepseq`
-
-    disableXInputDeviceName      opts `deepseq`
-    disableXInputDeviceId        opts `deepseq`
-    handleDevicePath             opts `deepseq`
-
-    xmobarIndicators             opts `deepseq`
-    xmobarIndicatorsObjPath      opts `deepseq`
-    xmobarIndicatorsBusName      opts `deepseq`
-    xmobarIndicatorsIface        opts `deepseq`
-    xmobarIndicatorsFlushObjPath opts `deepseq`
-    xmobarIndicatorsFlushIface   opts `deepseq`
-
-    externalControl              opts `deepseq`
-    externalControlObjPath       opts `deepseq`
-    externalControlBusName       opts `deepseq`
-    externalControlIface         opts `deepseq`
-
-    handleDeviceFd               opts `deepseq`
-    availableDevices             opts `deepseq`
-    availableXInputDevices       opts `deepseq`
-
-    ()
+   } deriving (Show, Eq, Generic, NFData)
 
 instance Default Options where
   def
@@ -443,24 +397,24 @@ options =
 
 type ErrorMessage = String
 extractOptions :: [String] -> Either ErrorMessage Options
-extractOptions argv =
-  case GetOpt.getOpt GetOpt.Permute options argv of
-    (o, n, []) ->
-      Right $ foldl (flip id) def o & handleDevicePath' %~ (<> n)
-    (_, _, errs) ->
-      Left $ case concat errs of
-                  (reverse -> '\n':xs) -> reverse xs
-                  x -> x
+extractOptions = GetOpt.getOpt GetOpt.Permute options .> \case
+  (o, n, []) ->
+    Right $ foldl (flip id) def o & handleDevicePath' %~ (<> n)
+
+  (_, _, errs) ->
+    Left $ case concat errs of
+                (reverse -> '\n':xs) -> reverse xs
+                x -> x
 
 
 usageInfo :: String
-usageInfo = '\n' : GetOpt.usageInfo header options
-  where header = "Usage: xlib-keys-hack [OPTION...] DEVICES-FD-PATHS..."
+usageInfo = '\n' : GetOpt.usageInfo header options where
+  header = "Usage: xlib-keys-hack [OPTION...] DEVICES-FD-PATHS..."
 
 
 noise :: Options -> String -> IO ()
 noise (verboseMode -> True) msg = putStrLn msg
-noise _ _ = return ()
+noise _ _ = pure ()
 
 
 subsDisplay :: String -> String -> String
