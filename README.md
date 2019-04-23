@@ -6,6 +6,14 @@ Keyboard behavior customization utility.
 
 **WARNING!** Work in progress, not released yet, look at
 [tasks board](https://github.com/unclechu/xlib-keys-hack/projects/1?fullscreen=true).
+Anyway, I'm using this tool for years already for myself, it's kinda in constant
+development. It's hard to prepare it to use for everyone since even the idea is
+not that simple to understand. You could use it right now, I'm keeping `master`
+branch pretty stable, by doing all experimental stuff in `dev` branch, just ask
+me for details personally:
+- In [XMPP/Jabber](https://xmpp.org/software/clients.html):
+  [unclechu@jabjab.de](xmpp:unclechu@jabjab.de?message)
+- In [Matrix](https://riot.im/app/): @unclechu:matrix.org
 
 __**TODO**__ This description isn't complete yet,
              and some of it isn't true anymore.
