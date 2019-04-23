@@ -9,7 +9,7 @@ import "hspec" Test.Hspec (Spec, describe, it, shouldBe)
 
 import "xlib-keys-hack" Utils.Sugar
      ( (.>), (|?|), (?)
-     , dupe, applyIf, applyUnless
+     , applyIf, applyUnless
      )
 
 spec :: Spec
@@ -33,13 +33,6 @@ spec = do
 
     it "(?) if-condition operator chaining" $
       (False ? 10 $ False ? 20 $ True ? 30 $ 40) `shouldBe` (30 :: Int)
-
-  describe "Tuples" $
-
-    it "`dupe`" $ do
-      dupe (10 :: Int) `shouldBe` (10, 10)
-      dupe (20 :: Int) `shouldBe` (20, 20)
-      dupe (30 :: Int, 40 :: Int) `shouldBe` ((30, 40), (30, 40))
 
   describe "Function applying helpers" $ do
 

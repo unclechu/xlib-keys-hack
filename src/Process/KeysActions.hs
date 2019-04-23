@@ -27,7 +27,6 @@ import Actions ( ActionType(Single, Sequence)
                            )
                , seqHead
                )
-import Options (Options)
 import Keys (KeyMap)
 import qualified Keys
 import Bindings.Xkb (xkbSetGroup)
@@ -35,22 +34,24 @@ import State (CrossThreadVars, keysActionsChan)
 import qualified State
 
 
-processKeysActions :: CrossThreadVars -> Options -> KeyMap -> Display -> IO ()
-processKeysActions ctVars _ keyMap dpy = forever $ do
+processKeysActions :: CrossThreadVars -> KeyMap -> Display -> IO ()
+processKeysActions ctVars keyMap dpy = forever $ do
 
   (action :: ActionType KeyAction) <- readChan $ keysActionsChan ctVars
 
   flip f action $ \case
     KeyCodePress   keyCode -> press   keyCode
     KeyCodeRelease keyCode -> release keyCode
-    ResetKeyboardLayout    -> xkbSetGroup dpy 0
-                                >>= flip unless (dieWith "xkbSetGroup error")
-    TurnCapsLock x -> (== x) . State.capsLockLed <$> getLeds dpy
-                        >>= flip unless toggleCapsLock
+
+    ResetKeyboardLayout ->
+      xkbSetGroup dpy 0 >>= (`unless` dieWith "xkbSetGroup error")
+
+    TurnCapsLock x ->
+      (== x) . State.capsLockLed <$> getLeds dpy >>= (`unless` toggleCapsLock)
 
   where f :: (KeyAction -> IO ()) -> ActionType KeyAction -> IO ()
         f m (Actions.Single a) = m a
-        f _ (Actions.Sequence []) = return ()
+        f _ (Actions.Sequence []) = return () -- TODO NonEmpty
         f m (Actions.seqHead -> (x, xs)) = m x >> f m xs
 
         press   keyCode = fakeKeyCodeEvent dpy keyCode True

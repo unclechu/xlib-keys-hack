@@ -82,9 +82,9 @@ initTerminate ctVars =
   writeChan (State.actionsChan ctVars) $ Single InitTerminate
 
 -- Notifies about thread's death
-threadIsDeath :: State.CrossThreadVars -> Int -> IO ()
-threadIsDeath ctVars =
-  writeChan (State.actionsChan ctVars) . Single . ThreadIsDead
+threadIsDeath :: State.CrossThreadVars -> String -> Int -> IO ()
+threadIsDeath ctVars threadName =
+  writeChan (State.actionsChan ctVars) . Single . ThreadIsDead threadName
 
 -- Kills main thread
 overthrow :: State.CrossThreadVars -> IO ()

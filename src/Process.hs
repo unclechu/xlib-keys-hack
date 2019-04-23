@@ -8,7 +8,17 @@ module Process
   ( initReset
   , processWindowFocus
   , watchLeds
-  , handleKeyboard
+
+  , HandledKey
+  , handleKeyEvent
+  , getNextKeyboardDeviceKeyEvent
+
+  , SoftwareDebouncer
+  , getSoftwareDebouncer
+  , getSoftwareDebouncerTiming
+  , moveKeyThroughSoftwareDebouncer
+  , handleNextSoftwareDebouncerEvent
+
   , processKeysActions
   , processKeyboardState
   ) where
@@ -63,7 +73,18 @@ import           State (type State, type LedModes, type CrossThreadVars)
 import qualified State
 import           Keys (type KeyMap)
 
-import           Process.Keyboard (handleKeyboard)
+import           Process.Keyboard.Types (HandledKey)
+import           Process.Keyboard.HandlingKeyEventFlow (handleKeyEvent)
+import           Process.Keyboard.RawDeviceHandling
+                   ( getNextKeyboardDeviceKeyEvent
+                   )
+import           Process.Keyboard.SoftwareDebouncer
+                   ( SoftwareDebouncer
+                   , getSoftwareDebouncer
+                   , getSoftwareDebouncerTiming
+                   , moveKeyThroughSoftwareDebouncer
+                   , handleNextSoftwareDebouncerEvent
+                   )
 import           Process.KeysActions (processKeysActions)
 import qualified Process.CrossThread as CrossThread ( justTurnCapsLockMode
                                                     , resetAll
@@ -101,8 +122,8 @@ initReset opts ipcHandle keyMap dpy = do
 data IsEOFException = IsEOFException deriving (Show, Typeable)
 instance Exception IsEOFException
 
-processWindowFocus :: CrossThreadVars -> Options -> KeyMap -> Display -> IO ()
-processWindowFocus ctVars opts _ _ = forever $ do
+processWindowFocus :: CrossThreadVars -> Options -> IO ()
+processWindowFocus ctVars opts = forever $ do
 
   noise [qms| Spawning subprocess of '{appExecPath}'
               to get window focus events... |]
@@ -168,8 +189,8 @@ processWindowFocus ctVars opts _ _ = forever $ do
 -- FIXME waiting in blocking-mode for new leds event
 -- Watch for new leds state and when new leds state is coming
 -- store it in State, notify xmobar pipe and log.
-watchLeds :: CrossThreadVars -> Options -> KeyMap -> Display -> IO ()
-watchLeds ctVars opts _ dpy = forever $ f $ \leds prevState -> do
+watchLeds :: CrossThreadVars -> Options -> Display -> IO ()
+watchLeds ctVars opts dpy = forever $ f $ \leds prevState -> do
 
   let prevCapsLock = prevState ^. State.leds' . State.capsLockLed'
       newCapsLock  = leds ^. State.capsLockLed'
@@ -199,8 +220,8 @@ watchLeds ctVars opts _ dpy = forever $ f $ \leds prevState -> do
 
 
 -- Watch for keyboard layout change
-processKeyboardState :: CrossThreadVars -> Options -> KeyMap -> Display -> IO ()
-processKeyboardState ctVars opts _ dpy = do
+processKeyboardState :: CrossThreadVars -> Options -> Display -> IO ()
+processKeyboardState ctVars opts dpy = do
   xkbListenForKeyboardStateEvents dpy
   XEvent.allocaXEvent $ \evPtr -> forever $ do
     noise "Waiting for next X event about new keyboard layout state..."

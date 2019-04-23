@@ -180,6 +180,11 @@ Usage: xlib-keys-hack [OPTION...] DEVICES-FD-PATHS...
       --disable-reset-by-window-focus-event               Disable resetting Caps Lock mode, Alternative mode and keyboard layout by switching between windows.
                                                           WARNING! If you don't disable this feature you should ensure that you have directory that contains 'xlib-keys-hack-watch-for-window-focus-events' executable in your 'PATH' environment variable!
                                                           Default is: On
+      --software-debouncer[=MILLISECONDS]                 Enable software debouncer feature.
+                                                          Debouncing is usually done on hardware or firmware level of a keyboard but timing could be not configurable. Some keyboards may have issues with doubling or just shrapnelling some keys (triggering a key pressing more than once per one physical press) especially after long use time. By using this feature you could use your keyboard longer, give it a second life.
+                                                          How this feature works: when you press/release a key only first event is handled and then it waits for specified or default timing ignoring any other events of that key in that gap and only after that it handles next state of that key.
+                                                          If this feature is turned on but timing is not specified then default timing would be: 30ms.
+                                                          Default is: Off
       --disable-xinput-device-name[=NAME]                 Name of device to disable using 'xinput' tool
       --disable-xinput-device-id[=ID]                     Id of device to disable using 'xinput' tool
       --device-fd-path[=FDPATH]                           Path to device file descriptor to get events from
@@ -235,6 +240,7 @@ Usage: xlib-keys-hack [OPTION...] DEVICES-FD-PATHS...
                                                           '%DISPLAY%' will be replaced with view of '$DISPLAY' environment variable where ':' and '.' symbols are replaced to underscore '_'.
                                                           For example if we have '$DISPLAY' as ':0.0' 'foo.%DISPLAY%.bar' will be replaced to 'foo._0_0.bar'.
                                                           This option makes sense only with --external-control
+
 ```
 
 ### Generating coverage report

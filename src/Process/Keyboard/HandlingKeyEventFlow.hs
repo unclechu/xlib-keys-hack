@@ -1,22 +1,19 @@
 -- Author: Viacheslav Lotsmanov
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
-{-# LANGUAGE ImpredicativeTypes #-}
-{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE NoMonomorphismRestriction, ImpredicativeTypes #-}
 
-module Process.Keyboard
-  ( handleKeyboard
-  ) where
+module Process.Keyboard.HandlingKeyEventFlow
+     ( handleKeyEvent
+     ) where
 
 import "base" System.IO (IOMode (WriteMode), withFile)
-import "base" GHC.IO.Handle (type Handle)
 import qualified "process" System.Process as P
-import qualified "linux-evdev" System.Linux.Input.Event as EvdevEvent
 
 import "transformers" Control.Monad.Trans.Class (lift)
-import "base" Control.Monad ((>=>), when, unless, forM_, forever)
+import "base" Control.Monad ((>=>), when, unless, forM_)
 import "base" Control.Concurrent.MVar (modifyMVar_)
-import "transformers" Control.Monad.Trans.State (execStateT)
+import "transformers" Control.Monad.Trans.State (StateT, execStateT)
 import "transformers" Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
 import "base" Control.Concurrent (forkIO)
 
@@ -33,11 +30,9 @@ import "time" Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms, qns)
 
 import "X11" Graphics.X11.Types (type KeyCode)
-import "X11" Graphics.X11.Xlib.Types (Display)
 
 -- local imports
 
-import           Utils.StateMonad (ExceptStateT)
 import           Utils.Sugar ((&), (?), (<&>))
 import           Utils.Lens ((%=<&~>))
 import           Options (type Options)
@@ -45,25 +40,42 @@ import qualified Options as O
 import qualified Actions
 import           State (type State, CrossThreadVars)
 import qualified State
-import           Keys (type KeyMap, type KeyName, type KeyAlias)
+import           Keys (type KeyMap, type KeyName)
 import qualified Keys
+import           Process.Keyboard.Types (HandledKey (HandledKey))
 
 import qualified Process.CrossThread as CrossThread
-  ( handleCapsLockModeChange
-  , handleAlternativeModeChange
-  , handleResetKbdLayout
+               ( handleCapsLockModeChange
+               , handleAlternativeModeChange
+               , handleResetKbdLayout
 
-  , toggleCapsLock
-  , toggleAlternative
+               , toggleCapsLock
+               , toggleAlternative
 
-  , resetAll
-  )
+               , resetAll
+               )
 
 
--- Wait for key events and simulate them in X server.
-handleKeyboard :: CrossThreadVars -> Options -> KeyMap -> Display -> Handle
-               -> IO ()
-handleKeyboard ctVars opts keyMap _ fd =
+-- | Key event handling flow.
+--
+-- Moving key event through all features heuristics, logging it and finally
+-- adding fake key event triggering to the queue (see "Actions" for details).
+--
+-- You're supposed to run this forever again in again in own thread, like that:
+--
+-- @
+-- let keyEventHandler = handleKeyEvent ctVars opts keyMap
+--
+-- forkIO $ forever $
+--   getNextKeyboardDeviceKeyEvent keyMap deviceFd >>= keyEventHandler
+-- @
+--
+-- TODO Better logging by mentioning exact device file descriptor an event came
+--      from or by a thread name marker which already has it
+--      (in this case we don't have to pass device file descriptor here
+--      but just a string).
+handleKeyEvent :: CrossThreadVars -> Options -> KeyMap -> HandledKey -> IO ()
+handleKeyEvent ctVars opts keyMap =
   onEv $ fix $ \again time keyName keyCode isPressed state ->
 
   let reprocess :: State -> IO State
@@ -731,9 +743,6 @@ handleKeyboard ctVars opts keyMap _ fd =
   releaseKeys     = Actions.releaseKeys     ctVars :: [KeyCode] -> IO ()
   pressReleaseKey = Actions.pressReleaseKey ctVars ::  KeyCode  -> IO ()
 
-  getAlias :: EvdevEvent.Key -> Maybe KeyAlias
-  getAlias = Keys.getAliasByKey keyMap
-
   getKeyCodeByName :: KeyName -> Maybe KeyCode
   getKeyCodeByName = Keys.getKeyCodeByName keyMap
 
@@ -768,33 +777,19 @@ handleKeyboard ctVars opts keyMap _ fd =
   handleResetKbdLayout :: State -> IO State
   handleResetKbdLayout = CrossThread.handleResetKbdLayout ctVars noise'
 
-  resetAll :: ExceptStateT State () IO ()
+  resetAll :: ExceptT () (StateT State IO) ()
   resetAll = CrossThread.resetAll opts ctVars noise' notify'
 
   -- Wait and extract event, make preparations and call handler
-  onEv :: (POSIXTime -> KeyName -> KeyCode -> Bool -> State -> IO State)
-          -> IO ()
-  onEv m = do
+  onEv
+    :: (POSIXTime -> KeyName -> KeyCode -> Bool -> State -> IO State)
+    -> HandledKey
+    -> IO ()
 
-    let process :: KeyName -> KeyCode -> Bool -> State -> IO State
-        process name code isPressed state = do
-          !time <- getPOSIXTime
-          m time name code isPressed state
-
-    forever $ EvdevEvent.hReadEvent fd >>= \case
-
-      Just EvdevEvent.KeyEvent
-             { EvdevEvent.evKeyCode      = (getAlias -> Just (name, _, code))
-             , EvdevEvent.evKeyEventType = (checkPress -> Just isPressed)
-             }
-               -> chain (name, isPressed) (process name code isPressed)
-
-      _ -> return ()
-
-    where checkPress :: EvdevEvent.KeyEventType -> Maybe Bool
-          checkPress = \case EvdevEvent.Depressed -> Just True
-                             EvdevEvent.Released  -> Just False
-                             _ -> Nothing
+  onEv m (HandledKey _ name code isPressed) =
+    chain (name, isPressed) $ \state -> do
+      !time <- getPOSIXTime
+      m time name code isPressed state
 
   -- Composed prepare actions
   chain :: (KeyName, Bool) -> (State -> IO State) -> IO ()

@@ -29,12 +29,12 @@ import "X11" Graphics.X11.Xlib.Misc (keysymToKeycode)
 import "X11" Graphics.X11.Xlib (displayString)
 
 import "deepseq" Control.DeepSeq (deepseq, force)
-import qualified "mtl" Control.Monad.State as St (get)
+import qualified "mtl" Control.Monad.State as St (get, gets, put, modify)
 import "mtl" Control.Monad.State (StateT, execStateT, evalStateT)
 import "base" Control.Monad.IO.Class (liftIO)
 import "transformers" Control.Monad.Trans.Class (lift)
 import "transformers" Control.Monad.Trans.Except (runExceptT, throwE)
-import "base" Control.Monad (when, unless, filterM, forever, forM_, void)
+import "base" Control.Monad ((>=>), when, unless, filterM, forever, forM_, void)
 import "lens" Control.Lens ((.~), (^.), set, view)
 import "base" Control.Concurrent ( forkIO
                                  , forkFinally
@@ -49,7 +49,7 @@ import "base" Control.Exception (Exception (fromException))
 import "base" Control.Arrow ((&&&))
 import "extra" Control.Monad.Extra (whenJust)
 
-import "base" Data.Monoid ((<>), mempty)
+import "base" Data.Word (Word8)
 import "base" Data.Maybe (fromJust)
 import "base" Data.List (intercalate)
 import "base" Data.Typeable (Typeable)
@@ -58,11 +58,11 @@ import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms, qns)
 
 -- local imports
 
-import "xlib-keys-hack" Utils.Sugar ((&), (<&>), (.>), (|?|), (?), preserveF')
+import "xlib-keys-hack" Utils.Sugar
+                      ( (&), (<&>), (.>), (|?|), (?)
+                      , preserveF', unnoticed, apart
+                      )
 import "xlib-keys-hack" Utils (errPutStrLn, dieWith)
-import "xlib-keys-hack" Utils.StateMonad ( updateState', updateStateM'
-                                         , modifyState,  modifyStateM
-                                         )
 import "xlib-keys-hack" Bindings.Xkb ( xkbGetDescPtr
                                      , xkbFetchControls
                                      , xkbGetGroupsCount
@@ -81,15 +81,23 @@ import "xlib-keys-hack" IPC ( openIPC
                             )
 import "xlib-keys-hack" Process ( initReset
                                 , watchLeds
-                                , handleKeyboard
+
+                                , handleKeyEvent
+                                , getNextKeyboardDeviceKeyEvent
+
+                                , getSoftwareDebouncer
+                                , getSoftwareDebouncerTiming
+                                , moveKeyThroughSoftwareDebouncer
+                                , handleNextSoftwareDebouncerEvent
+
                                 , processWindowFocus
                                 , processKeysActions
                                 , processKeyboardState
                                 )
 import qualified "xlib-keys-hack" Process.CrossThread as CrossThread
-  ( toggleAlternative
-  , turnAlternativeMode
-  )
+                                ( toggleAlternative
+                                , turnAlternativeMode
+                                )
 import "xlib-keys-hack" State ( CrossThreadVars ( CrossThreadVars
                                                 , stateMVar
                                                 , actionsChan
@@ -131,16 +139,6 @@ main = flip evalStateT ([] :: ThreadsState) $ do
   noise "Getting additional X Display for keys actions handler thread..."
   dpyForKeysActionsHanlder <- liftIO xkbInit
 
-  dpyForXWindowFocusHandler <-
-
-    if O.resetByWindowFocusEvent opts
-
-       then do noise [qns| Getting additional X Display
-                           for window focus handler thread... |]
-               liftIO xkbInit
-
-       else pure undefined
-
   noise "Getting additional X Display for keyboard state handler thread..."
   dpyForKeyboardStateHandler <- liftIO xkbInit
 
@@ -166,8 +164,9 @@ main = flip evalStateT ([] :: ThreadsState) $ do
     , (Keys.MMonBrightnessDownKey, XTypes.xF86XK_MonBrightnessDown)
     , (Keys.MMonBrightnessUpKey,   XTypes.xF86XK_MonBrightnessUp)
     ]
-  noise $ "Media keys aliases:" <>
-          foldr (\(a, b) -> ([qm|\n  {a}: {b}|] <>)) mempty mediaKeysAliases
+  noise
+    $ "Media keys aliases:"
+    <> foldMap (\(a, b) -> [qm|\n  {a}: {b}|]) mediaKeysAliases
 
   let keyMap = Keys.getKeyMap opts mediaKeysAliases
 
@@ -233,54 +232,67 @@ main = flip evalStateT ([] :: ThreadsState) $ do
       catch sig = installHandler sig (Catch termHook) Nothing
    in liftIO $ mapM_ catch [sigINT, sigTERM]
 
-  let _getThreadIdx = (length <$> St.get) :: StateT ThreadsState IO Int
+  let runThread :: String -> IO () -> StateT ThreadsState IO ()
+      runThread threadName m = go where
+        go = do
+          noise [qm| Starting {threadName} thread... |]
+          (ids, tIdx) <- St.gets $ id &&& length
+          tId <- liftIO $ forkFinally m $ handleFork tIdx
+          St.put $ (True, tId) : ids
 
-      _handleFork idx (Left e) =
+        handleFork idx = \case
+          Left e ->
+            case fromException e of
+              Just MortifyThreadException ->
+                Actions.threadIsDeath ctVars threadName idx
 
-        case fromException e of
+              _ -> do
+                Actions.panicNoise ctVars
+                  [qm| Unexpected thread #{idx} "{threadName}" exception: {e} |]
+                Actions.overthrow ctVars
 
-             Just MortifyThreadException -> Actions.threadIsDeath ctVars idx
+          Right _ -> do
+            Actions.panicNoise ctVars
+              [qm| Thread #{idx} "{threadName}" unexpectedly terminated |]
+            Actions.overthrow ctVars
 
-             _ -> do Actions.panicNoise ctVars
-                       [qm|Unexpected thread #{idx} exception: {e}|]
+  runThread "keys actions handler" $
+            processKeysActions ctVars keyMap dpyForKeysActionsHanlder
 
-                     Actions.overthrow ctVars
+  runThread "keyboard state handler" $
+            processKeyboardState ctVars opts dpyForKeyboardStateHandler
 
-      _handleFork idx (Right _) = do
-        Actions.panicNoise ctVars [qm|Thread #{idx} unexpectedly terminated|]
-        Actions.overthrow ctVars
+  when (O.resetByWindowFocusEvent opts) $
+    runThread "window focus handler" $ processWindowFocus ctVars opts
 
-      withData tDpy m = m ctVars opts keyMap tDpy
-      runThread m = modifyStateM $ \ids -> do
-        tIdx <- _getThreadIdx
-        tId  <- liftIO (forkFinally m $ _handleFork tIdx)
-        pure $ (True, tId) : ids
-
-  noise "Starting keys actions handler thread..."
-  runThread $ withData dpyForKeysActionsHanlder processKeysActions
-
-  noise "Starting keyboard state handler thread..."
-  runThread $ withData dpyForKeyboardStateHandler processKeyboardState
-
-  when (O.resetByWindowFocusEvent opts) $ do
-    noise "Starting window focus handler thread..."
-    runThread $ withData dpyForXWindowFocusHandler processWindowFocus
-
-  noise "Starting leds watcher thread..."
-  runThread $ withData dpyForLedsWatcher watchLeds
+  runThread "leds watcher" $ watchLeds ctVars opts dpyForLedsWatcher
 
   noise "Starting device handle threads (one thread per device)..."
-  (devicesDisplays :: [Display]) <-
+  let keyEventHandler = handleKeyEvent ctVars opts keyMap
+  O.handleDeviceFd opts `forM_` \fd -> do
+    liftIO (getSoftwareDebouncer opts) >>= \case
+      Nothing ->
+        runThread [qm| handler for device: {fd} |] $ forever $
+          getNextKeyboardDeviceKeyEvent keyMap fd >>= keyEventHandler
 
-    let m fd = do noise [qm|Getting own X Display for thread of device: {fd}|]
-                  _dpy <- liftIO xkbInit
-                  noise [qm|Starting handle thread for device: {fd}|]
-                  runThread $ withData _dpy handleKeyboard fd
-                  pure _dpy
+      Just softwareDebouncer -> do
+        let timing = round $
+              getSoftwareDebouncerTiming softwareDebouncer * 1000 :: Word8
 
-     in mapM m $ O.handleDeviceFd opts
+        runThread [qms| software debouncer (with timing: {timing}ms)
+                        debounced events handling for device: {fd} |]
+          $ forever
+          $ handleNextSoftwareDebouncerEvent softwareDebouncer
+              >>= pure () `maybe` keyEventHandler
 
-  modifyState reverse
+        runThread [qms| handler for device
+                        (with software debouncer timing: {timing}ms): {fd} |]
+          $ forever
+          $ getNextKeyboardDeviceKeyEvent keyMap fd
+              >>= moveKeyThroughSoftwareDebouncer softwareDebouncer
+              >>= pure () `maybe` keyEventHandler
+
+  St.modify reverse -- Threads in order they have been forked
 
   noise "Listening for actions in main thread..."
   forever $ do
@@ -342,26 +354,27 @@ main = flip evalStateT ([] :: ThreadsState) $ do
                  $ execStateT . runExceptT $ do
 
             -- Check if termination process already initialized
-            St.get <&> not . State.isTerminating
+            St.gets (not . State.isTerminating)
               >>= pure () |?| let s = [qns| Attempt to initialize application
                                             termination process when it's
                                             already initialized was skipped |]
                                in noise s >> throwE ()
 
-            modifyState $ State.isTerminating' .~ True
+            St.modify $ State.isTerminating' .~ True
             noise "Application termination process initialization..."
 
             liftIO $ forM_ threads $ snd .> flip throwTo MortifyThreadException
 
-        m (Actions.ThreadIsDead tIdx) = do
+        m (Actions.ThreadIsDead threadName tIdx) = do
 
           let markAsDead (_, []) = []
               markAsDead (l, (_, x) : xs) = l <> ((False, x) : xs)
 
-           in modifyState $ splitAt tIdx .> markAsDead
+           in St.modify $ splitAt tIdx .> markAsDead
 
-          (dead, total) <- St.get <&> (length . filter not . map fst &&& length)
-          noise [qm| Thread #{tIdx + 1} is dead ({dead} of {total} is dead) |]
+          (dead, total) <- St.gets $ length . filter not . map fst &&& length
+          noise [qms| Thread #{tIdx + 1} "{threadName}" is dead
+                      ({dead} of {total} is dead) |]
           when (dead == total) $ liftIO $ Actions.overthrow ctVars
 
         m Actions.JustDie = do
@@ -370,8 +383,8 @@ main = flip evalStateT ([] :: ThreadsState) $ do
           noise "Application is going to die"
           noise "Closing devices files descriptors..."
 
-          forM_ (O.handleDeviceFd opts) $ \fd -> do
-            noise [qm|Closing device file descriptor: {fd}...|]
+          O.handleDeviceFd opts `forM_` \fd -> do
+            noise [qm| Closing device file descriptor: {fd}... |]
             liftIO $ SysIO.hClose fd
 
           let close h = noise "Closing DBus connection..." >> lift (closeIPC h)
@@ -379,15 +392,13 @@ main = flip evalStateT ([] :: ThreadsState) $ do
 
           noise "Closing X Display descriptors..."
 
-          liftIO $ mapM_ closeDisplay $ dpy
-                                      : dpyForKeysActionsHanlder
-                                      : dpyForKeyboardStateHandler
-                                      : dpyForLedsWatcher
-                                      : devicesDisplays
+          liftIO $ mapM_ closeDisplay [ dpy
+                                      , dpyForKeysActionsHanlder
+                                      , dpyForKeyboardStateHandler
+                                      , dpyForLedsWatcher
+                                      ]
 
-          when (O.resetByWindowFocusEvent opts) $ do
-
-            liftIO $ closeDisplay dpyForXWindowFocusHandler
+          when (O.resetByWindowFocusEvent opts) $
 
             liftIO $ tryTakeMVar (State.stateMVar ctVars)
                       <&> fmap State.windowFocusProc
@@ -443,61 +454,47 @@ main = flip evalStateT ([] :: ThreadsState) $ do
         -- 'handleDeviceFd' option or fail the application
         -- if there's no available devices.
         extractAvailableDevices :: Options -> IO Options
-        extractAvailableDevices opts = flip execStateT opts $
+        extractAvailableDevices
+           =  execStateT
+           $  St.gets O.noise
+          >>= \noise -> St.gets (view O.handleDevicePath')
+          >>= lift . filterM doesFileExist
 
-          fmap (view O.handleDevicePath') St.get
-            >>= lift . filterM doesFileExist
-            >>= lift . checkForCount
-            >>= updateStateM' logAndStoreAvailable
+          >>= ( unnoticed $ length .> \availableDevicesCount ->
+                  unless (availableDevicesCount > 0) $ lift $ dieWith
+                    "All specified devices to get events from is unavailable!"
+              )
 
-            >>= liftBetween
-                  (noise "Opening devices files descriptors for reading...")
+          >>= ( unnoticed $ lift . noise
+              . ("Devices that will be handled:" <>) . foldMap ("\n  " <>)
+              )
 
-            >>= lift . mapM (`IOHandleFD.openFile` SysIO.ReadMode)
-            >>= updateState' (flip $ set O.handleDeviceFd')
+          >>= unnoticed (St.modify . set O.availableDevices')
 
-          where noise = O.noise opts
+          >>= ( apart $ lift
+              $ noise "Opening devices files descriptors for reading..."
+              )
 
-                logAndStoreAvailable :: O.HasOptions s
-                                     => s -> [FilePath] -> StateT s IO s
-                logAndStoreAvailable state files = do
+          >>= lift . mapM (`IOHandleFD.openFile` SysIO.ReadMode)
+          >>= St.modify . set O.handleDeviceFd'
 
-                  let devicesList = foldr (("\n  " <>) .> (<>)) mempty files
-                      title = "Devices that will be handled:"
-
-                   in lift $ noise $ title <> devicesList
-
-                  pure $ state & O.availableDevices' .~ files
-
-                -- Checks if we have at least one available device
-                -- and gets files list back.
-                checkForCount :: [FilePath] -> IO [FilePath]
-                checkForCount files = do
-
-                  when (length files < 1) $
-                    dieWith [qns| All specified devices to get events from
-                                  is unavailable! |]
-
-                  pure files
-
-        -- Lift up a monad and return back original value
-        liftBetween :: Monad m => m () -> a -> StateT s m a
-        liftBetween monad x = x <$ lift monad
 
         -- Completely parse input arguments and returns options
         -- data structure based on them.
         parseOpts :: [String] -> IO Options
-        parseOpts argv =
-          getOptsFromArgs argv
-            >>= extractAvailableDevices
-            >>= XInput.getAvailable
-            >>= (\opts -> opts <$ XInput.disable opts)
-            >>= logDisabled
+        parseOpts = go where
+          go
+             =  getOptsFromArgs
+            >=> extractAvailableDevices
+            >=> XInput.getAvailable
+            >=> unnoticed XInput.disable
+            >=> logDisabled
 
-          where logDisabled :: Options -> IO Options
-                logDisabled opts = O.availableXInputDevices opts
-                  & show .> ("XInput devices ids that was disabled: " <>)
-                  & (\x -> opts <$ O.noise opts x)
+          logDisabled :: Options -> IO Options
+          logDisabled opts
+            = O.availableXInputDevices opts
+            & ("XInput devices ids that was disabled: " <>) . show
+            & (\x -> opts <$ O.noise opts x)
 
         -- For situations when something went wrong and application
         -- can't finish its stuff correctly.
@@ -518,17 +515,17 @@ main = flip evalStateT ([] :: ThreadsState) $ do
 xkbInit :: IO Display
 xkbInit = do
 
-  (dpy :: Display) <- xkbGetDisplay >>= flip either pure
-    (\err -> dieWith [qm|Xkb open display error: {err}|])
+  (dpy :: Display) <- xkbGetDisplay >>= (`either` pure)
+    (\err -> dieWith [qm| Xkb open display error: {err} |])
 
-  xkbDescPtr <- xkbGetDescPtr dpy >>= flip either pure
-    (\err -> dieWith [qm|Xkb error: get keyboard data error: {err}|])
+  xkbDescPtr <- xkbGetDescPtr dpy >>= (`either` pure)
+    (\err -> dieWith [qm| Xkb error: get keyboard data error: {err} |])
 
   xkbFetchControls dpy xkbDescPtr
-    >>= flip unless (dieWith "Xkb error: fetch controls error")
+    >>= (`unless` dieWith "Xkb error: fetch controls error")
 
   (> 0) <$> xkbGetGroupsCount xkbDescPtr
-    >>= flip unless (dieWith "Xkb error: groups count is 0")
+    >>= (`unless` dieWith "Xkb error: groups count is 0")
 
   pure dpy
 

@@ -2,16 +2,17 @@
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
 module Utils.Sugar
-  ( (&), (<&>), (.>) -- pipes
-  , (?), (|?|)       -- conditions helpers
+  ( (&), (<&>), (.&>), (<$.), (.>)
+  , (?), (|?|) -- condition helpers
   , module Data.Maybe.Preserve
   , applyIf, applyUnless
-  , dupe
+  , unnoticed, apart
   ) where
 
 import "base" Data.Bool (bool)
-
-import qualified "lens" Control.Lens.Operators as Operators ((&), (<&>))
+import qualified "base" Data.Function as Operators ((&))
+import qualified "base" Data.Functor as Operators ((<&>))
+import "base" Data.Functor (($>))
 
 -- local imports
 
@@ -31,6 +32,20 @@ infixl 1 &
 (<&>) = (Operators.<&>)
 {-# INLINE (<&>) #-}
 infixr 5 <&>
+
+-- Point-free fmap (left-to-right version).
+-- Mix of (.>) and (<&>).
+(.&>) :: Functor f => (a -> f b) -> (b -> c) -> a -> f c
+f .&> g = f .> fmap g
+{-# INLINE (.&>) #-}
+infixl 9 .&> -- Precedence of (.>)
+
+-- Point-free fmap.
+-- Mix of (<$>) and (.).
+(<$.) :: Functor f => (b -> c) -> (a -> f b) -> a -> f c
+f <$. g = fmap f . g
+{-# INLINE (<$.) #-}
+infixr 9 <$. -- Precedence of (.)
 
 
 -- Pipe composition operator.
@@ -60,8 +75,7 @@ infixl 2 |?|
 --   isBar ? "bar" $
 --    "default"
 (?) :: Bool -> a -> a -> a
-(?) True  x _ = x
-(?) False _ y = y
+(?) c x y = if c then x else y
 {-# INLINE (?) #-}
 infixl 1 ?
 
@@ -75,6 +89,46 @@ applyUnless = (id |?|)
 {-# INLINE applyUnless #-}
 
 
-dupe :: a -> (a, a)
-dupe x = (x, x)
-{-# INLINE dupe #-}
+-- | A helper to do some stuff with incoming value, just by reading it
+--   or looking at it but always returning it back unchanged.
+--
+-- "unnoticed" means we don't notice if we remove whole call,
+-- types won't change and original value will be the same.
+--
+-- It helps to avoid noisy code patterns like this one:
+--
+-- @
+-- foo >>= \bar -> bar <$ f bar
+-- @
+--
+-- To replace them with:
+--
+-- @
+-- foo >>= unnoticed f
+-- @
+unnoticed :: Functor f => (a -> f b) -> a -> f a
+unnoticed f x = x <$ f x
+{-# INLINE unnoticed #-}
+
+
+-- | Just an alias for the "$>" operator.
+--
+-- Kinda alternative version of "unnoticed", when we want to do something and
+-- return back incoming value unchanged. But also we don't need that incoming
+-- value at all in our function, so that function doesn't even care what type
+-- of incoming value is and in some sense it lives "apart" from that context.
+--
+-- Writing it like this is not very readable:
+--
+-- @
+-- foo >>= (($>) $ bar $ baz bzz)
+-- @
+--
+-- This I think is better:
+--
+-- @
+-- foo >>= apart (bar $ baz bzz)
+-- @
+apart :: Functor f => f a -> b -> f b
+apart = ($>)
+{-# INLINE apart #-}

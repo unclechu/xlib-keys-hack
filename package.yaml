@@ -12,6 +12,7 @@ github:       unclechu/xlib-keys-hack
 default-extensions:
   - ExplicitNamespaces
   - PackageImports
+  - TypeOperators
   - BangPatterns
   - ViewPatterns
   - QuasiQuotes
@@ -32,10 +33,12 @@ dependencies:
   - mtl
   - process
   - qm-interpolated-string
+  - stm
   - template-haskell
   - text
   - time
   - transformers
+  - type-operators
   - unix
   - X11
 

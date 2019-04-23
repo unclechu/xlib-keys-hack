@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 92e9c5fdf7428b4d654c3ead253b80d889e38f03c94ba793e0f928d15285b88b
+-- hash: cda87e363ac484e2888f44e2f1e33e8ed4e9ca2fa667767b5c08ea9a14238362
 
 name:                xlib-keys-hack
 version:             0.1.0
@@ -27,7 +27,7 @@ library
   hs-source-dirs:
       src
   ghc-options: -Wall -O2
-  default-extensions: ExplicitNamespaces PackageImports BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
+  default-extensions: ExplicitNamespaces PackageImports TypeOperators BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
   exposed-modules:
       Actions
       Actions.Types
@@ -40,14 +40,15 @@ library
       Options
       Process
       Process.CrossThread
-      Process.Keyboard
+      Process.Keyboard.HandlingKeyEventFlow
+      Process.Keyboard.RawDeviceHandling
+      Process.Keyboard.SoftwareDebouncer
+      Process.Keyboard.Types
       Process.KeysActions
       State
       Utils
-      Utils.BreakableMonad
       Utils.Instances
       Utils.Lens
-      Utils.StateMonad
       Utils.Sugar
       Utils.X
       XInput
@@ -68,16 +69,18 @@ library
     , mtl
     , process
     , qm-interpolated-string
+    , stm
     , template-haskell
     , text
     , time
     , transformers
+    , type-operators
     , unix
 
 executable xlib-keys-hack
   default-language: Haskell2010
   ghc-options: -Wall -O2 -threaded
-  default-extensions: ExplicitNamespaces PackageImports BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
+  default-extensions: ExplicitNamespaces PackageImports TypeOperators BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
   hs-source-dirs:
       app/XlibKeysHack
   main-is: Main.hs
@@ -98,10 +101,12 @@ executable xlib-keys-hack
     , mtl
     , process
     , qm-interpolated-string
+    , stm
     , template-haskell
     , text
     , time
     , transformers
+    , type-operators
     , unix
     , xlib-keys-hack
   other-modules:
@@ -110,7 +115,7 @@ executable xlib-keys-hack
 executable xlib-keys-hack-watch-for-window-focus-events
   default-language: Haskell2010
   ghc-options: -Wall -O2 -threaded
-  default-extensions: ExplicitNamespaces PackageImports BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
+  default-extensions: ExplicitNamespaces PackageImports TypeOperators BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
   hs-source-dirs:
       app/WindowFocusWatcher
   main-is: Main.hs
@@ -129,10 +134,12 @@ executable xlib-keys-hack-watch-for-window-focus-events
     , mtl
     , process
     , qm-interpolated-string
+    , stm
     , template-haskell
     , text
     , time
     , transformers
+    , type-operators
     , unix
     , xlib-keys-hack
   other-modules:
@@ -142,14 +149,12 @@ test-suite xlib-keys-hack-utils-test
   type: exitcode-stdio-1.0
   default-language: Haskell2010
   ghc-options: -Wall -O2
-  default-extensions: ExplicitNamespaces PackageImports BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
+  default-extensions: ExplicitNamespaces PackageImports TypeOperators BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
   hs-source-dirs:
       test
   main-is: UtilsSpec.hs
   other-modules:
-      Utils.BreakableMonad
       Utils.Lens
-      Utils.StateMonad
       Utils.Sugar
       Paths_xlib_keys_hack
   build-depends:
@@ -168,9 +173,11 @@ test-suite xlib-keys-hack-utils-test
     , mtl
     , process
     , qm-interpolated-string
+    , stm
     , template-haskell
     , text
     , time
     , transformers
+    , type-operators
     , unix
     , xlib-keys-hack
