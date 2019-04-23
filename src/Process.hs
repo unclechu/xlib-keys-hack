@@ -73,16 +73,18 @@ import           State (type State, type LedModes, type CrossThreadVars)
 import qualified State
 import           Keys (type KeyMap)
 
-import           Process.Keyboard ( HandledKey
-                                  , handleKeyEvent
-                                  , getNextKeyboardDeviceKeyEvent
-
-                                  , SoftwareDebouncer
-                                  , getSoftwareDebouncer
-                                  , getSoftwareDebouncerTiming
-                                  , moveKeyThroughSoftwareDebouncer
-                                  , handleNextSoftwareDebouncerEvent
-                                  )
+import           Process.Keyboard.Types (HandledKey)
+import           Process.Keyboard.HandlingKeyEventFlow (handleKeyEvent)
+import           Process.Keyboard.RawDeviceHandling
+                   ( getNextKeyboardDeviceKeyEvent
+                   )
+import           Process.Keyboard.SoftwareDebouncer
+                   ( SoftwareDebouncer
+                   , getSoftwareDebouncer
+                   , getSoftwareDebouncerTiming
+                   , moveKeyThroughSoftwareDebouncer
+                   , handleNextSoftwareDebouncerEvent
+                   )
 import           Process.KeysActions (processKeysActions)
 import qualified Process.CrossThread as CrossThread ( justTurnCapsLockMode
                                                     , resetAll

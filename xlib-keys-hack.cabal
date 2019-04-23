@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 3b71ccea98ac0f71036cb4648cecb87a8a5dd4b1fe5e5b0a7f0f836038af9dbb
+-- hash: cda87e363ac484e2888f44e2f1e33e8ed4e9ca2fa667767b5c08ea9a14238362
 
 name:                xlib-keys-hack
 version:             0.1.0
@@ -40,7 +40,10 @@ library
       Options
       Process
       Process.CrossThread
-      Process.Keyboard
+      Process.Keyboard.HandlingKeyEventFlow
+      Process.Keyboard.RawDeviceHandling
+      Process.Keyboard.SoftwareDebouncer
+      Process.Keyboard.Types
       Process.KeysActions
       State
       Utils
