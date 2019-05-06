@@ -324,22 +324,41 @@ realKeys =
 -- Remapping for keys when Alternative mode is turned on
 alternativeModeRemaps :: [(KeyName, KeyName)]
 alternativeModeRemaps =
-  [ (HKey,            ArrowLeftKey)
+  -- 4th row shifted down to 3rd
+  [ (TabKey,          GraveKey)
+  , (QKey,            Number1Key)
+  , (WKey,            Number2Key)
+  , (EKey,            Number3Key)
+  , (RKey,            Number4Key)
+  , (TKey,            Number5Key)
+  , (YKey,            Number6Key)
+  , (UKey,            Number7Key)
+  , (IKey,            Number8Key)
+  , (OKey,            Number9Key)
+  , (PKey,            Number0Key)
+  , (BracketLeftKey,  MinusKey)
+  , (BracketRightKey, EqualKey)
+  , (BackslashKey,    BackSpaceKey)
+
+  -- Arrow keys
+  , (HKey,            ArrowLeftKey)
   , (JKey,            ArrowDownKey)
   , (KKey,            ArrowUpKey)
   , (LKey,            ArrowRightKey)
 
-  , (YKey,            PageDownKey)
-  , (UKey,            PageUpKey)
+  -- Delete backward/forward
+  , (SemicolonKey,    BackSpaceKey)
+  , (ApostropheKey,   DeleteKey)
 
+  -- PgUp/Home/End/PgDown
+  , (MKey,            PageUpKey)
   , (CommaKey,        HomeKey)
   , (PeriodKey,       EndKey)
+  , (SlashKey,        PageDownKey)
 
-  , (BracketLeftKey,  BackSpaceKey)
-  , (BracketRightKey, DeleteKey)
-
-  , (MKey,            RealMenuKey)
-  , (IKey,            InsertKey)
+  -- Insert and Menu keys (left hand)
+  , (GKey,            InsertKey)
+  , (BKey,            RealMenuKey)
   ]
 
 
