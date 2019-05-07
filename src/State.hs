@@ -148,7 +148,8 @@ instance Default ComboState where
 data HeldAltForAlternativeModeState
    = AltIsHeldForAlternativeMode HeldAltForAlternativeMode
    | AltIsReleasedBeforeAlternativeKey
--- ^ Waiting for release all alternative keys before turn alternative mode off
+     -- ^ Waiting for release all alternative keys
+     --   before turn alternative mode off.
      deriving (Show, Eq, Generic, NFData)
 
 data HeldAltForAlternativeMode
