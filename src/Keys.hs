@@ -49,7 +49,7 @@ import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
 
 -- local imports
 
-import Utils.Sugar ((.>), (&), (<&>), applyIf)
+import Utils.Sugar ((.>), (&), (<&>), (?), applyIf)
 import Utils.Lens (makeApoClassy)
 import qualified Options as O
 
@@ -117,6 +117,8 @@ data KeyName
      deriving (Eq, Show, Ord, Generic, NFData)
 
 
+-- | Use @0@ (@minBound@) for @Word16@ (second tuple item) as a plug
+--   (to turn key off on a keyboard).
 type KeyAlias = (KeyName, Word16, KeyCode)
 
 -- Mappings between keys names and device key codes
@@ -413,6 +415,15 @@ numericShift = Map.fromList
   ]
 
 
+fourhRow :: [KeyName]
+fourhRow =
+  [ GraveKey
+  , Number1Key , Number2Key , Number3Key , Number4Key , Number5Key
+  , Number6Key , Number7Key , Number8Key , Number9Key , Number0Key
+  , MinusKey   , EqualKey   , BackSpaceKey
+  ]
+
+
 -- Returns Map of aliases list using key name as a Map key
 getByNameMap :: [KeyAlias] -> Map KeyName KeyAlias
 getByNameMap keyMap = fromList $ fmap f keyMap where
@@ -442,7 +453,7 @@ getKeyMap opts mediaKeyAliases = go where
   go
     = KeyMap
     { byNameMap            = nameMap
-    , byDevNumMap          = getByDevNumMap keyAliases
+    , byDevNumMap          = devMap
     , byNameAlternativeMap = getAltMap alternativeModeRemaps empty
     , byNameMediaMap       = byNameMediaAliasesMap
     , byNameRealMap        = realMap
@@ -451,37 +462,41 @@ getKeyMap opts mediaKeyAliases = go where
     }
 
   keyAliases :: [KeyAlias]
-  keyAliases =
-    let
-      resolveMediaKey (keyName, keyCode) =
-        case keyName `lookup` mediaMap of
-             Just devNum -> (keyName, devNum, keyCode)
-             Nothing -> error [qm| Unexpected media key: {keyName} |]
+  keyAliases = go' where
+    go'
+      = defaultKeyAliases <> fmap resolveMediaKey mediaKeyAliases
+      & turnOffFourthRow `applyIf` O.turnOffFourthRow         opts
+      & makeCapsLockReal `applyIf` O.realCapsLock             opts
+      & shiftNumeric     `applyIf` O.shiftNumericKeys         opts
+      & controlAsSuper   `applyIf` O.rightControlAsRightSuper opts
 
-      makeCapsLockReal = fmap f
-        where f (CapsLockKey, devNum, _) =
-                (CapsLockKey, devNum, realMap ! RealCapsLockKey)
-              f x = x
+    resolveMediaKey (keyName, keyCode) =
+      case keyName `lookup` mediaMap of
+           Just devNum -> (keyName, devNum, keyCode)
+           Nothing -> error [qm| Unexpected media key: {keyName} |]
 
-      shiftNumeric aliases = fmap f aliases
-        where f alias@(keyName, devNum, _)
-                = maybe alias (resolve devNum)
-                $ keyName `Map.lookup` numericShift
+    turnOffFourthRow = fmap $ \x@(keyName, _, keyCode) ->
+      keyName `elem` fourhRow ? (keyName, minBound, keyCode) $ x
 
-              resolve devNum keyName =
-                find (\(x, _, _) -> x == keyName) aliases
-                  & fromJust
-                  & (\(toName, _, toCode) -> (toName, devNum, toCode))
+    makeCapsLockReal = fmap f where
+      f (CapsLockKey, devNum, _) =
+        (CapsLockKey, devNum, realMap ! RealCapsLockKey)
+      f x = x
 
-      controlAsSuper = fmap f
-        where f (ControlRightKey, devNum, _) =
-                (ControlRightKey, devNum, rightSuperKeyCode)
-              f x = x
-    in
-      defaultKeyAliases <> fmap resolveMediaKey mediaKeyAliases
-        & makeCapsLockReal `applyIf` O.realCapsLock             opts
-        & shiftNumeric     `applyIf` O.shiftNumericKeys         opts
-        & controlAsSuper   `applyIf` O.rightControlAsRightSuper opts
+    shiftNumeric aliases = fmap f aliases where
+      f alias@(keyName, devNum, _)
+        = maybe alias (resolve devNum)
+        $ keyName `Map.lookup` numericShift
+
+      resolve devNum keyName
+        = find (\(x, _, _) -> x == keyName) aliases
+        & fromJust
+        & \(toName, _, toCode) -> (toName, devNum, toCode)
+
+    controlAsSuper = fmap f where
+      f (ControlRightKey, devNum, _) =
+        (ControlRightKey, devNum, rightSuperKeyCode)
+      f x = x
 
   _asNamesMap = fromList _asNames :: Map KeyName KeyName
 
@@ -495,6 +510,9 @@ getKeyMap opts mediaKeyAliases = go where
   byNameMediaAliasesMap :: Map KeyName KeyCode
   byNameMediaAliasesMap =
     fromList [(a, b) | (a, _, b) <- keyAliases, a `member` mediaMap]
+
+  devMap :: Map Word16 KeyAlias
+  devMap = Map.delete minBound $ getByDevNumMap keyAliases
 
   mediaMap = fromList mediaDevNums   :: Map KeyName Word16
   nameMap  = getByNameMap keyAliases :: Map KeyName KeyAlias

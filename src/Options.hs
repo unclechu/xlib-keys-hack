@@ -48,7 +48,9 @@ data Options
    , shiftNumericKeys             :: Bool
    , rightControlAsRightSuper     :: Bool
 
+   , alternativeModeWithAltMod    :: Bool
    , toggleAlternativeModeByAlts  :: Bool
+   , turnOffFourthRow             :: Bool
    , superDoublePress             :: Bool
    , leftSuperDoublePressCmd      :: Maybe String
    , rightSuperDoublePressCmd     :: Maybe String
@@ -93,7 +95,9 @@ instance Default Options where
     , shiftNumericKeys             = False
     , rightControlAsRightSuper     = False
 
+    , alternativeModeWithAltMod    = False
     , toggleAlternativeModeByAlts  = True
+    , turnOffFourthRow             = False
     , superDoublePress             = True
     , leftSuperDoublePressCmd      = Nothing
     , rightSuperDoublePressCmd     = Nothing
@@ -181,11 +185,29 @@ options =
             Default is: {rightControlAsRightSuper def ? "On" $ "Off"}
             |]
 
+  , GetOpt.Option  [ ]  [holdAltForAlternativeMode]
+      (GetOpt.NoArg $ alternativeModeWithAltMod' .~ True)
+      [qmb| When hold Alt key (left or right, doesn't matter) \
+              alternative mode is turned on (real Alt keys aren't triggered).
+            To trigger real Alt key you press Alt+Space, in this case \
+              alternative mode is turned off and real Alt is triggered \
+              from that moment.
+            To turn alternative mode on Alt key supposed to be pressed first \
+              before any other key or modifier.
+            Default is: {alternativeModeWithAltMod def ? "On" $ "Off"}
+            |]
   , GetOpt.Option  [ ]  ["disable-toggling-alternative-mode-by-alts"]
       (GetOpt.NoArg $ toggleAlternativeModeByAlts' .~ False)
       [qmb| Disable toggling alternative mode \
               by pressing Alt keys (Left and Right) both at the same time
             Default is: {toggleAlternativeModeByAlts def ? "On" $ "Off"}
+            |]
+  , GetOpt.Option  [ ]  ["turn-off-fourth-row"]
+      (GetOpt.NoArg $ turnOffFourthRow' .~ True)
+      [qmb| Turns off fourth keys row completely.
+            This helps to change your reflexes when \
+              --{holdAltForAlternativeMode} feature is turned on.
+            Default is: {turnOffFourthRow def ? "On" $ "Off"}
             |]
   , GetOpt.Option  [ ]  [disableSuperDoublePress]
       (GetOpt.NoArg $ superDoublePress' .~ False)
@@ -369,6 +391,9 @@ options =
 
         makesNoSense :: String -> String
         makesNoSense = ("This option makes no sense with --" <>)
+
+        holdAltForAlternativeMode :: String
+        holdAltForAlternativeMode = "hold-alt-for-alternative-mode"
 
         disableSuperDoublePress :: String
         disableSuperDoublePress = "disable-super-double-press"

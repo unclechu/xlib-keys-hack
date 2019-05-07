@@ -32,4 +32,5 @@ test-command:
 		\
 		-v --shift-numeric-keys \
 		--right-super-double-press-cmd='place-cursor-at' \
-		--xmobar-indicators --software-debouncer=250
+		--xmobar-indicators --software-debouncer=25 \
+		--hold-alt-for-alternative-mode --turn-off-fourth-row

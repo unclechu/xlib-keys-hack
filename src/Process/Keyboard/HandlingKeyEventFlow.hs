@@ -11,7 +11,7 @@ import "base" System.IO (IOMode (WriteMode), withFile)
 import qualified "process" System.Process as P
 
 import "transformers" Control.Monad.Trans.Class (lift)
-import "base" Control.Monad ((>=>), when, unless, forM_)
+import "base" Control.Monad ((>=>), when, unless, forM_, guard)
 import "base" Control.Concurrent.MVar (modifyMVar_)
 import "transformers" Control.Monad.Trans.State (StateT, execStateT)
 import "transformers" Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
@@ -33,7 +33,7 @@ import "X11" Graphics.X11.Types (type KeyCode)
 
 -- local imports
 
-import           Utils.Sugar ((&), (?), (<&>))
+import           Utils.Sugar ((&), (?), (<&>), unnoticed)
 import           Utils.Lens ((%=<&~>))
 import           Options (type Options)
 import qualified Options as O
@@ -51,6 +51,7 @@ import qualified Process.CrossThread as CrossThread
 
                , toggleCapsLock
                , toggleAlternative
+               , notifyAboutAlternative
 
                , resetAll
                )
@@ -98,6 +99,21 @@ handleKeyEvent ctVars opts keyMap =
         O.toggleAlternativeModeByAlts opts &&
         let altsSet = Set.fromList [Keys.AltLeftKey, Keys.AltRightKey]
          in keyName `Set.member` altsSet && pressed == altsSet
+
+      -- | @onOnlyBothAltsPressed@ works when @not isPressed@.
+      onBothAltsAreHeldForAlternativeMode :: Bool
+      onBothAltsAreHeldForAlternativeMode =
+        O.toggleAlternativeModeByAlts opts &&
+        O.alternativeModeWithAltMod opts &&
+        isPressed &&
+        case state ^. State.comboState' . State.heldAltForAlternativeMode' of
+             Just (State.AltIsHeldForAlternativeMode altKey) ->
+               pressed == Set.singleton (
+                 case altKey of
+                      State.HeldLeftAltForAlternativeMode  -> Keys.AltRightKey
+                      State.HeldRightAltForAlternativeMode -> Keys.AltLeftKey
+               )
+             _ -> False
 
       -- When Alternative mode is on and current key has alternative map
       onAlternativeKey :: Bool
@@ -181,6 +197,42 @@ handleKeyEvent ctVars opts keyMap =
       intervalLimit :: Rational
       intervalLimit = 0.5
 
+      -- | To turn on alternative mode (real Alt key isn't triggered).
+      onHoldAltForAlternativeMode :: Bool
+      onHoldAltForAlternativeMode =
+        O.alternativeModeWithAltMod opts &&
+        not (State.alternative state) &&
+        isNothing ( state ^. State.comboState'
+                           . State.heldAltForAlternativeMode' ) &&
+        isPressed && keyName `elem` [Keys.AltLeftKey, Keys.AltRightKey] &&
+        Set.size pressed == 1
+
+      -- | To turn off alternative mode and trigger real Alt key.
+      onSpaceWithHoldedAltForAlternativeMode :: Bool
+      onSpaceWithHoldedAltForAlternativeMode =
+        O.alternativeModeWithAltMod opts &&
+        ( case state ^. State.comboState' . State.heldAltForAlternativeMode' of
+               Just (State.AltIsHeldForAlternativeMode _) -> True
+               _                                          -> False ) &&
+        isPressed && keyName == Keys.SpaceKey && Set.size pressed == 1
+
+      -- | When unholding Alt key which triggered alternative mode previously.
+      onUnholdAltForAlternativeMode :: Bool
+      onUnholdAltForAlternativeMode =
+        O.alternativeModeWithAltMod opts &&
+        case state ^. State.comboState' . State.heldAltForAlternativeMode' of
+             Nothing -> False
+
+             Just (State.AltIsHeldForAlternativeMode altKey) ->
+               not isPressed && keyName == (
+                 case altKey of
+                      State.HeldLeftAltForAlternativeMode  -> Keys.AltLeftKey
+                      State.HeldRightAltForAlternativeMode -> Keys.AltRightKey
+               )
+
+             Just State.AltIsReleasedBeforeAlternativeKey ->
+               all (not . isAlternative) pressed
+
       -- Super-Double-Press feature.
       -- 1st step: first press of Super key.
       onSuperDoubleFirstPress :: Bool
@@ -188,7 +240,7 @@ handleKeyEvent ctVars opts keyMap =
         O.superDoublePress opts &&
         not (state ^. State.comboState' . State.superDoublePressProceeded') &&
         maybeAsName keyName `elem` [Keys.SuperLeftKey, Keys.SuperRightKey] &&
-        isPressed && pressed == Set.singleton keyName &&
+        isPressed && Set.size pressed == 1 &&
         isNothing (state ^. State.comboState' . State.superDoublePress')
 
       -- Super-Double-Press feature.
@@ -215,7 +267,7 @@ handleKeyEvent ctVars opts keyMap =
           state ^. State.comboState' . State.superDoublePress' <&> \x ->
             toRational time < toRational (x ^. _3) + intervalLimit &&
             x ^. _2 == State.WaitForSecondPressAgain &&
-            keyName == x ^. _1 && isPressed && pressed == Set.singleton keyName
+            keyName == x ^. _1 && isPressed && Set.size pressed == 1
 
       -- Super-Double-Press feature.
       -- 4th step: second release of Super key.
@@ -288,6 +340,8 @@ handleKeyEvent ctVars opts keyMap =
             -- Alternative mode on while holding Super key.
             x ^. _2 == State.WaitForSecondReleaseAfterAlternativeKeys
 
+      -- | TODO Maybe replace @justTrigger@ with @justAsTrigger@
+      --        in @smartTrigger@? Otherwise explain why not in comment.
       justTrigger, justAsTrigger, smartTrigger, alternativeTrigger :: IO ()
       justTrigger   = trigger   keyName keyCode isPressed
       justAsTrigger = asTrigger keyName keyCode isPressed
@@ -515,15 +569,108 @@ handleKeyEvent ctVars opts keyMap =
 
              state & lens .~ Nothing & reprocess
 
+  | onHoldAltForAlternativeMode -> do
+
+    noise [qms| Pressed {keyName} alone, real Alt won't be triggered,
+                turning alternative mode on... |]
+
+    state
+      & State.pressedKeys' .~ otherPressed -- Without Alt key
+      & State.comboState' . State.heldAltForAlternativeMode' .~
+          Just ( State.AltIsHeldForAlternativeMode
+               $ keyName == Keys.AltLeftKey
+               ? State.HeldLeftAltForAlternativeMode
+               $ State.HeldRightAltForAlternativeMode
+               )
+      & State.alternative' .~ True
+      & unnoticed notifyAboutAlternative
+
+  | onSpaceWithHoldedAltForAlternativeMode -> do
+
+    noise [qns| Pressed Alt+Space, Space after Alt,
+                turning alternative mode off and triggering real Alt... |]
+
+    let altKeyName =
+          case state ^. State.comboState' . State.heldAltForAlternativeMode' of
+               Just ( State.AltIsHeldForAlternativeMode
+                      State.HeldLeftAltForAlternativeMode ) -> Keys.AltLeftKey
+               _                                            -> Keys.AltRightKey
+
+    getKeyCodeByName altKeyName
+      & pure () `maybe` \x -> maybeAsTrigger altKeyName x True
+
+    state
+      -- Excluding Space and adding Alt
+      & State.pressedKeys' .~ Set.insert altKeyName otherPressed
+      & State.comboState' . State.heldAltForAlternativeMode' .~ Nothing
+      & State.alternative' .~ False
+      & unnoticed notifyAboutAlternative
+
+  | onUnholdAltForAlternativeMode ->
+
+    case state ^. State.comboState' . State.heldAltForAlternativeMode' of
+         Nothing -> fail "Impossible case, it supposed to be checked earlier"
+
+         Just (State.AltIsHeldForAlternativeMode heldAltKey) -> do
+           let altKey =
+                 case heldAltKey of
+                      State.HeldLeftAltForAlternativeMode  -> Keys.AltLeftKey
+                      State.HeldRightAltForAlternativeMode -> Keys.AltRightKey
+
+           if Set.null pressed
+              then do
+                   noise [qms| {altKey} is released,
+                               turning alternative mode off... |]
+
+                   state
+                     & State.comboState' . State.heldAltForAlternativeMode'
+                                         .~ Nothing
+                     & State.alternative' .~ False
+                     & unnoticed notifyAboutAlternative
+
+              else do
+                   noise [qms| {altKey} is released but some alternative keys
+                               are still pressed, will turn alternative mode off
+                               after all those keys being released. |]
+                   pure
+                     $ state
+                     & State.comboState' . State.heldAltForAlternativeMode' .~
+                         Just State.AltIsReleasedBeforeAlternativeKey
+
+         Just State.AltIsReleasedBeforeAlternativeKey -> do
+           noise [qns| All alternative keys have been released after delayed
+                       turning alternative mode off, now turning alternative
+                       mode off... |]
+
+           smartTrigger
+
+           state
+             & State.comboState' . State.heldAltForAlternativeMode' .~ Nothing
+             & State.alternative' .~ False
+             & unnoticed notifyAboutAlternative
+
   -- Alternative mode on/off by Alts handling
   | onOnlyBothAltsPressed -> do
 
-    noise "Two alts pressed, it means Alternative mode toggling"
+    noise [qns| Two Alts are pressed at the same time,
+                it means Alternative mode toggling |]
+
     let toDelete = [Keys.AltLeftKey, Keys.AltRightKey]
     forM_ toDelete off
     state
       & State.pressedKeys' .~ foldr Set.delete pressed toDelete
       & toggleAlternative
+
+  -- See @onOnlyBothAltsPressed@ for details
+  | onBothAltsAreHeldForAlternativeMode -> do
+
+    noise [qns| Two Alts are pressed at the same time,
+                keeping Alternative mode turned on
+                without need to keep holding it... |]
+    pure
+      $ state
+      & State.pressedKeys' .~ otherPressed
+      & State.comboState' . State.heldAltForAlternativeMode' .~ Nothing
 
   -- Hadling `FNKey` pressing on apple keyboard
   | keyName == Keys.FNKey ->
@@ -766,6 +913,9 @@ handleKeyEvent ctVars opts keyMap =
   toggleAlternative :: State -> IO State
   toggleAlternative = CrossThread.toggleAlternative noise' notify'
 
+  notifyAboutAlternative :: State -> IO ()
+  notifyAboutAlternative = CrossThread.notifyAboutAlternative notify'
+
   handleCapsLockModeChange :: State -> IO State
   handleCapsLockModeChange =
     CrossThread.handleCapsLockModeChange ctVars noise'
@@ -815,13 +965,31 @@ handleKeyEvent ctVars opts keyMap =
 
      in modifyMVar_ (State.stateMVar ctVars) mapState
 
-    where -- Prevent doing anything when key state is the same
+    where -- | Prevent doing anything when key state is the same.
           ignoreDuplicates :: State -> ExceptT State IO State
-          ignoreDuplicates state =
-            let pressed     = State.pressedKeys state
-                isMember    = keyName `Set.member` pressed
-                isDuplicate = isPressed == isMember
-             in (isDuplicate ? throwE $ pure) state
+          ignoreDuplicates state = (isDuplicate ? throwE $ pure) state where
+            pressed     = State.pressedKeys state
+            isMember    = keyName `Set.member` pressed
+
+            isDuplicate =
+              isPressed == isMember &&
+              not isItHeldAltForAlternativeModeReleased
+
+            isItHeldAltForAlternativeModeReleased = isJust $ do
+              guard $ O.alternativeModeWithAltMod opts
+
+              heldAltState <-
+                state ^. State.comboState' . State.heldAltForAlternativeMode'
+
+              heldAltKey <-
+                case heldAltState of
+                     State.AltIsHeldForAlternativeMode x -> Just x
+                     _                                   -> Nothing
+
+              let f State.HeldLeftAltForAlternativeMode  = Keys.AltLeftKey
+                  f State.HeldRightAltForAlternativeMode = Keys.AltRightKey
+
+              guard $ not isPressed && keyName == f heldAltKey
 
           -- Store key user pressed in state
           storeKey :: State -> ExceptT State IO State

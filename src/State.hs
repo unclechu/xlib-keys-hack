@@ -7,6 +7,9 @@ module State
   ( State (..),            HasState (..)
   , LedModes (..),         HasLedModes (..)
   , ComboState (..),       HasComboState (..)
+
+  , HeldAltForAlternativeModeState (..)
+  , HeldAltForAlternativeMode (..)
   , SuperDoublePress (..)
 
   , CrossThreadVars (..),  HasCrossThreadVars (..)
@@ -107,6 +110,12 @@ data ComboState
    -- all currently pressed keys will be released.
    , resetKbdLayout :: Bool
 
+   , heldAltForAlternativeMode :: Maybe HeldAltForAlternativeModeState
+   -- ^ In case @alternativeModeWithAltMod@ option is enabled.
+   --
+   -- @Just@ when alternative mode have been turned on by pressing Alt key
+   -- but that Alt isn't released yet.
+
    -- TODO add description
    , superDoublePress :: Maybe (KeyName, SuperDoublePress, POSIXTime)
    -- Using it to prevent infinite recursion.
@@ -130,9 +139,22 @@ instance Default ComboState where
     , capsLockModeChange        = Nothing
     , alternativeModeChange     = Nothing
     , resetKbdLayout            = False
+    , heldAltForAlternativeMode = Nothing
     , superDoublePress          = Nothing
     , superDoublePressProceeded = False
     }
+
+
+data HeldAltForAlternativeModeState
+   = AltIsHeldForAlternativeMode HeldAltForAlternativeMode
+   | AltIsReleasedBeforeAlternativeKey
+-- ^ Waiting for release all alternative keys before turn alternative mode off
+     deriving (Show, Eq, Generic, NFData)
+
+data HeldAltForAlternativeMode
+   = HeldLeftAltForAlternativeMode
+   | HeldRightAltForAlternativeMode
+     deriving (Show, Eq, Generic, NFData)
 
 
 data SuperDoublePress
