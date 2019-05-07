@@ -172,8 +172,15 @@ Usage: xlib-keys-hack [OPTION...] DEVICES-FD-PATHS...
       --right-control-as-super                            Remap Right Control as Right Super key.
                                                           Some keyboards doesn't have neither Right Super nor Menu key at the right side, since you can have Control key pressing Enter by "additional controls" feature, this could be a solution.
                                                           Default is: Off
+      --hold-alt-for-alternative-mode                     When hold Alt key (left or right, doesn't matter) alternative mode is turned on (real Alt keys aren't triggered).
+                                                          To trigger real Alt key you press Alt+Space, in this case alternative mode is turned off and real Alt is triggered from that moment.
+                                                          To turn alternative mode on Alt key supposed to be pressed first before any other key or modifier.
+                                                          Default is: Off
       --disable-toggling-alternative-mode-by-alts         Disable toggling alternative mode by pressing Alt keys (Left and Right) both at the same time
                                                           Default is: On
+      --turn-off-fourth-row                               Turns off fourth keys row completely.
+                                                          This helps to change your reflexes when --hold-alt-for-alternative-mode feature is turned on.
+                                                          Default is: Off
       --disable-super-double-press                        Disable handling of double Super key press.
                                                           Default is: On
       --super-double-press-cmd=COMMAND                    When Super key is pressed twice in short interval alternative mode will be toggled or specified shell command will be spawned.
@@ -248,7 +255,6 @@ Usage: xlib-keys-hack [OPTION...] DEVICES-FD-PATHS...
                                                           '%DISPLAY%' will be replaced with view of '$DISPLAY' environment variable where ':' and '.' symbols are replaced to underscore '_'.
                                                           For example if we have '$DISPLAY' as ':0.0' 'foo.%DISPLAY%.bar' will be replaced to 'foo._0_0.bar'.
                                                           This option makes sense only with --external-control
-
 ```
 
 ### Generating coverage report
