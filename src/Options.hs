@@ -194,9 +194,15 @@ options =
               from that moment.
             To turn alternative mode on Alt key supposed to be pressed first \
               before any other key or modifier.
+            Use --{disableToggleAlternativeModeByAlts} to be able to press \
+              combo like Alt-2 by just both Alts pressed plus "w" key. \
+              Otherwise you'll just have turn alternative mode on permanently \
+              (by pressing both Alts or by double pressing Super key \
+              if such feature is enabled) \
+              and then press Alt-w to trigger actual Alt-2.
             Default is: {alternativeModeWithAltMod def ? "On" $ "Off"}
             |]
-  , GetOpt.Option  [ ]  ["disable-toggling-alternative-mode-by-alts"]
+  , GetOpt.Option  [ ]  [disableToggleAlternativeModeByAlts]
       (GetOpt.NoArg $ toggleAlternativeModeByAlts' .~ False)
       [qmb| Disable toggling alternative mode \
               by pressing Alt keys (Left and Right) both at the same time
@@ -394,6 +400,10 @@ options =
 
         holdAltForAlternativeMode :: String
         holdAltForAlternativeMode = "hold-alt-for-alternative-mode"
+
+        disableToggleAlternativeModeByAlts :: String
+        disableToggleAlternativeModeByAlts =
+          "disable-toggling-alternative-mode-by-alts"
 
         disableSuperDoublePress :: String
         disableSuperDoublePress = "disable-super-double-press"
