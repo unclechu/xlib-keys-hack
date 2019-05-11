@@ -691,10 +691,11 @@ handleKeyEvent ctVars opts keyMap =
     noise [qns| Two Alts are pressed at the same time,
                 keeping Alternative mode turned on
                 without need to keep holding it... |]
-    pure
-      $ state
-      & State.pressedKeys' .~ otherPressed
-      & State.comboState' . State.heldAltForAlternativeMode' .~ Nothing
+
+    unnoticed notifyAboutAlternative $ state &~ do
+      State.pressedKeys' .= otherPressed
+      State.comboState' . State.heldAltForAlternativeMode' .= Nothing
+      State.alternative' %=<&~> _2 .= True -- Now it's permanent
 
   -- Hadling `FNKey` pressing on apple keyboard
   | keyName == Keys.FNKey ->
