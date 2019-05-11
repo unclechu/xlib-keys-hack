@@ -33,6 +33,7 @@ import "time" Data.Time.Clock.POSIX (POSIXTime)
 
 import Utils.Lens (makeApoClassy)
 import Utils.Instances ()
+import Types (type AlternativeModeState)
 import Actions.Types (ActionType, Action, KeyAction)
 import Keys (KeyName)
 
@@ -42,7 +43,7 @@ data State
    { pressedKeys     :: Set.Set KeyName
    , leds            :: LedModes
    , kbdLayout       :: Word8
-   , alternative     :: Bool -- Alternative mode on/off
+   , alternative     :: AlternativeModeState
    , comboState      :: ComboState
    , isTerminating   :: Bool
    , windowFocusProc :: Maybe (FilePath, ProcessHandle, Handle)
@@ -54,7 +55,7 @@ instance Default State where
     { pressedKeys     = Set.empty
     , leds            = def
     , kbdLayout       = 0
-    , alternative     = False
+    , alternative     = Nothing
     , comboState      = def
     , isTerminating   = False
     , windowFocusProc = Nothing
@@ -104,7 +105,7 @@ data ComboState
    -- Modes that will be changed to specified state
    -- after all currently pressed keys will be released.
    , capsLockModeChange    :: Maybe Bool
-   , alternativeModeChange :: Maybe Bool
+   , alternativeModeChange :: Maybe AlternativeModeState
 
    -- Is keyboard layout reset deleyed til
    -- all currently pressed keys will be released.

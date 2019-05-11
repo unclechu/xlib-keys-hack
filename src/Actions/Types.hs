@@ -17,6 +17,7 @@ import "X11" Graphics.X11.Xlib (KeyCode)
 -- local imports
 
 import Utils.Lens (makeApoClassy)
+import Types (type AlternativeModeState)
 
 
 data ActionType a = Single    a
@@ -37,7 +38,7 @@ data Action = Noise        String
 
 data XmobarFlag = XmobarNumLockFlag     Bool
                 | XmobarCapsLockFlag    Bool
-                | XmobarAlternativeFlag Bool
+                | XmobarAlternativeFlag AlternativeModeState
                 | XmobarXkbLayout       Word8
                 | XmobarFlushAll
                   deriving (Show, Eq)

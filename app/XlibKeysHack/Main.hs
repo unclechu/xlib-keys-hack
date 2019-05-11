@@ -73,6 +73,9 @@ import qualified "xlib-keys-hack" Options as O
 import qualified "xlib-keys-hack" Actions
 import qualified "xlib-keys-hack" XInput
 import qualified "xlib-keys-hack" Keys
+import "xlib-keys-hack" Types ( type AlternativeModeState
+                              , AlternativeModeLevel (..)
+                              )
 import "xlib-keys-hack" Actions (ActionType, Action, KeyAction)
 import "xlib-keys-hack" IPC ( openIPC
                             , closeIPC
@@ -210,14 +213,15 @@ main = flip evalStateT ([] :: ThreadsState) $ do
                   modifyMVar_ (State.stateMVar ctVars) $
                     CrossThread.toggleAlternative _noise' _notify'
 
-                _turnAlternativeMode :: Bool -> IO ()
+                _turnAlternativeMode :: AlternativeModeState -> IO ()
                 _turnAlternativeMode to =
                   modifyMVar_ (State.stateMVar ctVars) $
                     flip (CrossThread.turnAlternativeMode _noise' _notify') to
 
                 altModeChange :: Maybe Bool -> IO ()
                 altModeChange Nothing  = _toggleAlternative
-                altModeChange (Just x) = _turnAlternativeMode x
+                altModeChange (Just x) = _turnAlternativeMode
+                                       $ x ? Just (def, True) $ Nothing
 
              in lift $ openIPC (displayString dpy) opts flush altModeChange
 
@@ -336,11 +340,26 @@ main = flip evalStateT ([] :: ThreadsState) $ do
                 handle $ Actions.XmobarXkbLayout
                        $ State.kbdLayout state
 
+              alternativeModeFlag a newModeState = do
+                let showPermament = "permanently" |?| "temporarily"
+
+                let showLevel FirstAlternativeModeLevel  = "1st level"
+                    showLevel SecondAlternativeModeLevel = "2nd level"
+
+                let showState = maybe "Off" $ \(level, isPermanent) ->
+                      [qms| On {showPermament isPermanent}
+                            on {showLevel level} |]
+
+                noise [qms| Setting xmobar Alternative Mode indicator state
+                            {showState newModeState}... |]
+
+                liftIO $ setIndicatorState ipc a
+
               handle a = case a of
                 Actions.XmobarFlushAll          -> flush
                 Actions.XmobarNumLockFlag     y -> flag a y "Num Lock"
                 Actions.XmobarCapsLockFlag    y -> flag a y "Caps Lock"
-                Actions.XmobarAlternativeFlag y -> flag a y "Alternative Mode"
+                Actions.XmobarAlternativeFlag y -> alternativeModeFlag a y
                 Actions.XmobarXkbLayout       y -> value a y "Keyboard layout"
 
            in handle x

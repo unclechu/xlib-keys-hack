@@ -1,8 +1,7 @@
 -- Author: Viacheslav Lotsmanov
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings, ScopedTypeVariables, NamedFieldPuns #-}
 
 module IPC
   ( IPCHandle
@@ -15,6 +14,8 @@ module IPC
 import "base" System.Exit (die)
 import "base" System.IO (stderr, hPutStrLn)
 
+import "base" Data.Word (Word8)
+import "base" Data.Maybe (fromMaybe)
 import "base" Data.List (intercalate)
 import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qmb)
 
@@ -55,6 +56,7 @@ import "dbus" DBus.Client ( Client
 -- local imports
 
 import Utils.Sugar ((?))
+import Types (AlternativeModeLevel (..))
 import qualified Options as O
 import Actions ( XmobarFlag ( XmobarNumLockFlag
                             , XmobarCapsLockFlag
@@ -64,31 +66,34 @@ import Actions ( XmobarFlag ( XmobarNumLockFlag
                             )
                )
 
+
 type Options = O.Options
 
 
 data XmobarIPC
-  = XmobarIPC
-  { xmobarObjectPath      :: ObjectPath
-  , xmobarBus             :: Maybe BusName
-  , xmobarInterface       :: InterfaceName
-  , xmobarFlushObjectPath :: ObjectPath
-  , xmobarFlushInterface  :: InterfaceName
-  , xmobarFlushSigHandler :: SignalHandler
-  }
+   = XmobarIPC
+   { xmobarObjectPath      :: ObjectPath
+   , xmobarBus             :: Maybe BusName
+   , xmobarInterface       :: InterfaceName
+   , xmobarFlushObjectPath :: ObjectPath
+   , xmobarFlushInterface  :: InterfaceName
+   , xmobarFlushSigHandler :: SignalHandler
+   }
 
 data ExternalCtrlIPC
-  = ExternalCtrlIPC
-  { externalCtrlObjectPath  :: ObjectPath
-  , externalCtrlBus         :: BusName
-  , externalCtrlInterface   :: InterfaceName
-  , externalCtrlSigHandlers :: [SignalHandler]
-  }
+   = ExternalCtrlIPC
+   { externalCtrlObjectPath  :: ObjectPath
+   , externalCtrlBus         :: BusName
+   , externalCtrlInterface   :: InterfaceName
+   , externalCtrlSigHandlers :: [SignalHandler]
+   }
 
-data IPCHandle = IPCHandle { dbusClient      :: Client
-                           , xmobarIPC       :: Maybe XmobarIPC
-                           , externalCtrlIPC :: Maybe ExternalCtrlIPC
-                           }
+data IPCHandle
+   = IPCHandle
+   { dbusClient      :: Client
+   , xmobarIPC       :: Maybe XmobarIPC
+   , externalCtrlIPC :: Maybe ExternalCtrlIPC
+   }
 
 
 openIPC :: String -> Options -> IO () -> (Maybe Bool -> IO ()) -> IO IPCHandle
@@ -201,32 +206,35 @@ closeIPC IPCHandle { dbusClient      = c
 
 
 setIndicatorState :: IPCHandle -> XmobarFlag -> IO ()
-setIndicatorState IPCHandle { dbusClient = c
-                            , xmobarIPC  = Just XmobarIPC
-                                { xmobarObjectPath = path
-                                , xmobarBus = bus
-                                , xmobarInterface = iface
-                                }
-                            }
-                  flag =
+setIndicatorState IPCHandle { dbusClient, xmobarIPC } flag = go where
+  go = pure () `fromMaybe` do
+    XmobarIPC { xmobarObjectPath, xmobarBus, xmobarInterface } <- xmobarIPC
+    (`fmap` notifications) $ mapM_ $ \(member, args) ->
+      emit dbusClient (signal xmobarObjectPath xmobarInterface member)
+                        { signalDestination = xmobarBus
+                        , signalBody        = args
+                        }
 
-  emit c (signal path iface member)
-           { signalDestination = bus
-           , signalBody        = [arg]
-           }
+  notifications = case flag of
+    XmobarNumLockFlag  x -> Just $ pure ("numlock",   [toVariant x])
+    XmobarCapsLockFlag x -> Just $ pure ("capslock",  [toVariant x])
+    XmobarXkbLayout    x -> Just $ pure ("xkblayout", [toVariant x])
 
-  where (member, arg) =
+    XmobarAlternativeFlag alternativeModeState ->
+      let
+        (isTurnedOn, level, isPermanent) = case alternativeModeState of
+          Nothing -> (False, minBound :: Word8, False)
+          Just (FirstAlternativeModeLevel,  x) -> (True, 1, x)
+          Just (SecondAlternativeModeLevel, x) -> (True, 2, x)
+      in
+        -- @"alternative"@ here is for backward compatibility.
+        -- @"alternative_level"@ already indicates alternative mode is turned
+        -- off if /level/ equals to @0@.
+        Just [ ("alternative",       [toVariant isTurnedOn])
+             , ("alternative_level", [toVariant level, toVariant isPermanent])
+             ]
 
-          case flag of
-
-               XmobarNumLockFlag     x -> ("numlock",     toVariant x)
-               XmobarCapsLockFlag    x -> ("capslock",    toVariant x)
-               XmobarAlternativeFlag x -> ("alternative", toVariant x)
-               XmobarXkbLayout       x -> ("xkblayout",   toVariant x)
-
-               XmobarFlushAll -> error "unexpected value"
-
-setIndicatorState _ _ = pure ()
+    XmobarFlushAll -> Nothing
 
 
 logView :: IPCHandle -> String

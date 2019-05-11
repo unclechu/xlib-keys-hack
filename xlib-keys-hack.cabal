@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: cda87e363ac484e2888f44e2f1e33e8ed4e9ca2fa667767b5c08ea9a14238362
+-- hash: 546b66b134b1e7c8fa548609d24221c796dd7890092e6703e8aa895939bac0fa
 
 name:                xlib-keys-hack
 version:             0.1.0
@@ -46,6 +46,7 @@ library
       Process.Keyboard.Types
       Process.KeysActions
       State
+      Types
       Utils
       Utils.Instances
       Utils.Lens

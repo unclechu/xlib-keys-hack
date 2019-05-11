@@ -22,6 +22,7 @@ import "lens" Control.Lens ( (.~), (%~), (^.), (&~), (.=), (%=)
                            , Lens'
                            )
 
+import "data-default" Data.Default (def)
 import "base" Data.Maybe (fromMaybe, fromJust, isJust, isNothing)
 import qualified "containers" Data.Set as Set
 import "containers" Data.Set (type Set, (\\))
@@ -33,7 +34,7 @@ import "X11" Graphics.X11.Types (type KeyCode)
 
 -- local imports
 
-import           Utils.Sugar ((&), (?), (<&>), unnoticed)
+import           Utils.Sugar ((&), (<&>), (?), (|?|), unnoticed)
 import           Utils.Lens ((%=<&~>))
 import           Options (type Options)
 import qualified Options as O
@@ -42,6 +43,7 @@ import           State (type State, CrossThreadVars)
 import qualified State
 import           Keys (type KeyMap, type KeyName)
 import qualified Keys
+import           Types (AlternativeModeLevel (..))
 import           Process.Keyboard.Types (HandledKey (HandledKey))
 
 import qualified Process.CrossThread as CrossThread
@@ -117,7 +119,7 @@ handleKeyEvent ctVars opts keyMap =
 
       -- When Alternative mode is on and current key has alternative map
       onAlternativeKey :: Bool
-      onAlternativeKey = State.alternative state && isJust alternative
+      onAlternativeKey = isJust (State.alternative state) && isJust alternative
 
       onAppleMediaPressed :: Bool
       onAppleMediaPressed = Keys.FNKey `Set.member` pressed && isMedia keyName
@@ -201,7 +203,7 @@ handleKeyEvent ctVars opts keyMap =
       onHoldAltForAlternativeMode :: Bool
       onHoldAltForAlternativeMode =
         O.alternativeModeWithAltMod opts &&
-        not (State.alternative state) &&
+        isNothing (State.alternative state) &&
         isNothing ( state ^. State.comboState'
                            . State.heldAltForAlternativeMode' ) &&
         isPressed && keyName `elem` [Keys.AltLeftKey, Keys.AltRightKey] &&
@@ -414,16 +416,37 @@ handleKeyEvent ctVars opts keyMap =
                    Keys.SuperRightKey -> O.rightSuperDoublePressCmd opts
                    _ -> error "unexpected value"
 
+        altModeOnLevel = def :: AlternativeModeLevel
+        altModeOnIsPermanent = True
+
         actionMsg :: String
-        actionMsg = isNothing cmd
+        actionMsg = go where
+          go
+            = isNothing cmd
+            ? [qm| toggling alternative mode (turning it {altModeAction}) |]
+            $ [qm| spawning shell command "{fromJust cmd}" |]
 
-                  ? [qms| toggling alternative mode (turning it
-                          {State.alternative state ? "off" $ "on"}) |]
+          showPermament = "permanently" |?| "temporarily"
 
-                  $ [qm| spawning shell command "{fromJust cmd}" |]
+          showLevel FirstAlternativeModeLevel  = "1st level"
+          showLevel SecondAlternativeModeLevel = "2nd level"
+
+          altModeAction :: String
+          altModeAction =
+            case State.alternative state of
+                 Nothing ->
+                   [qms| on {showPermament altModeOnIsPermanent}
+                         on {showLevel altModeOnLevel} |]
+                 Just (level, isPermanent) ->
+                   [qms| off from {showLevel level} which have been
+                         turned on {showPermament isPermanent} |]
 
         newState = state &~ do
-          when (isNothing cmd) $ State.alternative' %= not
+          when (isNothing cmd) $
+            State.alternative' %= \case
+              Nothing -> Just (altModeOnLevel, altModeOnIsPermanent)
+              Just _  -> Nothing
+
           State.comboState' . State.superDoublePress'          .= Nothing
           State.comboState' . State.superDoublePressProceeded' .= True
 
@@ -463,7 +486,8 @@ handleKeyEvent ctVars opts keyMap =
                 mode on until {maybeAsKeyStr superKey} will be released... |]
 
     maybeAsTrigger (maybeAsName superKey) superKeyCode False
-    notify $ Actions.XmobarAlternativeFlag True
+    let alternativeModeState = Just (def, False)
+    notify $ Actions.XmobarAlternativeFlag alternativeModeState
 
     reprocess $ state &~ do
 
@@ -471,7 +495,7 @@ handleKeyEvent ctVars opts keyMap =
         _2 .= State.WaitForSecondReleaseAfterAlternativeKeys
 
       State.comboState' . State.superDoublePressProceeded' .= True
-      State.alternative' .= True
+      State.alternative' .= alternativeModeState
 
   | onSuperDoubleReleasedAfterAlternative -> do
 
@@ -482,13 +506,13 @@ handleKeyEvent ctVars opts keyMap =
                 resetting state of this feature... |]
 
     alternativeMaybeAsTrigger' (Set.toList pressed) False
-    notify $ Actions.XmobarAlternativeFlag False
+    notify $ Actions.XmobarAlternativeFlag Nothing
 
     return $ state &~ do
       State.comboState' . State.superDoublePressProceeded' .= True
       State.comboState' . State.superDoublePress'          .= Nothing
       State.pressedKeys'                                   .= Set.empty
-      State.alternative'                                   .= False
+      State.alternative'                                   .= Nothing
 
   | onSuperDoubleElse -> do
 
@@ -582,7 +606,7 @@ handleKeyEvent ctVars opts keyMap =
                ? State.HeldLeftAltForAlternativeMode
                $ State.HeldRightAltForAlternativeMode
                )
-      & State.alternative' .~ True
+      & State.alternative' .~ Just (def, False)
       & unnoticed notifyAboutAlternative
 
   | onSpaceWithHoldedAltForAlternativeMode -> do
@@ -603,7 +627,7 @@ handleKeyEvent ctVars opts keyMap =
       -- Excluding Space and adding Alt
       & State.pressedKeys' .~ Set.insert altKeyName otherPressed
       & State.comboState' . State.heldAltForAlternativeMode' .~ Nothing
-      & State.alternative' .~ False
+      & State.alternative' .~ Nothing
       & unnoticed notifyAboutAlternative
 
   | onUnholdAltForAlternativeMode ->
@@ -625,7 +649,7 @@ handleKeyEvent ctVars opts keyMap =
                    state
                      & State.comboState' . State.heldAltForAlternativeMode'
                                          .~ Nothing
-                     & State.alternative' .~ False
+                     & State.alternative' .~ Nothing
                      & unnoticed notifyAboutAlternative
 
               else do
@@ -646,7 +670,7 @@ handleKeyEvent ctVars opts keyMap =
 
            state
              & State.comboState' . State.heldAltForAlternativeMode' .~ Nothing
-             & State.alternative' .~ False
+             & State.alternative' .~ Nothing
              & unnoticed notifyAboutAlternative
 
   -- Alternative mode on/off by Alts handling

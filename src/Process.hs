@@ -105,7 +105,7 @@ initReset opts ipcHandle keyMap dpy = do
     flip (maybe $ return ()) ipcHandle $ \ipc -> do
       setIndicatorState ipc $ Actions.XmobarNumLockFlag     False
       setIndicatorState ipc $ Actions.XmobarCapsLockFlag    False
-      setIndicatorState ipc $ Actions.XmobarAlternativeFlag False
+      setIndicatorState ipc $ Actions.XmobarAlternativeFlag Nothing
 
       xkbGetCurrentLayout dpy
         >>= setIndicatorState ipc . Actions.XmobarXkbLayout . fromIntegral
