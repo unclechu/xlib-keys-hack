@@ -343,23 +343,28 @@ alternativeModeRemaps =
   , (BackslashKey,    BackSpaceKey)
 
   -- Arrow keys
-  , (HKey,            ArrowLeftKey)
-  , (JKey,            ArrowDownKey)
-  , (KKey,            ArrowUpKey)
-  , (LKey,            ArrowRightKey)
+  , (JKey,            ArrowLeftKey)
+  , (KKey,            ArrowDownKey)
+  , (LKey,            ArrowUpKey)
+  , (SemicolonKey,    ArrowRightKey)
 
-  -- Delete backward/forward
-  , (SemicolonKey,    BackSpaceKey)
+  -- Delete backward (BS) and forward (Del)
+  , (HKey,            BackSpaceKey)
   , (ApostropheKey,   DeleteKey)
 
-  -- PgUp/Home/End/PgDown
-  , (MKey,            PageUpKey)
-  , (CommaKey,        HomeKey)
-  , (PeriodKey,       EndKey)
-  , (SlashKey,        PageDownKey)
+  -- Insert key
+  , (NKey,            InsertKey)
 
-  -- Insert and Menu keys (left hand)
-  , (GKey,            InsertKey)
+  -- Home, PgDown, PgUp, End
+  -- Symmetric to @jkl;@, just one row down:
+  --   Home/End    = Left/Right = j;
+  --   PgDown/PgUp = Down/Up    = kl
+  , (MKey,            HomeKey)
+  , (CommaKey,        PageDownKey)
+  , (PeriodKey,       PageUpKey)
+  , (SlashKey,        EndKey)
+
+  -- TODO move this key to second alternative mode level
   , (BKey,            RealMenuKey)
   ]
 
