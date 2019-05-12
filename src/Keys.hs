@@ -343,20 +343,20 @@ alternativeModeRemaps =
   , (BackslashKey,    BackSpaceKey)
 
   -- Arrow keys
-  , (JKey,            ArrowLeftKey)
-  , (KKey,            ArrowDownKey)
-  , (LKey,            ArrowUpKey)
-  , (SemicolonKey,    ArrowRightKey)
+  , (HKey,            ArrowLeftKey)
+  , (JKey,            ArrowDownKey)
+  , (KKey,            ArrowUpKey)
+  , (LKey,            ArrowRightKey)
 
   -- Delete backward (BS) and forward (Del)
-  , (HKey,            BackSpaceKey)
+  , (SemicolonKey,    BackSpaceKey)
   , (ApostropheKey,   DeleteKey)
 
   -- Insert key
   , (NKey,            InsertKey)
 
   -- Home, PgDown, PgUp, End
-  -- Symmetric to @jkl;@, just one row down:
+  -- Symmetric to @hjkl@:
   --   Home/End    = Left/Right = j;
   --   PgDown/PgUp = Down/Up    = kl
   , (MKey,            HomeKey)
