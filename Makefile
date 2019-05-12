@@ -30,7 +30,7 @@ test-command:
 		/dev/input/by-id/usb-Apple_Inc._Apple_Keyboard-event-if01 \
 		--disable-xinput-device-name='Apple Inc. Apple Keyboard' \
 		\
-		-v --shift-numeric-keys \
+		-v --shift-numeric-keys --shift-hjkl \
 		--right-super-double-press-cmd='place-cursor-at' \
 		--xmobar-indicators --software-debouncer=25 \
 		--hold-alt-for-alternative-mode --turn-off-fourth-row

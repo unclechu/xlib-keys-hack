@@ -4,7 +4,7 @@
 {-# LANGUAGE DeriveGeneric, DeriveAnyClass, TemplateHaskell, TupleSections #-}
 
 module Keys
-  ( KeyName(..)
+  ( KeyName (..)
   , KeyAlias
   , KeyMap
 
