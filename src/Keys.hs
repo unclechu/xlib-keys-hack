@@ -1,7 +1,7 @@
 -- Author: Viacheslav Lotsmanov
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
-{-# LANGUAGE DeriveGeneric, DeriveAnyClass, TemplateHaskell #-}
+{-# LANGUAGE DeriveGeneric, DeriveAnyClass, TemplateHaskell, TupleSections #-}
 
 module Keys
   ( KeyName(..)
@@ -30,11 +30,6 @@ import Prelude hiding (lookup)
 
 import "base" GHC.Generics (Generic)
 
-import "X11" Graphics.X11.Types (KeyCode)
-import "linux-evdev" System.Linux.Input.Event (Key (Key))
-
-import "deepseq" Control.DeepSeq (NFData)
-
 import "containers" Data.Map.Strict ( Map, (!), fromList, toList
                                     , lookup, empty, member, insert
                                     )
@@ -46,6 +41,14 @@ import "base" Data.Tuple (swap)
 import "base" Data.Maybe (fromMaybe, fromJust)
 import "base" Data.Monoid ((<>))
 import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
+
+import "lens" Control.Lens (view, _3)
+import "base" Control.Applicative ((<|>))
+import "deepseq" Control.DeepSeq (NFData)
+
+import "X11" Graphics.X11.Types (KeyCode)
+import "linux-evdev" System.Linux.Input.Event (Key (Key))
+
 
 -- local imports
 
@@ -212,12 +215,12 @@ defaultKeyAliases =
   , (FKey,            33,  41)
   , (GKey,            34,  42)
 
-  , (HKey,            35,  43)
-  , (JKey,            36,  44)
-  , (KKey,            37,  45)
-  , (LKey,            38,  46)
+  , (HKey,            35,  hKeyCode)
+  , (JKey,            36,  jKeyCode)
+  , (KKey,            37,  kKeyCode)
+  , (LKey,            38,  lKeyCode)
 
-  , (SemicolonKey,    39,  47)
+  , (SemicolonKey,    39,  semicolonKeyCode)
   , (ApostropheKey,   40,  48)
   , (EnterKey,        28,  36)
 
@@ -311,6 +314,17 @@ rightSuperKeyCode   = 134 ; rightSuperKeyCode   :: KeyCode
 {-# INLINE rightSuperKeyCode #-}
 escapeKeyCode       = 9   ; escapeKeyCode       :: KeyCode
 {-# INLINE escapeKeyCode #-}
+
+hKeyCode            = 43  ; hKeyCode            :: KeyCode
+{-# INLINE hKeyCode #-}
+jKeyCode            = 44  ; jKeyCode            :: KeyCode
+{-# INLINE jKeyCode #-}
+kKeyCode            = 45  ; kKeyCode            :: KeyCode
+{-# INLINE kKeyCode #-}
+lKeyCode            = 46  ; lKeyCode            :: KeyCode
+{-# INLINE lKeyCode #-}
+semicolonKeyCode    = 47  ; semicolonKeyCode    :: KeyCode
+{-# INLINE semicolonKeyCode #-}
 
 
 -- Real standard keys aliases to X key-codes to trigger them
@@ -473,6 +487,7 @@ getKeyMap opts mediaKeyAliases = go where
       & turnOffFourthRow `applyIf` O.turnOffFourthRow         opts
       & makeCapsLockReal `applyIf` O.realCapsLock             opts
       & shiftNumeric     `applyIf` O.shiftNumericKeys         opts
+      & shiftHJKL        `applyIf` O.shiftHJKL                opts
       & controlAsSuper   `applyIf` O.rightControlAsRightSuper opts
 
     resolveMediaKey (keyName, keyCode) =
@@ -488,7 +503,7 @@ getKeyMap opts mediaKeyAliases = go where
         (CapsLockKey, devNum, realMap ! RealCapsLockKey)
       f x = x
 
-    shiftNumeric aliases = fmap f aliases where
+    shiftNumeric aliases = f <$> aliases where
       f alias@(keyName, devNum, _)
         = maybe alias (resolve devNum)
         $ keyName `Map.lookup` numericShift
@@ -498,6 +513,14 @@ getKeyMap opts mediaKeyAliases = go where
         & fromJust
         & \(toName, _, toCode) -> (toName, devNum, toCode)
 
+    shiftHJKL aliases = f <$> aliases where
+      f (HKey,         devNum, _) = (HKey,         devNum, semicolonKeyCode)
+      f (JKey,         devNum, _) = (JKey,         devNum, hKeyCode)
+      f (KKey,         devNum, _) = (KKey,         devNum, jKeyCode)
+      f (LKey,         devNum, _) = (LKey,         devNum, kKeyCode)
+      f (SemicolonKey, devNum, _) = (SemicolonKey, devNum, lKeyCode)
+      f x = x
+
     controlAsSuper = fmap f where
       f (ControlRightKey, devNum, _) =
         (ControlRightKey, devNum, rightSuperKeyCode)
@@ -505,6 +528,8 @@ getKeyMap opts mediaKeyAliases = go where
 
   _asNamesMap = fromList _asNames :: Map KeyName KeyName
 
+  -- TODO FIXME Shifted numeric keys
+  -- TODO FIXME Shifted HJKL keys
   _asNames :: [(KeyName, KeyName)]
   _asNames
     = asNames
@@ -523,18 +548,29 @@ getKeyMap opts mediaKeyAliases = go where
   nameMap  = getByNameMap keyAliases :: Map KeyName KeyAlias
   realMap  = fromList realKeys       :: Map KeyName KeyCode
 
+  mapShiftedHJKL HKey         = JKey
+  mapShiftedHJKL JKey         = KKey
+  mapShiftedHJKL KKey         = LKey
+  mapShiftedHJKL LKey         = SemicolonKey
+  mapShiftedHJKL SemicolonKey = HKey
+  mapShiftedHJKL x            = x
+
   getAltMap
     :: [(KeyName, KeyName)]
     -> Map KeyName (KeyName, KeyCode)
     -> Map KeyName (KeyName, KeyCode)
 
   getAltMap [] altMap = altMap
-  getAltMap ((nameFrom, nameTo):xs) altMap
-    | nameTo `member` nameMap =
-      let (_, _, keyCode) = nameMap ! nameTo
-       in getAltMap xs $ insert nameFrom (nameTo, keyCode) altMap
-    | otherwise = getAltMap xs
-                $ insert nameFrom (nameTo, realMap ! nameTo) altMap
+  getAltMap (
+              ( mapShiftedHJKL `applyIf` O.shiftHJKL opts -> nameFrom
+              , nameTo
+              ) : xs
+            ) altMap = go' where
+
+    go'   = getAltMap xs $ maybe altMap f $ found <|> real
+    f     = flip (insert nameFrom) altMap . (nameTo,)
+    found = lookup nameTo nameMap <&> view _3
+    real  = lookup nameTo realMap
 
 
 getAliasByKey :: KeyMap -> Key -> Maybe KeyAlias

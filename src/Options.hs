@@ -46,6 +46,7 @@ data Options
    , realCapsLock                 :: Bool
    , additionalControls           :: Bool
    , shiftNumericKeys             :: Bool
+   , shiftHJKL                    :: Bool
    , rightControlAsRightSuper     :: Bool
 
    , alternativeModeWithAltMod    :: Bool
@@ -93,6 +94,7 @@ instance Default Options where
     , realCapsLock                 = False
     , additionalControls           = True
     , shiftNumericKeys             = False
+    , shiftHJKL                    = False
     , rightControlAsRightSuper     = False
 
     , alternativeModeWithAltMod    = False
@@ -175,6 +177,14 @@ options =
               and move 'minus' key to the left side at '1' key position.
             Could be more consistent for 10-fingers typing.
             Default is: {shiftNumericKeys def ? "On" $ "Off"}
+            |]
+  , GetOpt.Option  [ ]  ["shift-hjkl"]
+      (GetOpt.NoArg $ shiftHJKL' .~ True)
+      [qmb| Shift 'HJKL' keys one column right \
+              ('semicolon' key would be moved on original 'H' key position).
+            To place arrows keys (alternative mode, vim, tmux selection, etc.) \
+              under four fingers to provide more convenient experience.
+            Default is: {shiftHJKL def ? "On" $ "Off"}
             |]
   , GetOpt.Option  [ ]  ["right-control-as-super"]
       (GetOpt.NoArg $ rightControlAsRightSuper' .~ True)
