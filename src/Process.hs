@@ -1,8 +1,7 @@
 -- Author: Viacheslav Lotsmanov
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
-{-# LANGUAGE DoAndIfThenElse #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables, DataKinds, DoAndIfThenElse #-}
 
 module Process
   ( initReset
@@ -23,6 +22,17 @@ module Process
   , processKeyboardState
   ) where
 
+import "base" Data.Proxy (type Proxy)
+import "base" Data.Typeable (Typeable)
+import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms)
+
+import "base" Control.Monad (when, unless, forever)
+import "lens" Control.Lens ((.~), (^.), view)
+import "base" Control.Concurrent (threadDelay)
+import "base" Control.Concurrent.MVar (modifyMVar_)
+import "transformers" Control.Monad.Trans.State (execStateT)
+import "base" Control.Exception (Exception, throw, catch)
+
 import "base" System.IO ( BufferMode (NoBuffering)
                         , Handle
                         , hSetBinaryMode
@@ -41,19 +51,10 @@ import "process" System.Process ( CreateProcess (std_in, std_out, std_err)
                                 , getProcessExitCode
                                 )
 
-import "base" Control.Monad (when, unless, forever)
-import "lens" Control.Lens ((.~), (^.), view)
-import "base" Control.Concurrent (threadDelay)
-import "base" Control.Concurrent.MVar (modifyMVar_)
-import "transformers" Control.Monad.Trans.State (execStateT)
-import "base" Control.Exception (Exception, throw, catch)
-
-import "base" Data.Typeable (Typeable)
-import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms)
-
 import qualified "X11" Graphics.X11.Xlib.Event  as XEvent
 import qualified "X11" Graphics.X11.Xlib.Extras as XExtras
-import "X11" Graphics.X11.Xlib.Types (Display)
+import "X11" Graphics.X11.Types (type KeyCode)
+import "X11" Graphics.X11.Xlib.Types (type Display)
 
 -- local imports
 
@@ -71,7 +72,7 @@ import qualified Options as O
 import qualified Actions
 import           State (type State, type LedModes, type CrossThreadVars)
 import qualified State
-import           Keys (type KeyMap)
+import qualified Keys
 
 import           Process.Keyboard.Types (HandledKey)
 import           Process.Keyboard.HandlingKeyEventFlow (handleKeyEvent)
@@ -91,8 +92,15 @@ import qualified Process.CrossThread as CrossThread ( justTurnCapsLockMode
                                                     )
 
 
-initReset :: Options -> Maybe IPCHandle -> KeyMap -> Display -> IO ()
-initReset opts ipcHandle keyMap dpy = do
+initReset
+  :: Options
+  -> Maybe IPCHandle
+  -> (Proxy 'Keys.CapsLockKey, KeyCode)
+  -- ^ "KeyCode" of real Caps Lock key (it must be not remapped!)
+  -> Display
+  -> IO ()
+
+initReset opts ipcHandle capsLockKeyDef dpy = do
 
   noise "Initial resetting of keyboard layout..."
   initialResetKbdLayout dpy
@@ -112,7 +120,7 @@ initReset opts ipcHandle keyMap dpy = do
 
   where noise = O.noise opts
         justTurnCapsLockMode =
-          CrossThread.justTurnCapsLockMode dpy noise keyMap
+          CrossThread.justTurnCapsLockMode dpy noise capsLockKeyDef
 
         initialResetKbdLayout :: Display -> IO ()
         initialResetKbdLayout _dpy =

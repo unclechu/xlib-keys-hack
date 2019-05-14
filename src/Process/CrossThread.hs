@@ -1,11 +1,8 @@
 -- Author: Viacheslav Lotsmanov
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE NoMonomorphismRestriction #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoMonomorphismRestriction, RankNTypes, FlexibleContexts #-}
+{-# LANGUAGE DataKinds, MultiParamTypeClasses, TupleSections #-}
 
 module Process.CrossThread
   ( handleCapsLockModeChange
@@ -27,6 +24,7 @@ module Process.CrossThread
   , resetAll
   ) where
 
+import "base" Data.Proxy (Proxy (Proxy))
 import "data-default" Data.Default (def)
 import "base" Data.Maybe (isJust)
 import qualified "containers" Data.Set as Set (null)
@@ -41,7 +39,8 @@ import qualified "mtl" Control.Monad.State.Class as St
 import "base" Control.Monad.IO.Class (MonadIO (liftIO))
 import "lens" Control.Lens ((.~), (^.), view, set, Lens')
 
-import "X11" Graphics.X11.Xlib (Display)
+import "X11" Graphics.X11.Types (type KeyCode)
+import "X11" Graphics.X11.Xlib.Types (type Display)
 
 -- local imports
 
@@ -52,7 +51,6 @@ import           Options (type Options)
 import qualified Actions
 import           State (type State, type CrossThreadVars)
 import qualified State
-import           Keys (type KeyMap)
 import qualified Keys
 import           Types (type AlternativeModeState, AlternativeModeLevel (..))
 
@@ -127,7 +125,7 @@ handleCapsLockModeChange ctVars noise' state = go where
   delayedModeState = state ^. mcLens
   currentModeState = state ^. State.leds' . State.capsLockLed' :: Bool
 
-  keyName = Keys.RealCapsLockKey
+  keyName = Keys.CapsLockKey
 
   handler :: State -> IO State
   handler = (<$ maybe (pure ()) (Actions.turnCapsLock ctVars) delayedModeState)
@@ -230,7 +228,7 @@ toggleCapsLock ctVars noise' state = go where
 
   newModeState = not $ state ^. State.leds' . State.capsLockLed' :: Bool
 
-  keyName = Keys.RealCapsLockKey
+  keyName = Keys.CapsLockKey
 
   handler :: State -> IO State
   handler = (<$ Actions.turnCapsLock ctVars newModeState)
@@ -300,7 +298,7 @@ turnCapsLockMode ctVars noise' state newModeState = go where
   isNowOn = state ^. State.leds' . State.capsLockLed' :: Bool
   already = Just (isNowOn, [alreadyMsg]) :: Maybe (Bool, [String])
 
-  keyName = Keys.RealCapsLockKey
+  keyName = Keys.CapsLockKey
 
   handler :: State -> IO State
   handler = (<$ Actions.turnCapsLock ctVars newModeState)
@@ -430,15 +428,22 @@ resetAll _ ctVars noise' notify' = go where
 
 -- Turns Caps Lock mode on/off without checking pressed keys
 -- but checks for led state.
-justTurnCapsLockMode :: Display -> (String -> IO ()) -> KeyMap -> Bool -> IO ()
-justTurnCapsLockMode dpy noise keyMap isOn = go where
+justTurnCapsLockMode
+  :: Display
+  -> (String -> IO ())
+  -> (Proxy 'Keys.CapsLockKey, KeyCode)
+  -- ^ "KeyCode" of real Caps Lock key (it must be not remapped!)
+  -> Bool
+  -> IO ()
+
+justTurnCapsLockMode dpy noise (Proxy, capsLockKeyCode) isOn = go where
   go =
     (
       let
         logIt = noise [qms| Turning Caps Lock mode {onOrOff isOn}
-                            (by pressing and releasing {keyName})... |]
+                            (by pressing and releasing {Keys.CapsLockKey})... |]
 
-        f = fakeKeyCodeEvent dpy keyCode
+        f = fakeKeyCodeEvent dpy capsLockKeyCode
         toggle = f True >> f False
 
         -- Sometimes for some reason Caps Lock mode led returns True
@@ -456,9 +461,6 @@ justTurnCapsLockMode dpy noise keyMap isOn = go where
 
     noise [qms| Attempt to turn Caps Lock mode {onOrOff isOn},
                 it's already done, skipping... |]
-
-  keyName = Keys.RealCapsLockKey
-  Just !keyCode = Keys.getRealKeyCodeByName keyMap keyName
 
   orIfAlreadyOn :: IO () -> IO () -> IO ()
   a `orIfAlreadyOn` b = do

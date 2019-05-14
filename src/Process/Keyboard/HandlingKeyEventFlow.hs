@@ -94,7 +94,7 @@ handleKeyEvent ctVars opts keyMap =
 
       -- Alternative version of currently pressed or released key
       alternative :: Maybe (KeyName, KeyCode)
-      alternative = getAlternative keyName
+      alternative = getAlternativeRemapByName keyName
 
       onOnlyBothAltsPressed :: Bool
       onOnlyBothAltsPressed =
@@ -122,7 +122,7 @@ handleKeyEvent ctVars opts keyMap =
       onAlternativeKey = isJust (State.alternative state) && isJust alternative
 
       onAppleMediaPressed :: Bool
-      onAppleMediaPressed = Keys.FNKey `Set.member` pressed && isMedia keyName
+      onAppleMediaPressed = Set.member Keys.FNKey pressed && isMediaKey keyName
 
       onOnlyTwoControlsPressed :: Bool
       onOnlyTwoControlsPressed =
@@ -233,7 +233,7 @@ handleKeyEvent ctVars opts keyMap =
                )
 
              Just State.AltIsReleasedBeforeAlternativeKey ->
-               all (not . isAlternative) pressed
+               all (not . hasAlternativeRemap) pressed
 
       -- Super-Double-Press feature.
       -- 1st step: first press of Super key.
@@ -306,7 +306,7 @@ handleKeyEvent ctVars opts keyMap =
         Just True ==
           state ^. State.comboState' . State.superDoublePress' <&> \x ->
             x ^. _2 == State.WaitForSecondReleaseOrPressAlternativeKey &&
-            isAlternative keyName && isPressed &&
+            hasAlternativeRemap keyName && isPressed &&
 
             let superAndAlternative = [x ^. _1, keyName]
                 onlyModifiers = foldr Set.delete pressed superAndAlternative
@@ -342,12 +342,15 @@ handleKeyEvent ctVars opts keyMap =
             -- Alternative mode on while holding Super key.
             x ^. _2 == State.WaitForSecondReleaseAfterAlternativeKeys
 
-      -- | TODO Maybe replace @justTrigger@ with @justAsTrigger@
-      --        in @smartTrigger@? Otherwise explain why not in comment.
-      justTrigger, justAsTrigger, smartTrigger, alternativeTrigger :: IO ()
-      justTrigger   = trigger   keyName keyCode isPressed
-      justAsTrigger = asTrigger keyName keyCode isPressed
-      smartTrigger  = onAlternativeKey ? alternativeTrigger $ justTrigger
+      triggerCurrentKey, smartlyTriggerCurrentKey, alternativeTrigger :: IO ()
+
+      -- | Key could be remapped. It ignores alternative mode remapping.
+      triggerCurrentKey = trigger keyName keyCode isPressed
+
+      -- | Key could be remapped. If alternative mode is on and a key has
+      --   alternative mode remap it triggers that alternative version.
+      smartlyTriggerCurrentKey =
+        onAlternativeKey ? alternativeTrigger $ triggerCurrentKey
 
       alternativeTrigger = do
 
@@ -485,7 +488,7 @@ handleKeyEvent ctVars opts keyMap =
                 triggering {maybeAsKeyStr superKey} off and enabling alternative
                 mode on until {maybeAsKeyStr superKey} will be released... |]
 
-    maybeAsTrigger (maybeAsName superKey) superKeyCode False
+    trigger superKey superKeyCode False
     let alternativeModeState = Just (def, False)
     notify $ Actions.XmobarAlternativeFlag alternativeModeState
 
@@ -505,7 +508,7 @@ handleKeyEvent ctVars opts keyMap =
                 turning alternative mode off and
                 resetting state of this feature... |]
 
-    alternativeMaybeAsTrigger' (Set.toList pressed) False
+    alternativeMultipleTrigger (Set.toList pressed) False
     notify $ Actions.XmobarAlternativeFlag Nothing
 
     return $ state &~ do
@@ -550,8 +553,8 @@ handleKeyEvent ctVars opts keyMap =
              let enterKeyCode = fromJust $ getKeyCodeByName Keys.EnterKey
 
                  -- Handle it recursively again (without flag in state)
-                 -- to press modifier befure triggering Enter.
-              in pressRelease Keys.EnterKey enterKeyCode
+                 -- to press modifier before triggering Enter.
+              in triggerPressRelease Keys.EnterKey enterKeyCode
 
              -- Triggering releasing of modifier
              -- and flush modifiers for enter list in state.
@@ -621,7 +624,7 @@ handleKeyEvent ctVars opts keyMap =
                _                                            -> Keys.AltRightKey
 
     getKeyCodeByName altKeyName
-      & pure () `maybe` \x -> maybeAsTrigger altKeyName x True
+      & pure () `maybe` \x -> trigger altKeyName x True
 
     state
       -- Excluding Space and adding Alt
@@ -666,7 +669,7 @@ handleKeyEvent ctVars opts keyMap =
                        turning alternative mode off, now turning alternative
                        mode off... |]
 
-           smartTrigger
+           smartlyTriggerCurrentKey
 
            state
              & State.comboState' . State.heldAltForAlternativeMode' .~ Nothing
@@ -714,14 +717,14 @@ handleKeyEvent ctVars opts keyMap =
 
     -- As `InsertKey` (because no media pressed)
     | otherwise -> do
-      asPressRelease keyName keyCode
+      triggerPressRelease keyName keyCode
       return state
 
   -- When held `FNKey` on apple keyboard and press some media key
   | onAppleMediaPressed -> do
     noise [qms| Apple media key pressed, preventing triggering
                 {Keys.FNKey} as {Keys.InsertKey}... |]
-    smartTrigger
+    smartlyTriggerCurrentKey
     return $ state & State.comboState' . State.appleMediaPressed' .~ True
 
   | onOnlyTwoControlsPressed -> do
@@ -761,7 +764,7 @@ handleKeyEvent ctVars opts keyMap =
            else do noise [qms| {keyName} released and had pressed before
                                only with modifiers, triggering it as
                                {Set.toList mods} + {keyName}... |]
-                   set lens Nothing state <$ pressRelease keyName keyCode
+                   set lens Nothing state <$ triggerPressRelease keyName keyCode
 
   -- Handling of additional controls by `CapsLockKey` and `EnterKey`.
   -- They can't be pressed both in the same time here, it handled above.
@@ -777,13 +780,13 @@ handleKeyEvent ctVars opts keyMap =
                  ( State.comboState' . State.isCapsLockUsedWithCombos'
                  , State.comboState' . State.keysPressedBeforeCapsLock'
                  , Keys.ControlLeftKey
-                 , getKeyCodeByName Keys.ControlLeftKey
+                 , getDefaultKeyCodeByName Keys.ControlLeftKey
                  )
                Keys.EnterKey ->
                  ( State.comboState' . State.isEnterUsedWithCombos'
                  , State.comboState' . State.keysPressedBeforeEnter'
                  , Keys.ControlRightKey
-                 , getRealKeyCodeByName Keys.RealControlRightKey
+                 , getDefaultKeyCodeByName Keys.ControlRightKey
                  )
                _ -> error [qms| Got unexpected key, it supposed to be only
                                 {Keys.CapsLockKey} or {Keys.EnterKey} |]
@@ -823,16 +826,12 @@ handleKeyEvent ctVars opts keyMap =
         | otherwise ->
           case keyName of
                Keys.CapsLockKey -> do
-
-                 ( if O.realCapsLock opts
-                      then pressRelease
-                      else asPressRelease ) keyName keyCode
-
+                 triggerPressRelease keyName keyCode
                  if O.resetByEscapeOnCapsLock opts
                     then execStateT (runExceptT resetAll) state
                     else return state
 
-               Keys.EnterKey -> state <$ pressRelease keyName keyCode
+               Keys.EnterKey -> state <$ triggerPressRelease keyName keyCode
                _ -> return state
 
   -- When either `CapsLockKey` or `EnterKey` pressed with combo.
@@ -849,14 +848,14 @@ handleKeyEvent ctVars opts keyMap =
              , State.comboState' . State.isCapsLockUsedWithCombos'
              , State.comboState' . State.keysPressedBeforeCapsLock'
              , Keys.ControlLeftKey
-             , getKeyCodeByName Keys.ControlLeftKey
+             , getDefaultKeyCodeByName Keys.ControlLeftKey
              )
            | Keys.EnterKey `Set.member` pressed =
              ( Keys.EnterKey
              , State.comboState' . State.isEnterUsedWithCombos'
              , State.comboState' . State.keysPressedBeforeEnter'
              , Keys.ControlRightKey
-             , getRealKeyCodeByName Keys.RealControlRightKey
+             , getDefaultKeyCodeByName Keys.ControlRightKey
              )
            | otherwise =
              error [qms| Got unexpected key, it supposed to be only
@@ -876,10 +875,11 @@ handleKeyEvent ctVars opts keyMap =
         -- additional control, so we just remove this key from
         -- list of keys that pressed before additional control.
         | not isPressed && (keyName `Set.member` pressedBeforeList) ->
-          (state & pressedBeforeLens %~ Set.delete keyName) <$ smartTrigger
+          let newState = state & pressedBeforeLens %~ Set.delete keyName
+           in newState <$ smartlyTriggerCurrentKey
 
         -- When pressing of Control already triggered
-        | state ^. withCombosFlagLens -> state <$ smartTrigger
+        | state ^. withCombosFlagLens -> state <$ smartlyTriggerCurrentKey
 
         -- `CapsLockKey` or `EnterKey` pressed with combo,
         -- it means it should be interpreted as Control key.
@@ -888,7 +888,7 @@ handleKeyEvent ctVars opts keyMap =
                       triggering {controlKeyName}
                       (X key code: {controlKeyCode})... |]
           pressKey controlKeyCode -- Press Control before current key
-          smartTrigger
+          smartlyTriggerCurrentKey
           return $ state & withCombosFlagLens .~ True
 
   -- When Caps Lock remapped as Escape key.
@@ -896,11 +896,11 @@ handleKeyEvent ctVars opts keyMap =
   -- and specific logging (noticing about remapping).
   | keyName == Keys.CapsLockKey && not (O.realCapsLock opts) ->
     if O.resetByEscapeOnCapsLock opts && not isPressed
-       then justAsTrigger >> execStateT (runExceptT resetAll) state
-       else state <$ justAsTrigger
+       then triggerCurrentKey >> execStateT (runExceptT resetAll) state
+       else state <$ triggerCurrentKey
 
   -- Usual key handling
-  | otherwise -> state <$ smartTrigger
+  | otherwise -> state <$ smartlyTriggerCurrentKey
 
   where
 
@@ -918,19 +918,18 @@ handleKeyEvent ctVars opts keyMap =
   getKeyCodeByName :: KeyName -> Maybe KeyCode
   getKeyCodeByName = Keys.getKeyCodeByName keyMap
 
-  getRealKeyCodeByName :: KeyName -> Maybe KeyCode
-  getRealKeyCodeByName = Keys.getRealKeyCodeByName keyMap
+  getDefaultKeyCodeByName :: KeyName -> Maybe KeyCode
+  getDefaultKeyCodeByName = Keys.getDefaultKeyCodeByName keyMap
 
-  isAlternative = Keys.isAlternative keyMap :: KeyName -> Bool
-  getAlternative :: KeyName -> Maybe (KeyName, KeyCode)
-  getAlternative = Keys.getAlternative keyMap
+  hasAlternativeRemap = Keys.hasAlternativeRemap keyMap :: KeyName -> Bool
+  getAlternativeRemapByName :: KeyName -> Maybe (KeyName, KeyCode)
+  getAlternativeRemapByName = Keys.getAlternativeRemapByName keyMap
 
-  isMedia  = Keys.isMedia keyMap  :: KeyName -> Bool
-  getMedia = Keys.getMedia keyMap :: KeyName -> Maybe KeyCode
+  isMediaKey      = Keys.isMediaKey      keyMap :: KeyName -> Bool
+  getMediaKeyCode = Keys.getMediaKeyCode keyMap :: KeyName -> Maybe KeyCode
 
-  getAsName    = Keys.getAsName    keyMap :: KeyName -> KeyName
-  maybeAsName  = Keys.maybeAsName  keyMap :: KeyName -> KeyName
-  getExtraKeys = Keys.getExtraKeys keyMap :: KeyName -> Set KeyName
+  getRemapByName = Keys.getRemapByName keyMap :: KeyName -> Maybe KeyName
+  getExtraKeys   = Keys.getExtraKeys   keyMap :: KeyName -> Set KeyName
 
   toggleCapsLock :: State -> IO State
   toggleCapsLock = CrossThread.toggleCapsLock ctVars noise'
@@ -954,6 +953,10 @@ handleKeyEvent ctVars opts keyMap =
 
   resetAll :: ExceptT () (StateT State IO) ()
   resetAll = CrossThread.resetAll opts ctVars noise' notify'
+
+  -- | Either returns key provided key remapped to or original provided key
+  maybeAsName :: KeyName -> KeyName
+  maybeAsName keyName = fromMaybe keyName $ getRemapByName keyName
 
   -- Wait and extract event, make preparations and call handler
   onEv
@@ -1050,8 +1053,8 @@ handleKeyEvent ctVars opts keyMap =
   --   (\keyName -> [qms| Releasing alternative {keyName}
   --                      during turning alternative mode off... |])
   --
-  --   isAlternative
-  --   (getAlternative .> fmap snd)
+  --   hasAlternativeRemap
+  --   (getAlternativeRemapByName .> fmap snd)
 
   -- Release apple media keys.
   -- Useful when user released `FNKey` erlier than media key.
@@ -1064,73 +1067,59 @@ handleKeyEvent ctVars opts keyMap =
     (\keyName -> [qms| Releasing held media {keyName} of apple keyboard
                        after {Keys.FNKey} released... |])
 
-    isMedia
-    getMedia
+    isMediaKey
+    getMediaKeyCode
 
-  -- Simple triggering key user pressed to X server
+  -- | Triggering of a key user pressed to X server.
+  --
+  -- It supports optionally remapped key.
   trigger :: KeyName -> KeyCode -> Bool -> IO ()
   trigger keyName keyCode isPressed = do
 
-    noise [qms| Triggering {isPressed ? "pressing" $ "releasing"}
-                of {keyName} (X key code: {keyCode})... |]
-
-    (isPressed ? pressKey $ releaseKey) keyCode
-
-  -- Trigger remapped key.
-  -- Difference between `trigger` is that this one
-  -- shows in log which key this key remapped to.
-  asTrigger :: KeyName -> KeyCode -> Bool -> IO ()
-  asTrigger keyName keyCode isPressed = do
+    let asKeyName = getRemapByName keyName
 
     noise [qms| Triggering {isPressed ? "pressing" $ "releasing"}
-                of {keyName} as {getAsName keyName}
+                of {keyName} {maybe mempty (("as " <>) . show) asKeyName}
                 (X key code: {keyCode})... |]
 
     (isPressed ? pressKey $ releaseKey) keyCode
 
-  maybeAsTrigger :: KeyName -> KeyCode -> Bool -> IO ()
-  maybeAsTrigger keyName =
-    let k = maybeAsName keyName
-     in k == keyName ? trigger keyName $ asTrigger keyName
-
-  -- Multiple version of `maybeAsTrigger` that supports alternative keys.
+  -- | Multiple version of "trigger" that supports alternative keys.
+  --
   -- Alternative mode supposed to be enabled when calling this monad.
-  alternativeMaybeAsTrigger' :: [KeyName] -> Bool -> IO ()
-  alternativeMaybeAsTrigger' keyNames isPressed = do
+  alternativeMultipleTrigger :: [KeyName] -> Bool -> IO ()
+  alternativeMultipleTrigger keyNames isPressed = do
 
     let keys :: [(KeyName, KeyName, KeyCode)]
         keys = flip map keyNames $ \k ->
-
-            let mappedAlternative = getAlternative k
-                nonAlternative = (maybeAsName k, fromJust $ getKeyCodeByName k)
-                (asKeyName, code) = fromMaybe nonAlternative mappedAlternative
-
-             in (k, asKeyName, code)
+          let
+            mappedAlternative = getAlternativeRemapByName k
+            nonAlternative = (maybeAsName k, fromJust $ getKeyCodeByName k)
+            (asKeyName, code) = fromMaybe nonAlternative mappedAlternative
+          in
+            (k, asKeyName, code)
 
     noise' $ flip map keys $ \(keyName, asKeyName, code) ->
-      let alternativeStr = isAlternative keyName ? "alternative " $ ""
-       in [qms| Triggering {isPressed ? "pressing" $ "releasing"}
-                of {alternativeStr}{asKeyStr keyName asKeyName}
-                (X key code: {code})... |]
+      let
+        alternativeStr = hasAlternativeRemap keyName ? "alternative " $ mempty
+        asKeyStr | keyName == asKeyName = show keyName
+                 | otherwise            = [qm| {keyName} (as {asKeyName}) |]
+      in
+        [qms| Triggering {isPressed ? "pressing" $ "releasing"}
+              of {alternativeStr}{asKeyStr} (X key code: {code})... |]
 
-    (isPressed ? pressKeys $ releaseKeys) $ map (\(_, _, x) -> x) keys
+    (isPressed ? pressKeys $ releaseKeys) $ view _3 <$> keys
 
-  -- Triggering both press and release events to X server
-  pressRelease :: KeyName -> KeyCode -> IO ()
-  pressRelease keyName keyCode = do
+  -- | Triggering both press and release events to X server
+  --
+  -- It supports optionally remapped key.
+  triggerPressRelease :: KeyName -> KeyCode -> IO ()
+  triggerPressRelease keyName keyCode = do
 
-    noise [qms| Triggering pressing and releasing of {keyName}
-                (X key code: {keyCode})... |]
+    let asKeyName = getRemapByName keyName
 
-    pressReleaseKey keyCode
-
-  -- Triggering both press and release events to X server.
-  -- Also write to log about to which key this key remapped.
-  asPressRelease :: KeyName -> KeyCode -> IO ()
-  asPressRelease keyName keyCode = do
-
-    noise [qms| Triggering pressing and releasing
-                of {keyName} as {getAsName keyName}
+    noise [qms| Triggering pressing and releasing of {keyName}\
+                {maybe mempty ((" as " <>) . show) asKeyName}
                 (X key code: {keyCode})... |]
 
     pressReleaseKey keyCode
@@ -1164,10 +1153,6 @@ handleKeyEvent ctVars opts keyMap =
           remappedMods = Set.foldr (Set.union . getExtraKeys) Set.empty mods
 
   maybeAsKeyStr :: KeyName -> String
-  maybeAsKeyStr k | k == maybeAsName k = show k
-                  | otherwise          = [qm| {k} (as {maybeAsName k}) |]
-
-  asKeyStr :: KeyName -> KeyName -> String
-  asKeyStr keyName asKeyName
-    | keyName == asKeyName = show keyName
-    | otherwise            = [qm| {keyName} (as {asKeyName}) |]
+  maybeAsKeyStr keyName
+    = getRemapByName keyName
+    & show keyName `maybe` \asKeyName -> [qm| {keyName} (as {asKeyName}) |]

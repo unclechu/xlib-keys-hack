@@ -46,7 +46,7 @@ data Options
    , realCapsLock                 :: Bool
    , additionalControls           :: Bool
    , shiftNumericKeys             :: Bool
-   , shiftHJKL                    :: Bool
+   , shiftHJKLKeys                :: Bool
    , rightControlAsRightSuper     :: Bool
 
    , alternativeModeWithAltMod    :: Bool
@@ -94,7 +94,7 @@ instance Default Options where
     , realCapsLock                 = False
     , additionalControls           = True
     , shiftNumericKeys             = False
-    , shiftHJKL                    = False
+    , shiftHJKLKeys                = False
     , rightControlAsRightSuper     = False
 
     , alternativeModeWithAltMod    = False
@@ -179,12 +179,12 @@ options =
             Default is: {shiftNumericKeys def ? "On" $ "Off"}
             |]
   , GetOpt.Option  [ ]  ["shift-hjkl"]
-      (GetOpt.NoArg $ shiftHJKL' .~ True)
+      (GetOpt.NoArg $ shiftHJKLKeys' .~ True)
       [qmb| Shift 'HJKL' keys one column right \
               ('semicolon' key would be moved on original 'H' key position).
             To place arrows keys (alternative mode, vim, tmux selection, etc.) \
               under four fingers to provide more convenient experience.
-            Default is: {shiftHJKL def ? "On" $ "Off"}
+            Default is: {shiftHJKLKeys def ? "On" $ "Off"}
             |]
   , GetOpt.Option  [ ]  ["right-control-as-super"]
       (GetOpt.NoArg $ rightControlAsRightSuper' .~ True)

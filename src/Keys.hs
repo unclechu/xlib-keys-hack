@@ -1,53 +1,53 @@
 -- Author: Viacheslav Lotsmanov
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
-{-# LANGUAGE DeriveGeneric, DeriveAnyClass, TemplateHaskell, TupleSections #-}
+{-# LANGUAGE DeriveGeneric, DeriveAnyClass, OverloadedLists #-}
+{-# LANGUAGE TemplateHaskell, TupleSections, FlexibleContexts #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Keys
-  ( KeyName (..)
-  , KeyAlias
-  , KeyMap
+     ( KeyName (..)
+     , KeyMap
 
-  , getKeyMap
-  , getAliasByKey
-  , getKeyCodeByName
-  , getRealKeyCodeByName
+     , getKeyMap
+     , getAliasByKeyDevNum
+     , getKeyCodeByName
+     , getDefaultKeyCodeByName
 
-  , getAlternative
-  , isAlternative
+     , getAlternativeRemapByName
+     , hasAlternativeRemap
 
-  , getMedia
-  , isMedia
+     , getMediaKeyCode
+     , isMediaKey
 
-  , getAsName
-  , lookupAsName
-  , maybeAsName
-  , getRemappedByName
-  , getExtraKeys
-  ) where
+     , getRemapByName
+     , getRemappedByName
+     , getExtraKeys
+     ) where
 
 import Prelude hiding (lookup)
 
 import "base" GHC.Generics (Generic)
 
-import "containers" Data.Map.Strict ( Map, (!), fromList, toList
-                                    , lookup, empty, member, insert
-                                    )
+import "containers" Data.Set (type Set)
+import "containers" Data.Map.Strict (type Map, lookup, member, insert, delete)
 import qualified "containers" Data.Map.Strict as Map
 import qualified "containers" Data.Set as Set
 import "base" Data.List (find)
 import "base" Data.Word (Word16)
 import "base" Data.Tuple (swap)
-import "base" Data.Maybe (fromMaybe, fromJust)
-import "base" Data.Monoid ((<>))
-import "qm-interpolated-string" Text.InterpolatedString.QM (qm)
+import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms)
 
-import "lens" Control.Lens (view, _3)
-import "base" Control.Applicative ((<|>))
+import "base" Control.Arrow ((&&&))
+import "lens" Control.Lens ((&~), (.=), view, use, set, _1, _2, _3)
+import "base" Control.Applicative ((<**>))
+import "base" Control.Monad (join)
+import "extra" Control.Monad.Extra (whenM)
+import "mtl" Control.Monad.Except (MonadError (throwError))
 import "deepseq" Control.DeepSeq (NFData)
+import "type-operators" Control.Type.Operator (type ($))
 
 import "X11" Graphics.X11.Types (KeyCode)
-import "linux-evdev" System.Linux.Input.Event (Key (Key))
 
 
 -- local imports
@@ -106,10 +106,6 @@ data KeyName
    | KPNumber1Key | KPNumber2Key | KPNumber3Key | KPEnterKey
    | KPNumber0Key | KPDecimalKey
 
-   -- Real original pseudo-keys
-
-   | RealMenuKey | RealCapsLockKey | RealControlRightKey
-
    -- Media keys
 
    | MCalculatorKey | MEjectKey
@@ -120,16 +116,20 @@ data KeyName
      deriving (Eq, Show, Ord, Generic, NFData)
 
 
--- | Use @0@ (@minBound@) for @Word16@ (second tuple item) as a plug
+-- | Use @0@ ("minBound") for "Word16" (second tuple item) as a plug
 --   (to turn key off on a keyboard).
+--
+-- But override it to "minBound" only inside "getKeyMap".
 type KeyAlias = (KeyName, Word16, KeyCode)
 
--- Mappings between keys names and device key codes
--- and X key codes to trigger them.
--- Also with custom remaps for specific keys.
-defaultKeyAliases :: [KeyAlias]
+-- | Mappings between keys names and device key codes
+--   and X key codes to trigger them.
+--
+-- This mapping supposed to be as standard as possible, without any remaps,
+-- it will be taken as a source of original key codes for actual remaps.
+defaultKeyAliases :: Set KeyAlias
 defaultKeyAliases =
-  [ (EscapeKey,       1,   escapeKeyCode)
+  [ (EscapeKey,       1,   9)
 
   , (F1Key,           59,  67)
   , (F2Key,           60,  68)
@@ -207,7 +207,7 @@ defaultKeyAliases =
 
   -- ASDF line
 
-  , (CapsLockKey,     58,  escapeKeyCode) -- Remapped (see `realKeys`)
+  , (CapsLockKey,     58,  66)
 
   , (AKey,            30,  38)
   , (SKey,            31,  39)
@@ -215,12 +215,12 @@ defaultKeyAliases =
   , (FKey,            33,  41)
   , (GKey,            34,  42)
 
-  , (HKey,            35,  hKeyCode)
-  , (JKey,            36,  jKeyCode)
-  , (KKey,            37,  kKeyCode)
-  , (LKey,            38,  lKeyCode)
+  , (HKey,            35,  43)
+  , (JKey,            36,  44)
+  , (KKey,            37,  45)
+  , (LKey,            38,  46)
 
-  , (SemicolonKey,    39,  semicolonKeyCode)
+  , (SemicolonKey,    39,  47)
   , (ApostropheKey,   40,  48)
   , (EnterKey,        28,  36)
 
@@ -229,9 +229,9 @@ defaultKeyAliases =
 
   , (ShiftLeftKey,    42,  50)
 
-  -- Near left shift.
-  -- It's 94 but let's remap it as Left Shift.
-  , (LessKey,         86,  50)
+  -- An additional key on some keyboards between "Left Shift" and "Z".
+  -- Could be found on Russian version of Apple Magic Keyboard.
+  , (LessKey,         86,  94)
 
   , (ZKey,            44,  52)
   , (XKey,            45,  53)
@@ -256,16 +256,16 @@ defaultKeyAliases =
   , (SpaceKey,        57,  65)
 
   , (AltRightKey,     100, 108)
-  , (SuperRightKey,   126, rightSuperKeyCode)
-  , (MenuKey,         127, rightSuperKeyCode) -- Remapped (see `realKeys`)
-  , (ControlRightKey, 97,  rightControlKeyCode)
+  , (SuperRightKey,   126, 134)
+  , (MenuKey,         127, 135)
+  , (ControlRightKey, 97,  105)
 
 
   -- Right block
 
-  -- On apple keyboard (no X num, remap as Insert).
+  -- On apple keyboard (no X num).
   -- Also it will be handled as Fn when is used with media keys.
-  , (FNKey,           464, 118)
+  , (FNKey,           464, minBound)
 
   , (InsertKey,       110, 118)
   , (HomeKey,         102, 110)
@@ -308,37 +308,22 @@ defaultKeyAliases =
   ]
 
 
-rightControlKeyCode = 105 ; rightControlKeyCode :: KeyCode
-{-# INLINE rightControlKeyCode #-}
-rightSuperKeyCode   = 134 ; rightSuperKeyCode   :: KeyCode
-{-# INLINE rightSuperKeyCode #-}
-escapeKeyCode       = 9   ; escapeKeyCode       :: KeyCode
-{-# INLINE escapeKeyCode #-}
-
-hKeyCode            = 43  ; hKeyCode            :: KeyCode
-{-# INLINE hKeyCode #-}
-jKeyCode            = 44  ; jKeyCode            :: KeyCode
-{-# INLINE jKeyCode #-}
-kKeyCode            = 45  ; kKeyCode            :: KeyCode
-{-# INLINE kKeyCode #-}
-lKeyCode            = 46  ; lKeyCode            :: KeyCode
-{-# INLINE lKeyCode #-}
-semicolonKeyCode    = 47  ; semicolonKeyCode    :: KeyCode
-{-# INLINE semicolonKeyCode #-}
-
-
--- Real standard keys aliases to X key-codes to trigger them
--- if they were remapped to another keys.
-realKeys :: [(KeyName, KeyCode)]
-realKeys =
-  [ (RealMenuKey,         135)
-  , (RealCapsLockKey,     66)
-  , (RealControlRightKey, rightControlKeyCode)
+-- | A map of keys which supposed to act like another keys.
+--
+-- It could be extended in "getKeyMap" depending on provided "O.Options".
+--
+-- To remap a key you replace "KeyCode" in original mapping inside "getKeyMap".
+basicKeyRemapping :: Map KeyName KeyName
+basicKeyRemapping =
+  [ (FNKey,       InsertKey)
+  , (CapsLockKey, EscapeKey)
+  , (LessKey,     ShiftLeftKey)
+  , (MenuKey,     SuperRightKey)
   ]
 
 
--- Remapping for keys when Alternative mode is turned on
-alternativeModeRemaps :: [(KeyName, KeyName)]
+-- | Remapping for keys when Alternative mode is turned on
+alternativeModeRemaps :: Map KeyName KeyName
 alternativeModeRemaps =
   -- 4th row shifted down to 3rd
   [ (TabKey,          GraveKey)
@@ -379,12 +364,12 @@ alternativeModeRemaps =
   , (SlashKey,        EndKey)
 
   -- TODO move this key to second alternative mode level
-  , (BKey,            RealMenuKey)
+  , (BKey,            MenuKey)
   ]
 
 
--- Aliases for media keys
-mediaDevNums :: [(KeyName, Word16)]
+-- | Device key numbers aliases for media keys
+mediaDevNums :: Map KeyName Word16
 mediaDevNums =
   [ (MCalculatorKey,        140)
   , (MEjectKey,             161)
@@ -403,23 +388,8 @@ mediaDevNums =
   ]
 
 
--- Aliases that indicates that specific key remapped to another.
--- If you want for example get all Shift keys you must also check this mapping
--- for alias, because for example `LessKey` is remapped to `ShiftLeftKey`,
--- to `LessKey` is Shift key too.
--- TODO Rename it since it's not just about "names"
---      but also marks remapped keys.
-asNames :: [(KeyName, KeyName)]
-asNames =
-  [ (FNKey,       InsertKey)
-  , (CapsLockKey, EscapeKey)
-  , (LessKey,     ShiftLeftKey)
-  , (MenuKey,     SuperRightKey)
-  ]
-
-
-numericShift :: Map.Map KeyName KeyName
-numericShift = Map.fromList
+numericShift :: Map KeyName KeyName
+numericShift =
   [ (Number1Key, MinusKey)
   , (Number2Key, Number1Key)
   , (Number3Key, Number2Key)
@@ -434,6 +404,16 @@ numericShift = Map.fromList
   ]
 
 
+hjklShift :: Map KeyName KeyName
+hjklShift =
+  [ (HKey,         SemicolonKey)
+  , (JKey,         HKey)
+  , (KKey,         JKey)
+  , (LKey,         KKey)
+  , (SemicolonKey, LKey)
+  ]
+
+
 fourhRow :: [KeyName]
 fourhRow =
   [ GraveKey
@@ -443,193 +423,223 @@ fourhRow =
   ]
 
 
--- Returns Map of aliases list using key name as a Map key
-getByNameMap :: [KeyAlias] -> Map KeyName KeyAlias
-getByNameMap keyMap = fromList $ fmap f keyMap where
+-- | Returns "Map" of aliases list using key name as a "Map" key
+getByNameMap :: Set KeyAlias -> Map KeyName KeyAlias
+getByNameMap = Map.fromList . Set.toList . Set.map f where
   f (name, devNum, xNum) = (name, (name, devNum, xNum))
 
--- Returns Map of aliases list using device key code as a Map key
-getByDevNumMap :: [KeyAlias] -> Map Word16 KeyAlias
-getByDevNumMap keyMap = fromList $ fmap f keyMap where
+-- | Returns "Map" of aliases list using device key code as a "Map" key
+getByDevNumMap :: Set KeyAlias -> Map Word16 KeyAlias
+getByDevNumMap = Map.fromList . Set.toList . Set.map f where
   f (name, devNum, xNum) = (devNum, (name, devNum, xNum))
 
 
 data KeyMap
    = KeyMap
-   { byNameMap            :: Map KeyName KeyAlias
+   { byNameDefaultKeyCode :: Map KeyName KeyCode
+   , byNameMap            :: Map KeyName KeyAlias
    , byDevNumMap          :: Map Word16  KeyAlias
    , byNameAlternativeMap :: Map KeyName (KeyName, KeyCode)
    , byNameMediaMap       :: Map KeyName KeyCode
-   , byNameRealMap        :: Map KeyName KeyCode
-   , asNamesMap           :: Map KeyName KeyName
-   , extraByRemaps        :: [(KeyName, KeyName)]
+   , byNameRemaps         :: Map KeyName KeyName
+   , extraByRemaps        :: Set (KeyName, KeyName)
    } deriving (Show, Eq, Generic, NFData)
 
 
--- `moreAliases` supposed to contain media keys
-getKeyMap :: O.Options -> [(KeyName, KeyCode)] -> KeyMap
-getKeyMap opts mediaKeyAliases = go where
-  go
-    = KeyMap
-    { byNameMap            = nameMap
-    , byDevNumMap          = devMap
-    , byNameAlternativeMap = getAltMap alternativeModeRemaps empty
-    , byNameMediaMap       = byNameMediaAliasesMap
-    , byNameRealMap        = realMap
-    , asNamesMap           = _asNamesMap
-    , extraByRemaps        = fmap swap _asNames
-    }
+-- | @moreAliases@ supposed to contain media keys.
+--
+-- Accept "Map" instead of list of pairs.
+getKeyMap
+  :: forall m. MonadError String m
+  => O.Options
+  -> Map KeyName KeyCode -- ^ Obtained media key codes from X server
+  -> m KeyMap
 
-  keyAliases :: [KeyAlias]
+getKeyMap opts mediaKeyCodes = go where
+  go = do
+    defaultKeyCodes'         <- defaultKeyCodes
+    nameMap'                 <- nameMap
+    devMap'                  <- devMap
+    alternativeModeKeyCodes' <- alternativeModeKeyCodes
+    byNameMediaAliasesMap'   <- byNameMediaAliasesMap
+
+    pure
+      $ KeyMap
+      { byNameDefaultKeyCode = defaultKeyCodes'
+      , byNameMap            = nameMap'
+      , byDevNumMap          = devMap'
+      , byNameAlternativeMap = alternativeModeKeyCodes'
+      , byNameMediaMap       = byNameMediaAliasesMap'
+      , byNameRemaps         = remaps
+      , extraByRemaps        = remapsMirror
+      }
+
+  keyAliases :: m $ Set KeyAlias
   keyAliases = go' where
-    go'
-      = defaultKeyAliases <> fmap resolveMediaKey mediaKeyAliases
-      & turnOffFourthRow `applyIf` O.turnOffFourthRow         opts
-      & makeCapsLockReal `applyIf` O.realCapsLock             opts
-      & shiftNumeric     `applyIf` O.shiftNumericKeys         opts
-      & shiftHJKL        `applyIf` O.shiftHJKL                opts
-      & controlAsSuper   `applyIf` O.rightControlAsRightSuper opts
+    go' = pure defaultKeyAliases
+        <**> fmap mappend resolvedMediaKeys
+        <**> pure (turnOffFourthRow `applyIf` O.turnOffFourthRow opts)
 
-    resolveMediaKey (keyName, keyCode) =
-      case keyName `lookup` mediaMap of
-           Just devNum -> (keyName, devNum, keyCode)
-           Nothing -> error [qm| Unexpected media key: {keyName} |]
+    resolvedMediaKeys =
+      Set.fromList . Map.elems <$>
+        Map.traverseWithKey mediaKeysReducer mediaKeyCodes
 
-    turnOffFourthRow = fmap $ \x@(keyName, _, keyCode) ->
-      keyName `elem` fourhRow ? (keyName, minBound, keyCode) $ x
+    mediaKeysReducer keyName keyCode
+      = throwError [qm| Unexpected media key: {keyName} |] `maybe` pure
+      $ (keyName,,keyCode) <$> keyName `lookup` mediaDevNums
 
-    makeCapsLockReal = fmap f where
-      f (CapsLockKey, devNum, _) =
-        (CapsLockKey, devNum, realMap ! RealCapsLockKey)
-      f x = x
+    turnOffFourthRow =
+      Set.map (&~ do whenM (use _1 <&> (`elem` fourhRow)) $ _2 .= minBound)
 
-    shiftNumeric aliases = f <$> aliases where
-      f alias@(keyName, devNum, _)
-        = maybe alias (resolve devNum)
-        $ keyName `Map.lookup` numericShift
+  defaultKeyCodes :: m $ Map KeyName KeyCode
+  defaultKeyCodes =
+    keyAliases <&> Map.fromList . Set.toList . Set.map (view _1 &&& view _3)
 
-      resolve devNum keyName
-        = find (\(x, _, _) -> x == keyName) aliases
-        & fromJust
-        & \(toName, _, toCode) -> (toName, devNum, toCode)
+  remaps :: Map KeyName KeyName
+  remaps = f basicKeyRemapping where
+    f = (delete CapsLockKey `applyIf` O.realCapsLock             opts)
+     .> (rightCtrlAsSuper   `applyIf` O.rightControlAsRightSuper opts)
+     .> ((<> numericShift)  `applyIf` O.shiftNumericKeys         opts)
+     .> ((<> hjklShift)     `applyIf` O.shiftHJKLKeys            opts)
 
-    shiftHJKL aliases = f <$> aliases where
-      f (HKey,         devNum, _) = (HKey,         devNum, semicolonKeyCode)
-      f (JKey,         devNum, _) = (JKey,         devNum, hKeyCode)
-      f (KKey,         devNum, _) = (KKey,         devNum, jKeyCode)
-      f (LKey,         devNum, _) = (LKey,         devNum, kKeyCode)
-      f (SemicolonKey, devNum, _) = (SemicolonKey, devNum, lKeyCode)
-      f x = x
+    rightCtrlAsSuper = insert ControlRightKey SuperRightKey
 
-    controlAsSuper = fmap f where
-      f (ControlRightKey, devNum, _) =
-        (ControlRightKey, devNum, rightSuperKeyCode)
-      f x = x
+  remapsMirror = Set.fromList $ swap <$> Map.toList remaps
 
-  _asNamesMap = fromList _asNames :: Map KeyName KeyName
+  remapsWithKeyCodes :: m $ Map KeyName (KeyName, KeyCode)
+  remapsWithKeyCodes = keyAliases >>= \aliases ->
+    flip Map.traverseWithKey remaps $ \keyNameRemapFrom keyNameRemapTo ->
+      let
+        found   = find (view _1 .> (== keyNameRemapTo)) aliases
+        failMsg = [qms| Default key code of {keyNameRemapTo} not found
+                        to remap {keyNameRemapFrom} to |]
+      in
+        maybe (throwError failMsg) (pure . (keyNameRemapTo,) . view _3) found
 
-  -- TODO FIXME Shifted numeric keys
-  -- TODO FIXME Shifted HJKL keys
-  _asNames :: [(KeyName, KeyName)]
-  _asNames
-    = asNames
-    & filter (fst .> (/= CapsLockKey)) `applyIf` O.realCapsLock opts
-    & ((ControlRightKey, SuperRightKey) :)
-        `applyIf` O.rightControlAsRightSuper opts
+  remappedKeyAliases :: m $ Set KeyAlias
+  remappedKeyAliases = go' where
+    go' = join $ f <$> keyAliases <*> remapsWithKeyCodes
 
-  byNameMediaAliasesMap :: Map KeyName KeyCode
-  byNameMediaAliasesMap =
-    fromList [(a, b) | (a, _, b) <- keyAliases, a `member` mediaMap]
+    f aliases remaps' = resolve where
+      (new, xsRemaps) = foldl reducer (Set.empty, remaps') aliases
+      resolve         = Map.null xsRemaps ? pure new $ throwError failMsg
+      failMsg         = [qms| Some keys which are supposed to be remapped
+                              haven't found their targets: {xsRemaps} |]
 
-  devMap :: Map Word16 KeyAlias
-  devMap = Map.delete minBound $ getByDevNumMap keyAliases
+    reducer (flip Set.insert -> append, xsRemaps) alias@(view _1 -> keyName) =
+      case lookup keyName xsRemaps <&> view _2 <&> set _3 of
+           Nothing    -> (append alias,         xsRemaps)
+           Just remap -> (append $ remap alias, delete keyName xsRemaps)
 
-  mediaMap = fromList mediaDevNums   :: Map KeyName Word16
-  nameMap  = getByNameMap keyAliases :: Map KeyName KeyAlias
-  realMap  = fromList realKeys       :: Map KeyName KeyCode
+  nameMap :: m $ Map KeyName KeyAlias
+  nameMap = getByNameMap <$> remappedKeyAliases
 
-  mapShiftedHJKL HKey         = JKey
-  mapShiftedHJKL JKey         = KKey
-  mapShiftedHJKL KKey         = LKey
-  mapShiftedHJKL LKey         = SemicolonKey
-  mapShiftedHJKL SemicolonKey = HKey
-  mapShiftedHJKL x            = x
+  devMap :: m $ Map Word16 KeyAlias
+  devMap = delete minBound . getByDevNumMap <$> remappedKeyAliases
 
-  getAltMap
-    :: [(KeyName, KeyName)]
-    -> Map KeyName (KeyName, KeyCode)
-    -> Map KeyName (KeyName, KeyCode)
+  byNameMediaAliasesMap :: m $ Map KeyName KeyCode
+  byNameMediaAliasesMap
+     =  remappedKeyAliases
+    <&> Set.filter (view _1 .> (`member` mediaDevNums))
+    <&> Map.fromList . Set.toList . Set.map (view _1 &&& view _3)
 
-  getAltMap [] altMap = altMap
-  getAltMap (
-              ( mapShiftedHJKL `applyIf` O.shiftHJKL opts -> nameFrom
-              , nameTo
-              ) : xs
-            ) altMap = go' where
+  alternativeModeKeyCodes :: m $ Map KeyName (KeyName, KeyCode)
+  alternativeModeKeyCodes = go' where
+    go' = followRemaps <$> Map.traverseWithKey f alternativeModeRemaps
 
-    go'   = getAltMap xs $ maybe altMap f $ found <|> real
-    f     = flip (insert nameFrom) altMap . (nameTo,)
-    found = lookup nameTo nameMap <&> view _3
-    real  = lookup nameTo realMap
+    followRemaps result = f' $ foldl reducer intialAcc remapsMirror where
+      f' (toDelete, toAdd) = Map.withoutKeys result toDelete <> toAdd
+
+      -- | A "Set" of keys to delete from original alternative mapping
+      --   and a "Map" of new remapped keys to add to it.
+      intialAcc = (Set.empty, Map.empty)
+
+      reducer acc@(toDelete, toAdd) (toKey, fromKey)
+        = maybe acc (\x -> (Set.insert toKey toDelete, insert fromKey x toAdd))
+        $ lookup toKey result
+
+    f keyNameFrom keyNameTo = x where
+      x = lookup keyNameTo <$> defaultKeyCodes >>= resolve
+      resolve = throwError failMsg `maybe` (pure . (keyNameTo,))
+      failMsg = [qms| Default key code of {keyNameTo} not found
+                      for alternative {keyNameFrom} |]
 
 
-getAliasByKey :: KeyMap -> Key -> Maybe KeyAlias
-getAliasByKey keyMap (Key x) = x `lookup` byDevNumMap keyMap
+getAliasByKeyDevNum :: KeyMap -> Word16 -> Maybe KeyAlias
+getAliasByKeyDevNum keyMap devNum = devNum `lookup` byDevNumMap keyMap
 
 
-getAlternative :: KeyMap -> KeyName -> Maybe (KeyName, KeyCode)
-getAlternative keyMap keyName = keyName `lookup` byNameAlternativeMap keyMap
+-- | Gets a key and returns a key it remmaped to in alternative mode
+--   and remapped "KeyCode" to trigger remapped key.
+getAlternativeRemapByName :: KeyMap -> KeyName -> Maybe (KeyName, KeyCode)
+getAlternativeRemapByName keyMap keyName =
+  keyName `lookup` byNameAlternativeMap keyMap
 
--- Check if key could be alternatively remapped
-isAlternative :: KeyMap -> KeyName -> Bool
-isAlternative keyMap keyName = keyName `member` byNameAlternativeMap keyMap
+-- | Check if a key has remap in alternative mode.
+hasAlternativeRemap :: KeyMap -> KeyName -> Bool
+hasAlternativeRemap keyMap keyName =
+  keyName `member` byNameAlternativeMap keyMap
 
 
-getAsName :: KeyMap -> KeyName -> KeyName
-getAsName keyMap keyName = asNamesMap keyMap ! keyName
+-- | Get a key provided key remapped to.
+getRemapByName :: KeyMap -> KeyName -> Maybe KeyName
+getRemapByName keyMap keyName = keyName `lookup` byNameRemaps keyMap
 
-lookupAsName :: KeyMap -> KeyName -> Maybe KeyName
-lookupAsName keyMap keyName = lookup keyName $ asNamesMap keyMap
-
-maybeAsName :: KeyMap -> KeyName -> KeyName
-maybeAsName keyMap keyName = fromMaybe keyName $ lookupAsName keyMap keyName
-
+-- | Returns a "Set" of keys which have been remapped to a specific key.
+--
+-- Mirrored getting of remapped keys. For example "MenuKey" and
+-- "ControlRightKey" are both remapped to "SuperRightKey", so you call
+-- "getRemappedByName" with "SuperRightKey" and you get a "Set" of
+-- "ControlRightKey" and "MenuKey".
 getRemappedByName :: KeyMap -> KeyName -> Set.Set KeyName
-getRemappedByName keyMap keyName
-  = asNamesMap keyMap
-  & Map.filter (== keyName) & toList & fmap fst & Set.fromList
+getRemappedByName keyMap keyName =
+  Map.keysSet $ Map.filter (== keyName) $ byNameRemaps keyMap
 
--- Gets specific key and returns a Set that contains extra keys
--- aliased as this specific key (you get a Set of extra synonyms keys).
--- For example `LessKey` remapped as `ShiftLeftKey` and if you need to
--- handle in some way `ShiftLeftKey` you should also handle `LessKey`
--- same way, because they're same keys, they're kinda synonyms,
--- so, you could try this:
---   `getExtraKeys keyMap ShiftLeftKey`
--- and then you get a Set of extra aliases for this key like this:
---   `Set.fromList [LessKey]`
--- (this Set can contaion more than one aliases).
+-- | Gets a specific key and returns a "Set" that contains extra keys
+--   aliased as this specific key (you get a "Set" of extra synonyms keys).
+--
+-- For example "LessKey" remapped as "ShiftLeftKey" and if you need to
+-- handle in some way "ShiftLeftKey" you should also handle and treat "LessKey"
+-- the same way you do it with "ShiftLeftKey", because they're same keys,
+-- they're kinda synonyms.
+--
+-- So, you could try this:
+--
+-- @
+-- getExtraKeys keyMap ShiftLeftKey
+-- @
+--
+-- And then you get a "Set" of extra aliases for this key like this:
+--
+-- @
+-- Set.fromList [LessKey]
+-- @
+--
+-- (this "Set" may contain more than one alias).
+--
+-- TODO Is this duplicate of "getRemappedByName"?
+--      Find out and tell the difference (or remove one and keep another).
 getExtraKeys :: KeyMap -> KeyName -> Set.Set KeyName
 getExtraKeys (extraByRemaps -> extra) keyName =
-  Set.fromList . fmap snd . filter ((== keyName) . fst) $ extra
+  extra & Set.filter (view _1 .> (== keyName)) & Set.map (view _2)
 
 
--- Check if key is media key
-isMedia :: KeyMap -> KeyName -> Bool
-isMedia keyMap keyName = keyName `member` byNameMediaMap keyMap
+-- | Check if a key is a media key
+isMediaKey :: KeyMap -> KeyName -> Bool
+isMediaKey keyMap keyName = keyName `member` byNameMediaMap keyMap
 
-getMedia :: KeyMap -> KeyName -> Maybe KeyCode
-getMedia keyMap keyName = keyName `lookup` byNameMediaMap keyMap
+getMediaKeyCode :: KeyMap -> KeyName -> Maybe KeyCode
+getMediaKeyCode keyMap keyName = keyName `lookup` byNameMediaMap keyMap
 
 
--- Get mapped `KeyCode` to `KeyName`
+-- | Get mapped "KeyCode" to "KeyName"
 getKeyCodeByName :: KeyMap -> KeyName -> Maybe KeyCode
-getKeyCodeByName keyMap keyName =
-  keyName `lookup` byNameMap keyMap <&> \(_, _, x) -> x
+getKeyCodeByName keyMap keyName = keyName `lookup` byNameMap keyMap <&> view _3
 
 
-getRealKeyCodeByName :: KeyMap -> KeyName -> Maybe KeyCode
-getRealKeyCodeByName keyMap keyName = keyName `lookup` byNameRealMap keyMap
+getDefaultKeyCodeByName :: KeyMap -> KeyName -> Maybe KeyCode
+getDefaultKeyCodeByName keyMap keyName =
+  keyName `lookup` byNameDefaultKeyCode keyMap
 
 
 makeApoClassy ''KeyMap

@@ -1,22 +1,24 @@
 -- Author: Viacheslav Lotsmanov
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables, DataKinds #-}
 
 module Process.KeysActions
   ( processKeysActions
   ) where
 
+import "base" Data.Proxy (Proxy (Proxy))
+
 import "base" Control.Concurrent.Chan (readChan)
 import "base" Control.Monad (unless, forever)
 
-import "base" Data.Maybe (fromJust)
-
-import "X11" Graphics.X11.Xlib (Display)
+import "X11" Graphics.X11.Types (type KeyCode)
+import "X11" Graphics.X11.Xlib (type Display)
 
 -- local imports
 
 import Utils (dieWith)
+import Utils.Sugar ((.>))
 import Bindings.MoreXlib (getLeds)
 import Bindings.XTest (fakeKeyCodeEvent)
 import Actions ( ActionType(Single, Sequence)
@@ -27,15 +29,20 @@ import Actions ( ActionType(Single, Sequence)
                            )
                , seqHead
                )
-import Keys (KeyMap)
-import qualified Keys
 import Bindings.Xkb (xkbSetGroup)
-import State (CrossThreadVars, keysActionsChan)
+import State (type CrossThreadVars, keysActionsChan)
 import qualified State
+import Keys (KeyName (CapsLockKey))
 
 
-processKeysActions :: CrossThreadVars -> KeyMap -> Display -> IO ()
-processKeysActions ctVars keyMap dpy = forever $ do
+processKeysActions
+  :: CrossThreadVars
+  -> (Proxy 'CapsLockKey, KeyCode)
+  -- ^ "KeyCode" of real Caps Lock key (it must be not remapped!)
+  -> Display
+  -> IO ()
+
+processKeysActions ctVars (Proxy, capsLockKeyCode) dpy = forever $ do
 
   (action :: ActionType KeyAction) <- readChan $ keysActionsChan ctVars
 
@@ -47,7 +54,7 @@ processKeysActions ctVars keyMap dpy = forever $ do
       xkbSetGroup dpy 0 >>= (`unless` dieWith "xkbSetGroup error")
 
     TurnCapsLock x ->
-      (== x) . State.capsLockLed <$> getLeds dpy >>= (`unless` toggleCapsLock)
+      State.capsLockLed .> (== x) <$> getLeds dpy >>= (`unless` toggleCapsLock)
 
   where f :: (KeyAction -> IO ()) -> ActionType KeyAction -> IO ()
         f m (Actions.Single a) = m a
@@ -57,6 +64,4 @@ processKeysActions ctVars keyMap dpy = forever $ do
         press   keyCode = fakeKeyCodeEvent dpy keyCode True
         release keyCode = fakeKeyCodeEvent dpy keyCode False
 
-        toggleCapsLock = press keyCode >> release keyCode
-          where keyCode = fromJust $
-                  Keys.getRealKeyCodeByName keyMap Keys.RealCapsLockKey
+        toggleCapsLock = press capsLockKeyCode >> release capsLockKeyCode

@@ -1,32 +1,20 @@
 -- Author: Viacheslav Lotsmanov
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE NoMonomorphismRestriction, FlexibleContexts, DataKinds #-}
+{-# LANGUAGE ScopedTypeVariables, TupleSections #-}
 
 module Main (main) where
 
-import "base" System.Exit (ExitCode (ExitFailure), exitSuccess)
-import "base" System.Environment (getArgs)
-import "directory" System.Directory (doesFileExist)
-import "unix" System.Posix.Signals ( installHandler
-                                   , Handler (Catch)
-                                   , sigINT
-                                   , sigTERM
-                                   )
-import "unix" System.Posix (exitImmediately)
-import qualified "base" System.IO as SysIO
-import qualified "base" GHC.IO.Handle.FD as IOHandleFD
-import "process" System.Process (terminateProcess, waitForProcess)
-
-import qualified "X11" Graphics.X11.Types      as XTypes
-import qualified "X11" Graphics.X11.ExtraTypes as XTypes
-import "X11" Graphics.X11.Xlib.Types (Display)
-import "X11" Graphics.X11.Xlib.Display (closeDisplay)
-import "X11" Graphics.X11.Xlib.Misc (keysymToKeycode)
-import "X11" Graphics.X11.Xlib (displayString)
+import "base" Data.Proxy (Proxy (Proxy))
+import "base" Data.Word (Word8)
+import "base" Data.Maybe (fromJust)
+import "base" Data.List (intercalate)
+import "base" Data.Typeable (Typeable)
+import "data-default" Data.Default (def)
+import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms, qns)
+import qualified "containers" Data.Map.Strict as Map
+import "containers" Data.Map.Strict (type Map)
 
 import "deepseq" Control.DeepSeq (deepseq, force)
 import qualified "mtl" Control.Monad.State as St (get, gets, put, modify)
@@ -49,12 +37,25 @@ import "base" Control.Exception (Exception (fromException))
 import "base" Control.Arrow ((&&&))
 import "extra" Control.Monad.Extra (whenJust)
 
-import "base" Data.Word (Word8)
-import "base" Data.Maybe (fromJust)
-import "base" Data.List (intercalate)
-import "base" Data.Typeable (Typeable)
-import "data-default" Data.Default (def)
-import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms, qns)
+import "base" System.Exit (ExitCode (ExitFailure), exitSuccess)
+import "base" System.Environment (getArgs)
+import "directory" System.Directory (doesFileExist)
+import "unix" System.Posix.Signals ( installHandler
+                                   , Handler (Catch)
+                                   , sigINT
+                                   , sigTERM
+                                   )
+import "unix" System.Posix (exitImmediately)
+import qualified "base" System.IO as SysIO
+import qualified "base" GHC.IO.Handle.FD as IOHandleFD
+import "process" System.Process (terminateProcess, waitForProcess)
+
+import qualified "X11" Graphics.X11.Types      as XTypes
+import qualified "X11" Graphics.X11.ExtraTypes as XTypes
+import "X11" Graphics.X11.Xlib.Types (Display)
+import "X11" Graphics.X11.Xlib.Display (closeDisplay)
+import "X11" Graphics.X11.Xlib.Misc (keysymToKeycode)
+import "X11" Graphics.X11.Xlib (displayString)
 
 -- local imports
 
@@ -150,7 +151,7 @@ main = flip evalStateT ([] :: ThreadsState) $ do
 
 
   noise "Dynamically getting media keys X key codes..."
-  (mediaKeysAliases :: [(KeyName, KeyCode)]) <- liftIO $ mapM
+  (mediaKeysAliases :: Map KeyName KeyCode) <- liftIO $ Map.fromList <$> mapM
     (\(keyName, keySym) -> (keyName,) <$> keysymToKeycode dpy keySym)
     [ (Keys.MCalculatorKey,        XTypes.xF86XK_Calculator)
     , (Keys.MEjectKey,             XTypes.xF86XK_Eject)
@@ -169,12 +170,22 @@ main = flip evalStateT ([] :: ThreadsState) $ do
     ]
   noise
     $ "Media keys aliases:"
-    <> foldMap (\(a, b) -> [qm|\n  {a}: {b}|]) mediaKeysAliases
+    <> Map.foldMapWithKey (\a b -> [qm|\n  {a}: {b}|]) mediaKeysAliases
 
-  let keyMap = Keys.getKeyMap opts mediaKeysAliases
+  keyMap <-
+    let failure err = liftIO $ dieWith [qm| Failed to construct KeyMap: {err} |]
+     in either failure pure $ Keys.getKeyMap opts mediaKeysAliases
 
   -- Making it fail at start app time if media keys described incorrectly
   keyMap `deepseq` pure ()
+
+  !capsLockKeyDef <-
+    let
+      key     = Keys.CapsLockKey
+      failure = liftIO $ dieWith [qm| Failed to obtain {key} code |]
+      success = pure . (Proxy :: Proxy 'Keys.CapsLockKey,)
+    in
+      maybe failure success $ Keys.getDefaultKeyCodeByName keyMap key
 
   when (O.shiftNumericKeys opts) $
     noise "Numeric keys in numbers row are shifted"
@@ -229,7 +240,7 @@ main = flip evalStateT ([] :: ThreadsState) $ do
 
 
   noise "Initial resetting..."
-  liftIO $ initReset opts ipcHandle keyMap dpy
+  liftIO $ initReset opts ipcHandle capsLockKeyDef dpy
 
 
   let termHook  = Actions.initTerminate ctVars
@@ -261,7 +272,7 @@ main = flip evalStateT ([] :: ThreadsState) $ do
             Actions.overthrow ctVars
 
   runThread "keys actions handler" $
-            processKeysActions ctVars keyMap dpyForKeysActionsHanlder
+            processKeysActions ctVars capsLockKeyDef dpyForKeysActionsHanlder
 
   runThread "keyboard state handler" $
             processKeyboardState ctVars opts dpyForKeyboardStateHandler
