@@ -7,28 +7,32 @@ module Process.Keyboard.HandlingKeyEventFlow
      ( handleKeyEvent
      ) where
 
-import "base" System.IO (IOMode (WriteMode), withFile)
-import qualified "process" System.Process as P
+import "base" Data.Function (fix)
+import "data-default" Data.Default (def)
+import "base" Data.Maybe (fromMaybe, fromJust, isJust, isNothing)
+import "containers" Data.Set (type Set, (\\))
+import qualified "containers" Data.Set as Set
+import "time" Data.Time.Clock.POSIX (type POSIXTime, getPOSIXTime)
+import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms, qns)
 
-import "transformers" Control.Monad.Trans.Class (lift)
+import "type-operators" Control.Type.Operator (type ($))
 import "base" Control.Monad ((>=>), when, unless, forM_, guard)
-import "base" Control.Concurrent.MVar (modifyMVar_)
-import "transformers" Control.Monad.Trans.State (StateT, execStateT)
-import "transformers" Control.Monad.Trans.Except (ExceptT, runExceptT, throwE)
+import "transformers" Control.Monad.Trans.Class (lift)
 import "base" Control.Concurrent (forkIO)
+import "base" Control.Concurrent.MVar (modifyMVar_)
+import "transformers" Control.Monad.Trans.State (type StateT, execStateT)
+
+import "transformers" Control.Monad.Trans.Except ( type ExceptT
+                                                 , runExceptT, throwE
+                                                 )
 
 import "lens" Control.Lens ( (.~), (%~), (^.), (&~), (.=), (%=)
                            , set, mapped, view, _1, _2, _3
-                           , Lens'
+                           , type Lens'
                            )
 
-import "data-default" Data.Default (def)
-import "base" Data.Maybe (fromMaybe, fromJust, isJust, isNothing)
-import qualified "containers" Data.Set as Set
-import "containers" Data.Set (type Set, (\\))
-import "base" Data.Function (fix)
-import "time" Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
-import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms, qns)
+import "base" System.IO (type IOMode (WriteMode), withFile)
+import qualified "process" System.Process as P
 
 import "X11" Graphics.X11.Types (type KeyCode)
 
@@ -43,8 +47,8 @@ import           State (type State, CrossThreadVars)
 import qualified State
 import           Keys (type KeyMap, type KeyName)
 import qualified Keys
-import           Types (AlternativeModeLevel (..))
-import           Process.Keyboard.Types (HandledKey (HandledKey))
+import           Types (type AlternativeModeLevel (..))
+import           Process.Keyboard.Types (type HandledKey (HandledKey))
 
 import qualified Process.CrossThread as CrossThread
                ( handleCapsLockModeChange
@@ -85,14 +89,15 @@ handleKeyEvent ctVars opts keyMap =
       reprocess = again time keyName keyCode isPressed
 
       pressed, otherPressed :: Set KeyName
-      -- All pressed keys at this time.
+      -- | All pressed keys at this time.
+      --
       -- Curretly pressed or released key (`keyName`) automatically
       -- added to (or removed from) this Set at the same time.
       pressed = State.pressedKeys state
-      -- All pressed keys at this time excluding currently pressed key
+      -- | All pressed keys at this time excluding currently pressed key
       otherPressed = Set.delete keyName pressed
 
-      -- Alternative version of currently pressed or released key
+      -- | Alternative version of currently pressed or released key
       alternative :: Maybe (KeyName, KeyCode)
       alternative = getAlternativeRemapByName keyName
 
@@ -117,7 +122,7 @@ handleKeyEvent ctVars opts keyMap =
                )
              _ -> False
 
-      -- When Alternative mode is on and current key has alternative map
+      -- | When Alternative mode is on and current key has alternative map
       onAlternativeKey :: Bool
       onAlternativeKey = isJust (State.alternative state) && isJust alternative
 
@@ -131,8 +136,8 @@ handleKeyEvent ctVars opts keyMap =
          in pressed == ctrls
          || (O.additionalControls opts && pressed == additionalControls)
 
-      -- Caps Lock or Enter pressed (current key)
-      -- but not Enter with modifiers.
+      -- | Caps Lock or Enter pressed (current key)
+      --   but not Enter with modifiers.
       onAdditionalControlKey :: Bool
       onAdditionalControlKey =
         O.additionalControls opts &&
@@ -142,8 +147,8 @@ handleKeyEvent ctVars opts keyMap =
           isJust (state ^. State.comboState' . State.isEnterPressedWithMods')
         )
 
-      -- Caps Lock or Enter pressed (previously pressed)
-      -- but ignoring just Enter with modifiers.
+      -- | Caps Lock or Enter pressed (previously pressed)
+      --   but ignoring just Enter with modifiers.
       onWithAdditionalControlKey :: Bool
       onWithAdditionalControlKey =
         O.additionalControls opts &&
@@ -154,7 +159,8 @@ handleKeyEvent ctVars opts keyMap =
           isJust (state ^. State.comboState' . State.isEnterPressedWithMods')
         )
 
-      -- Only for additional controls.
+      -- | Only for additional controls.
+      --
       -- Enter key just pressed after some modifiers (only) was pressed before.
       -- Or Enter key just released after pressed with some modes keys.
       onEnterOnlyWithMods :: Bool
@@ -162,8 +168,8 @@ handleKeyEvent ctVars opts keyMap =
         O.additionalControls opts &&
         keyName == Keys.EnterKey &&
 
-        let -- When Enter key just pressed
-            -- after some modifiers pressed before.
+        let -- | When Enter key just pressed
+            --   after some modifiers pressed before.
             pressedCase =
               isPressed &&
               not (Set.null otherPressed) && -- Have some keys pressed
@@ -172,8 +178,8 @@ handleKeyEvent ctVars opts keyMap =
               -- not any other key was pressed before.
               Set.null (Set.foldr Set.delete otherPressed allModifiersKeys)
 
-            -- When Enter key is just released
-            -- and before it was pressed only with modifiers.
+            -- | When Enter key is just released
+            --   and before it was pressed only with modifiers.
             releasedCase =
               not isPressed &&
               isJust
@@ -181,7 +187,7 @@ handleKeyEvent ctVars opts keyMap =
 
          in pressedCase || releasedCase
 
-      -- When Enter pressed with only modifiers before and not released yet
+      -- | When Enter pressed with only modifiers before and not released yet
       onEnterWithModsOnlyInProgress :: Bool
       onEnterWithModsOnlyInProgress =
 
@@ -235,7 +241,8 @@ handleKeyEvent ctVars opts keyMap =
              Just State.AltIsReleasedBeforeAlternativeKey ->
                all (not . hasAlternativeRemap) pressed
 
-      -- Super-Double-Press feature.
+      -- | Super-Double-Press feature.
+      --
       -- 1st step: first press of Super key.
       onSuperDoubleFirstPress :: Bool
       onSuperDoubleFirstPress =
@@ -245,7 +252,8 @@ handleKeyEvent ctVars opts keyMap =
         isPressed && Set.size pressed == 1 &&
         isNothing (state ^. State.comboState' . State.superDoublePress')
 
-      -- Super-Double-Press feature.
+      -- | Super-Double-Press feature.
+      --
       -- 2nd step: first release of Super key.
       onSuperDoubleFirstRelease :: Bool
       onSuperDoubleFirstRelease =
@@ -258,7 +266,8 @@ handleKeyEvent ctVars opts keyMap =
             x ^. _2 == State.WaitForFirstRelease &&
             keyName == x ^. _1 && not isPressed && Set.null pressed
 
-      -- Super-Double-Press feature.
+      -- | Super-Double-Press feature.
+      --
       -- 3rd step: second press of Super key.
       onSuperDoubleSecondPress :: Bool
       onSuperDoubleSecondPress =
@@ -271,7 +280,8 @@ handleKeyEvent ctVars opts keyMap =
             x ^. _2 == State.WaitForSecondPressAgain &&
             keyName == x ^. _1 && isPressed && Set.size pressed == 1
 
-      -- Super-Double-Press feature.
+      -- | Super-Double-Press feature.
+      --
       -- 4th step: second release of Super key.
       onSuperDoubleSecondRelease :: Bool
       onSuperDoubleSecondRelease =
@@ -284,7 +294,8 @@ handleKeyEvent ctVars opts keyMap =
             x ^. _2 == State.WaitForSecondReleaseOrPressAlternativeKey &&
             keyName == x ^. _1 && not isPressed && Set.null pressed
 
-      -- Super-Double-Press feature.
+      -- | Super-Double-Press feature.
+      --
       -- 4th step: pressed some alternative key while Super key still pressed.
       --
       -- P.S. If alternative mode it is already turned on we pass this as it
@@ -315,7 +326,8 @@ handleKeyEvent ctVars opts keyMap =
              in Set.fromList superAndAlternative `Set.isSubsetOf` pressed &&
                 Set.null (mappedAs \\ onlyRealModifiers)
 
-      -- Super-Double-Press feature.
+      -- | Super-Double-Press feature.
+      --
       -- 5th step: held Super key is released after
       -- some alternative keys had pressed.
       onSuperDoubleReleasedAfterAlternative :: Bool
@@ -511,7 +523,7 @@ handleKeyEvent ctVars opts keyMap =
     alternativeMultipleTrigger (Set.toList pressed) False
     notify $ Actions.XmobarAlternativeFlag Nothing
 
-    return $ state &~ do
+    pure $ state &~ do
       State.comboState' . State.superDoublePressProceeded' .= True
       State.comboState' . State.superDoublePress'          .= Nothing
       State.pressedKeys'                                   .= Set.empty
@@ -706,26 +718,26 @@ handleKeyEvent ctVars opts keyMap =
     if
 
     -- Prevent triggering when just pressed
-    | isPressed -> return state
+    | isPressed -> pure state
 
     -- When releasing `FNKey` after some media keys pressed
     | state ^. State.comboState' . State.appleMediaPressed' -> do
       restPressed <- releaseAppleMedia $ State.pressedKeys state
-      return $ state
+      pure $ state
         & State.comboState' . State.appleMediaPressed' .~ False
         & State.pressedKeys' .~ restPressed
 
     -- As `InsertKey` (because no media pressed)
     | otherwise -> do
       triggerPressRelease keyName keyCode
-      return state
+      pure state
 
   -- When held `FNKey` on apple keyboard and press some media key
   | onAppleMediaPressed -> do
     noise [qms| Apple media key pressed, preventing triggering
                 {Keys.FNKey} as {Keys.InsertKey}... |]
     smartlyTriggerCurrentKey
-    return $ state & State.comboState' . State.appleMediaPressed' .~ True
+    pure $ state & State.comboState' . State.appleMediaPressed' .~ True
 
   | onOnlyTwoControlsPressed -> do
 
@@ -807,7 +819,7 @@ handleKeyEvent ctVars opts keyMap =
                    , [qms| Storing keys was pressed before {keyName}:
                            {Set.toList otherPressed}... |]
                    ]
-          return $ state & pressedBeforeLens .~ otherPressed
+          pure $ state & pressedBeforeLens .~ otherPressed
 
         -- Trigger Control releasing because when you press
         -- `CapsLockKey` or `EnterKey` with combo (see below)
@@ -819,7 +831,7 @@ handleKeyEvent ctVars opts keyMap =
                          (X key code: {controlKeyCode})... |]
                  ]
           releaseKey controlKeyCode
-          return $ state & withCombosFlagLens .~ False
+          pure $ state & withCombosFlagLens .~ False
 
         -- Just triggering default aliased key code
         -- to `CapsLockKey` or `EnterKey`.
@@ -829,10 +841,10 @@ handleKeyEvent ctVars opts keyMap =
                  triggerPressRelease keyName keyCode
                  if O.resetByEscapeOnCapsLock opts
                     then execStateT (runExceptT resetAll) state
-                    else return state
+                    else pure state
 
                Keys.EnterKey -> state <$ triggerPressRelease keyName keyCode
-               _ -> return state
+               _ -> pure state
 
   -- When either `CapsLockKey` or `EnterKey` pressed with combo.
   -- They couldn't be pressed both, it handled above.
@@ -889,7 +901,7 @@ handleKeyEvent ctVars opts keyMap =
                       (X key code: {controlKeyCode})... |]
           pressKey controlKeyCode -- Press Control before current key
           smartlyTriggerCurrentKey
-          return $ state & withCombosFlagLens .~ True
+          pure $ state & withCombosFlagLens .~ True
 
   -- When Caps Lock remapped as Escape key.
   -- Resetting stuff (if it's enabled)
@@ -958,7 +970,7 @@ handleKeyEvent ctVars opts keyMap =
   maybeAsName :: KeyName -> KeyName
   maybeAsName keyName = fromMaybe keyName $ getRemapByName keyName
 
-  -- Wait and extract event, make preparations and call handler
+  -- | Wait and extract event, make preparations and call handler
   onEv
     :: (POSIXTime -> KeyName -> KeyCode -> Bool -> State -> IO State)
     -> HandledKey
@@ -969,68 +981,70 @@ handleKeyEvent ctVars opts keyMap =
       !time <- getPOSIXTime
       m time name code isPressed state
 
-  -- Composed prepare actions
+  -- | Composed prepare actions
   chain :: (KeyName, Bool) -> (State -> IO State) -> IO ()
-  chain (keyName, isPressed) handleM = do
+  chain (keyName, isPressed) handleM = go where
+    go = do
+      -- Log key user pressed (even if it's ignored or replaced)
+      noise [qm| {keyName} is {isPressed ? "pressed" $ "released"} |]
 
-    -- Log key user pressed (even if it's ignored or replaced)
-    noise [qm| {keyName} is {isPressed ? "pressed" $ "released"} |]
+      modifyMVar_ (State.stateMVar ctVars) mapState
 
-    let mapState :: State -> IO State
-        mapState = fmap (either id id) . runExceptT . _chain
+    mapState :: State -> IO State
+    mapState = fmap (either id id) . runExceptT . chain where
 
-        _reset :: State -> State
-        _reset = State.comboState' . State.superDoublePressProceeded' .~ False
+      chain :: State -> ExceptT State IO State
+      chain = ignoreDuplicates
+              >=> storeKey
+              >=> lift . handleM
+              >=> lift . handleResetKbdLayout
+              >=> lift . handleCapsLockModeChange
+              >=> lift . handleAlternativeModeChange
+              >=> lift . pure . reset
 
-        _chain :: State -> ExceptT State IO State
-        _chain = ignoreDuplicates
-                   >=> storeKey
-                   >=> lift . handleM
-                   >=> lift . handleResetKbdLayout
-                   >=> lift . handleCapsLockModeChange
-                   >=> lift . handleAlternativeModeChange
-                   >=> lift . pure . _reset
+    reset :: State -> State
+    reset = State.comboState' . State.superDoublePressProceeded' .~ False
 
-     in modifyMVar_ (State.stateMVar ctVars) mapState
+    -- | Store key user pressed in state
+    storeKey :: State -> ExceptT State IO State
+    storeKey state = x where
+      x = pure $ state & State.pressedKeys' %~ action keyName
+      action = isPressed ? Set.insert $ Set.delete
 
-    where -- | Prevent doing anything when key state is the same.
-          ignoreDuplicates :: State -> ExceptT State IO State
-          ignoreDuplicates state = (isDuplicate ? throwE $ pure) state where
-            pressed     = State.pressedKeys state
-            isMember    = keyName `Set.member` pressed
+    -- | Prevent doing anything when key state is the same.
+    ignoreDuplicates :: State -> ExceptT State IO State
+    ignoreDuplicates state = (isDuplicate ? throwE $ pure) state where
+      pressed     = State.pressedKeys state
+      isMember    = keyName `Set.member` pressed
 
-            isDuplicate =
-              isPressed == isMember &&
-              not isItHeldAltForAlternativeModeReleased
+      isDuplicate =
+        isPressed == isMember &&
+        not isItHeldAltForAlternativeModeReleased
 
-            isItHeldAltForAlternativeModeReleased = isJust $ do
-              guard $ O.alternativeModeWithAltMod opts
+      isItHeldAltForAlternativeModeReleased = isJust $ do
+        guard $ O.alternativeModeWithAltMod opts
 
-              heldAltState <-
-                state ^. State.comboState' . State.heldAltForAlternativeMode'
+        heldAltState <-
+          state ^. State.comboState' . State.heldAltForAlternativeMode'
 
-              heldAltKey <-
-                case heldAltState of
-                     State.AltIsHeldForAlternativeMode x -> Just x
-                     _                                   -> Nothing
+        heldAltKey <-
+          case heldAltState of
+               State.AltIsHeldForAlternativeMode x -> Just x
+               _                                   -> Nothing
 
-              let f State.HeldLeftAltForAlternativeMode  = Keys.AltLeftKey
-                  f State.HeldRightAltForAlternativeMode = Keys.AltRightKey
+        let f State.HeldLeftAltForAlternativeMode  = Keys.AltLeftKey
+            f State.HeldRightAltForAlternativeMode = Keys.AltRightKey
 
-              guard $ not isPressed && keyName == f heldAltKey
+        guard $ not isPressed && keyName == f heldAltKey
 
-          -- Store key user pressed in state
-          storeKey :: State -> ExceptT State IO State
-          storeKey state =
-            let action = isPressed ? Set.insert $ Set.delete
-             in return $ state & State.pressedKeys' %~ action keyName
+  abstractRelease
+    :: String -- ^ @releaseMsg@
+    -> (KeyName -> String) -- ^ @releaseItemMsgMask@
+    -> (KeyName -> Bool) -- ^ @splitter@
+    -> (KeyName -> Maybe KeyCode) -- ^ @getter@
+    -> Set KeyName -- ^ @pressed@
+    -> IO $ Set KeyName -- ^ Returns rest of @pressed@
 
-  abstractRelease :: String -- `releaseMsg`
-                  -> (KeyName -> String) -- `releaseItemMsgMask`
-                  -> (KeyName -> Bool) -- `splitter`
-                  -> (KeyName -> Maybe KeyCode) -- `getter`
-                  -> Set KeyName -- `pressed`
-                  -> IO (Set KeyName) -- returns rest of `pressed`
   abstractRelease releaseMsg releaseItemMsgMask splitter getter pressed = do
     let (toRelease, rest) = Set.partition splitter pressed
     when (Set.size toRelease > 0) $ do
@@ -1039,13 +1053,15 @@ handleKeyEvent ctVars opts keyMap =
         noise $ releaseItemMsgMask keyName
         let Just keyCode = getter keyName
          in releaseKey keyCode
-    return rest
+    pure rest
 
-  -- Release alternative keys.
-  -- Useful when alternative mode turns off not by both alts
-  -- and key could be still pressed.
+  -- -- | Release alternative keys.
+  -- --
+  -- -- Useful when alternative mode turns off not by both alts
+  -- -- and key could be still pressed.
+  -- --
   -- -- It's commented because it's never used anywhere
-  -- releaseAlternative :: Set KeyName -> IO (Set KeyName)
+  -- releaseAlternative :: Set KeyName -> IO $ Set KeyName
   -- releaseAlternative = abstractRelease
   --
   --   "Releasing alternative keys during turning alternative mode off..."
@@ -1056,9 +1072,10 @@ handleKeyEvent ctVars opts keyMap =
   --   hasAlternativeRemap
   --   (getAlternativeRemapByName .> fmap snd)
 
-  -- Release apple media keys.
-  -- Useful when user released `FNKey` erlier than media key.
-  releaseAppleMedia :: Set KeyName -> IO (Set KeyName)
+  -- | Release apple media keys.
+  --
+  -- Useful when user released @FNKey@ erlier than media key.
+  releaseAppleMedia :: Set KeyName -> IO $ Set KeyName
   releaseAppleMedia = abstractRelease
 
     [qms| Releasing held media keys of apple keyboard
@@ -1110,16 +1127,14 @@ handleKeyEvent ctVars opts keyMap =
 
     (isPressed ? pressKeys $ releaseKeys) $ view _3 <$> keys
 
-  -- | Triggering both press and release events to X server
+  -- | Triggering both press and release events to X server.
   --
   -- It supports optionally remapped key.
   triggerPressRelease :: KeyName -> KeyCode -> IO ()
   triggerPressRelease keyName keyCode = do
 
-    let asKeyName = getRemapByName keyName
-
     noise [qms| Triggering pressing and releasing of {keyName}\
-                {maybe mempty ((" as " <>) . show) asKeyName}
+                {maybe mempty ((" as " <>) . show) $ getRemapByName keyName}
                 (X key code: {keyCode})... |]
 
     pressReleaseKey keyCode
@@ -1131,27 +1146,29 @@ handleKeyEvent ctVars opts keyMap =
     , Keys.AltLeftKey,     Keys.AltRightKey
     ]
 
-  -- Union of all modifiers keys
-  -- (including keys that remapped as these modifiers).
+  -- | Union of all modifiers keys.
+  --
+  -- Including keys that are remapped as those modifiers.
   allModifiersKeys :: Set KeyName
-  allModifiersKeys = mods `Set.union` remappedMods
+  allModifiersKeys = mods `Set.union` remappedMods where
+    -- | Just Set of modifiers keys
+    mods :: Set KeyName
+    mods = Set.fromList
+      [ Keys.ControlLeftKey, Keys.ControlRightKey
+      , Keys.SuperLeftKey,   Keys.SuperRightKey
+      , Keys.AltLeftKey,     Keys.AltRightKey
+      , Keys.ShiftLeftKey,   Keys.ShiftRightKey
+      ]
 
-    where -- Just Set of modifiers keys
-          mods :: Set KeyName
-          mods = Set.fromList
-            [ Keys.ControlLeftKey, Keys.ControlRightKey
-            , Keys.SuperLeftKey,   Keys.SuperRightKey
-            , Keys.AltLeftKey,     Keys.AltRightKey
-            , Keys.ShiftLeftKey,   Keys.ShiftRightKey
-            ]
+    -- | Other keys that was remapped as modifiers keys,
+    --   that means they're modifiers too.
+    --
+    -- For example @LessKey@ is remapped to @ShiftLeftKey@,
+    -- so it means that this key is a modifier too.
+    remappedMods :: Set KeyName
+    remappedMods = Set.foldr (Set.union . getExtraKeys) Set.empty mods
 
-          -- Other keys that was remapped as modifiers keys,
-          -- that means they're modifiers too.
-          -- For example `LessKey` is remapped to `ShiftLeftKey`,
-          -- so it means that this key is modifier too.
-          remappedMods :: Set KeyName
-          remappedMods = Set.foldr (Set.union . getExtraKeys) Set.empty mods
-
+  -- | A helper for logging (to also show remapped key).
   maybeAsKeyStr :: KeyName -> String
   maybeAsKeyStr keyName
     = getRemapByName keyName
