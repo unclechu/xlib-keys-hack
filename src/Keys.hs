@@ -3,11 +3,12 @@
 
 {-# LANGUAGE DeriveGeneric, DeriveAnyClass, OverloadedLists #-}
 {-# LANGUAGE TemplateHaskell, TupleSections, FlexibleContexts #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables, RankNTypes #-}
 
 module Keys
-     ( KeyName (..)
-     , KeyMap
+     ( type KeyName (..)
+     , type KeyMap
+     , type AlternativeModeKeyAction (..)
 
      , getKeyMap
      , getAliasByKeyDevNum
@@ -16,6 +17,8 @@ module Keys
 
      , getAlternativeRemapByName
      , hasAlternativeRemap
+     , hasAlternativeKeyAction
+     , hasAlternativeKey
 
      , getMediaKeyCode
      , isMediaKey
@@ -29,32 +32,37 @@ import Prelude hiding (lookup)
 
 import "base" GHC.Generics (Generic)
 
+import "base" Data.List (find)
+import "base" Data.Tuple (swap)
+import "base" Data.Word (type Word16)
+import "base" Data.Either (isLeft, isRight)
 import "containers" Data.Set (type Set)
 import "containers" Data.Map.Strict (type Map, lookup, member, insert, delete)
 import qualified "containers" Data.Map.Strict as Map
 import qualified "containers" Data.Set as Set
-import "base" Data.List (find)
-import "base" Data.Word (Word16)
-import "base" Data.Tuple (swap)
 import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms)
 
-import "base" Control.Arrow ((&&&))
-import "lens" Control.Lens ((&~), (.=), view, use, set, _1, _2, _3)
+import "base" Control.Arrow ((&&&), (***))
 import "base" Control.Applicative ((<**>))
 import "base" Control.Monad (join)
 import "extra" Control.Monad.Extra (whenM)
-import "mtl" Control.Monad.Except (MonadError (throwError))
-import "deepseq" Control.DeepSeq (NFData)
+import "mtl" Control.Monad.Except (type MonadError (throwError))
+import "deepseq" Control.DeepSeq (type NFData)
 import "type-operators" Control.Type.Operator (type ($))
+import "lens" Control.Lens ( type Lens', type Field1, type Field2
+                           , (&~), (.=)
+                           , view, use, set, _1, _2, _3
+                           )
 
-import "X11" Graphics.X11.Types (KeyCode)
+import "X11" Graphics.X11.Types (type KeyCode)
 
 
 -- local imports
 
-import Utils.Sugar ((.>), (&), (<&>), (?), applyIf)
+import Utils.Sugar ((.>), (<$.), (&), (<&>), (?), applyIf, liftAT2)
 import Utils.Lens (makeApoClassy)
 import qualified Options as O
+import Types (type AlternativeModeLevel (..))
 
 
 data KeyName
@@ -94,7 +102,7 @@ data KeyName
    | SpaceKey
    | AltRightKey | SuperRightKey | MenuKey | ControlRightKey
 
-   | FNKey -- On apple keyboard
+   | FNKey -- On Apple Magic Keyboard (where @InsertKey@ is supposed to be)
    | InsertKey | HomeKey | PageUpKey
    | DeleteKey | EndKey  | PageDownKey
 
@@ -322,49 +330,104 @@ basicKeyRemapping =
   ]
 
 
+-- | A representation of a key action that do something inside and with
+--   alternative mode.
+data AlternativeModeKeyAction
+   = AlternativeModeFreeze
+   | AlternativeModeLevelUp
+   | AlternativeModeLevelDown
+     deriving (Show, Eq, Generic, NFData)
+
+
 -- | Remapping for keys when Alternative mode is turned on
-alternativeModeRemaps :: Map KeyName KeyName
-alternativeModeRemaps =
+alternativeModeRemaps ::
+  ( Map KeyName $ Either AlternativeModeKeyAction KeyName -- First  level
+  , Map KeyName $ Either AlternativeModeKeyAction KeyName -- Second level
+  )
+
+alternativeModeRemaps = (,)
   -- 4th row shifted down to 3rd
-  [ (TabKey,          GraveKey)
-  , (QKey,            Number1Key)
-  , (WKey,            Number2Key)
-  , (EKey,            Number3Key)
-  , (RKey,            Number4Key)
-  , (TKey,            Number5Key)
-  , (YKey,            Number6Key)
-  , (UKey,            Number7Key)
-  , (IKey,            Number8Key)
-  , (OKey,            Number9Key)
-  , (PKey,            Number0Key)
-  , (BracketLeftKey,  MinusKey)
-  , (BracketRightKey, EqualKey)
-  , (BackslashKey,    BackSpaceKey)
+  [ (TabKey,          Right GraveKey)
+  , (QKey,            Right Number1Key)
+  , (WKey,            Right Number2Key)
+  , (EKey,            Right Number3Key)
+  , (RKey,            Right Number4Key)
+  , (TKey,            Right Number5Key)
+  , (YKey,            Right Number6Key)
+  , (UKey,            Right Number7Key)
+  , (IKey,            Right Number8Key)
+  , (OKey,            Right Number9Key)
+  , (PKey,            Right Number0Key)
+  , (BracketLeftKey,  Right MinusKey)
+  , (BracketRightKey, Right EqualKey)
+  , (BackslashKey,    Right BackSpaceKey)
 
   -- Arrow keys
-  , (HKey,            ArrowLeftKey)
-  , (JKey,            ArrowDownKey)
-  , (KKey,            ArrowUpKey)
-  , (LKey,            ArrowRightKey)
+  , (HKey,            Right ArrowLeftKey)
+  , (JKey,            Right ArrowDownKey)
+  , (KKey,            Right ArrowUpKey)
+  , (LKey,            Right ArrowRightKey)
 
   -- Delete backward (BS) and forward (Del)
-  , (SemicolonKey,    BackSpaceKey)
-  , (ApostropheKey,   DeleteKey)
+  , (SemicolonKey,    Right BackSpaceKey)
+  , (ApostropheKey,   Right DeleteKey)
 
   -- Insert key
-  , (NKey,            InsertKey)
+  , (NKey,            Right InsertKey)
 
   -- Home, PgDown, PgUp, End
   -- Symmetric to @hjkl@:
   --   Home/End    = Left/Right = j;
   --   PgDown/PgUp = Down/Up    = kl
-  , (MKey,            HomeKey)
-  , (CommaKey,        PageDownKey)
-  , (PeriodKey,       PageUpKey)
-  , (SlashKey,        EndKey)
+  , (MKey,            Right HomeKey)
+  , (CommaKey,        Right PageDownKey)
+  , (PeriodKey,       Right PageUpKey)
+  , (SlashKey,        Right EndKey)
 
-  -- TODO move this key to second alternative mode level
-  , (BKey,            MenuKey)
+  -- Alternative mode operations
+  , (ZKey,            Left AlternativeModeFreeze)
+  , (GKey,            Left AlternativeModeLevelUp)
+  , (BKey,            Left AlternativeModeLevelDown)
+  ]
+
+  -- FN keys row shifted down to 3rd row
+  [ (TabKey,          Right EscapeKey)
+  , (QKey,            Right F1Key)
+  , (WKey,            Right F2Key)
+  , (EKey,            Right F3Key)
+  , (RKey,            Right F4Key)
+  , (TKey,            Right F5Key)
+  , (YKey,            Right F6Key)
+  , (UKey,            Right F7Key)
+  , (IKey,            Right F8Key)
+  , (OKey,            Right F9Key)
+  , (PKey,            Right F10Key)
+  , (BracketLeftKey,  Right F11Key)
+  , (BracketRightKey, Right F12Key)
+  , (BackslashKey,    Right PrintScreenKey)
+
+  , (XKey,            Right PrintScreenKey)
+  , (CKey,            Right ScrollLockKey)
+  , (VKey,            Right PauseKey)
+
+  , (HKey,            Right MAudioPrevKey)
+  , (JKey,            Right MMonBrightnessDownKey)
+  , (KKey,            Right MMonBrightnessUpKey)
+  , (LKey,            Right MAudioNextKey)
+
+  , (SemicolonKey,    Right MAudioPlayKey)
+  , (ApostropheKey,   Right MAudioStopKey)
+
+  , (NKey,            Right MCalculatorKey)
+  , (MKey,            Right MAudioMuteKey)
+  , (CommaKey,        Right MAudioLowerVolumeKey)
+  , (PeriodKey,       Right MAudioRaiseVolumeKey)
+  , (SlashKey,        Right MenuKey)
+
+  -- Alternative mode operations
+  , (ZKey,            Left AlternativeModeFreeze)
+  , (GKey,            Left AlternativeModeLevelUp)
+  , (BKey,            Left AlternativeModeLevelDown)
   ]
 
 
@@ -439,7 +502,12 @@ data KeyMap
    { byNameDefaultKeyCode :: Map KeyName KeyCode
    , byNameMap            :: Map KeyName KeyAlias
    , byDevNumMap          :: Map Word16  KeyAlias
-   , byNameAlternativeMap :: Map KeyName (KeyName, KeyCode)
+
+   , byNameAlternativeMap ::
+       ( Map KeyName $ Either AlternativeModeKeyAction (KeyName, KeyCode)
+       , Map KeyName $ Either AlternativeModeKeyAction (KeyName, KeyCode)
+       )
+
    , byNameMediaMap       :: Map KeyName KeyCode
    , byNameRemaps         :: Map KeyName KeyName
    , extraByRemaps        :: Set (KeyName, KeyName)
@@ -543,12 +611,17 @@ getKeyMap opts mediaKeyCodes = go where
     <&> Set.filter (view _1 .> (`member` mediaDevNums))
     <&> Map.fromList . Set.toList . Set.map (view _1 &&& view _3)
 
-  alternativeModeKeyCodes :: m $ Map KeyName (KeyName, KeyCode)
-  alternativeModeKeyCodes = go' where
-    go' = followRemaps <$> Map.traverseWithKey f alternativeModeRemaps
+  alternativeModeKeyCodes :: m $
+    ( Map KeyName $ Either AlternativeModeKeyAction (KeyName, KeyCode)
+    , Map KeyName $ Either AlternativeModeKeyAction (KeyName, KeyCode)
+    )
 
-    followRemaps result = f' $ foldl reducer intialAcc remapsMirror where
-      f' (toDelete, toAdd) = Map.withoutKeys result toDelete <> toAdd
+  alternativeModeKeyCodes = go' where
+    go' = liftAT2 $ handle *** handle $ alternativeModeRemaps
+    handle = followRemaps <$. Map.traverseWithKey f
+
+    followRemaps result = g $ foldl reducer intialAcc remapsMirror where
+      g (toDelete, toAdd) = Map.withoutKeys result toDelete <> toAdd
 
       -- | A "Set" of keys to delete from original alternative mapping
       --   and a "Map" of new remapped keys to add to it.
@@ -558,9 +631,10 @@ getKeyMap opts mediaKeyCodes = go where
         = maybe acc (\x -> (Set.insert toKey toDelete, insert fromKey x toAdd))
         $ lookup toKey result
 
-    f keyNameFrom keyNameTo = x where
+    f _ (Left x) = pure $ Left x
+    f keyNameFrom (Right keyNameTo) = x where
       x = lookup keyNameTo <$> defaultKeyCodes >>= resolve
-      resolve = throwError failMsg `maybe` (pure . (keyNameTo,))
+      resolve = throwError failMsg `maybe` (pure . Right . (keyNameTo,))
       failMsg = [qms| Default key code of {keyNameTo} not found
                       for alternative {keyNameFrom} |]
 
@@ -571,14 +645,33 @@ getAliasByKeyDevNum keyMap devNum = devNum `lookup` byDevNumMap keyMap
 
 -- | Gets a key and returns a key it remmaped to in alternative mode
 --   and remapped "KeyCode" to trigger remapped key.
-getAlternativeRemapByName :: KeyMap -> KeyName -> Maybe (KeyName, KeyCode)
-getAlternativeRemapByName keyMap keyName =
-  keyName `lookup` byNameAlternativeMap keyMap
+getAlternativeRemapByName
+  :: KeyMap
+  -> AlternativeModeLevel
+  -> KeyName
+  -> Maybe $ Either AlternativeModeKeyAction (KeyName, KeyCode)
 
--- | Check if a key has remap in alternative mode.
-hasAlternativeRemap :: KeyMap -> KeyName -> Bool
-hasAlternativeRemap keyMap keyName =
-  keyName `member` byNameAlternativeMap keyMap
+getAlternativeRemapByName keyMap (alternativeLevelToLens -> getter) keyName =
+  lookup keyName $ view getter $ byNameAlternativeMap keyMap
+
+-- | Check if a key has a remap in alternative mode.
+hasAlternativeRemap :: KeyMap -> AlternativeModeLevel -> KeyName -> Bool
+hasAlternativeRemap keyMap (alternativeLevelToLens -> getter) keyName =
+  member keyName $ view getter $ byNameAlternativeMap keyMap
+
+-- | Checks if a key has a remap in alternative mode
+--   and this remap is "AlternativeModeKeyAction".
+hasAlternativeKeyAction :: KeyMap -> AlternativeModeLevel -> KeyName -> Bool
+hasAlternativeKeyAction keyMap (alternativeLevelToLens -> getter) keyName
+  = maybe False isLeft
+  $ lookup keyName $ view getter $ byNameAlternativeMap keyMap
+
+-- | Checks if a key has a remap in alternative mode
+--   and this remap is an alias to another key to trigger.
+hasAlternativeKey :: KeyMap -> AlternativeModeLevel -> KeyName -> Bool
+hasAlternativeKey keyMap (alternativeLevelToLens -> getter) keyName
+  = maybe False isRight
+  $ lookup keyName $ view getter $ byNameAlternativeMap keyMap
 
 
 -- | Get a key provided key remapped to.
@@ -640,6 +733,15 @@ getKeyCodeByName keyMap keyName = keyName `lookup` byNameMap keyMap <&> view _3
 getDefaultKeyCodeByName :: KeyMap -> KeyName -> Maybe KeyCode
 getDefaultKeyCodeByName keyMap keyName =
   keyName `lookup` byNameDefaultKeyCode keyMap
+
+
+alternativeLevelToLens
+  :: (Field1 a a b b, Field2 a a b b)
+  => AlternativeModeLevel
+  -> Lens' a b
+
+alternativeLevelToLens FirstAlternativeModeLevel  = _1
+alternativeLevelToLens SecondAlternativeModeLevel = _2
 
 
 makeApoClassy ''KeyMap

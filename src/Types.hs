@@ -20,9 +20,10 @@ import "deepseq" Control.DeepSeq (NFData)
 type AlternativeModeState = Maybe (AlternativeModeLevel, Bool)
 
 
-data AlternativeModeLevel = FirstAlternativeModeLevel
-                          | SecondAlternativeModeLevel
-                            deriving (Show, Eq, Generic, NFData)
+data AlternativeModeLevel
+   = FirstAlternativeModeLevel
+   | SecondAlternativeModeLevel
+     deriving (Show, Eq, Ord, Bounded, Enum, Generic, NFData)
 
 instance Default AlternativeModeLevel where
   def = FirstAlternativeModeLevel

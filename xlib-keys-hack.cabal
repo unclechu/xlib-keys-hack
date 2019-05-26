@@ -1,8 +1,10 @@
--- This file has been generated from package.yaml by hpack version 0.28.2.
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.31.1.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 546b66b134b1e7c8fa548609d24221c796dd7890092e6703e8aa895939bac0fa
+-- hash: 848a1a94ac702fb7bbe71d143ad5e7ce727d79ad123ba57edfe121e4a366a063
 
 name:                xlib-keys-hack
 version:             0.1.0
@@ -16,7 +18,6 @@ maintainer:          <lotsmanov89@gmail.com>
 copyright:           2016-2019 Viacheslav Lotsmanov
 category:            System
 build-type:          Simple
-cabal-version:       >= 1.10
 
 source-repository head
   type: git
@@ -70,6 +71,7 @@ library
     , mtl
     , process
     , qm-interpolated-string
+    , safe
     , stm
     , template-haskell
     , text
@@ -102,6 +104,7 @@ executable xlib-keys-hack
     , mtl
     , process
     , qm-interpolated-string
+    , safe
     , stm
     , template-haskell
     , text
@@ -135,6 +138,7 @@ executable xlib-keys-hack-watch-for-window-focus-events
     , mtl
     , process
     , qm-interpolated-string
+    , safe
     , stm
     , template-haskell
     , text
@@ -174,6 +178,7 @@ test-suite xlib-keys-hack-utils-test
     , mtl
     , process
     , qm-interpolated-string
+    , safe
     , stm
     , template-haskell
     , text

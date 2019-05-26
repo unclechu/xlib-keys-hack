@@ -1,18 +1,24 @@
 -- Author: Viacheslav Lotsmanov
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
+{-# OPTIONS_GHC -Wno-orphans #-}
+
 module Utils.Sugar
   ( (&), (<&>), (.&>), (<$.), (.>)
   , (?), (|?|) -- condition helpers
   , module Data.Maybe.Preserve
   , applyIf, applyUnless
   , unnoticed, apart
+  , liftAT2, liftAT3
   ) where
 
 import "base" Data.Bool (bool)
 import qualified "base" Data.Function as Operators ((&))
 import qualified "base" Data.Functor as Operators ((<&>))
 import "base" Data.Functor (($>))
+import "extra" Data.Tuple.Extra (uncurry3)
+
+import "base" Control.Applicative (liftA2, liftA3)
 
 -- local imports
 
@@ -65,6 +71,7 @@ infixl 9 .>
 (|?|) :: a -> a -> (Bool -> a)
 a |?| b = bool b a
 {-# INLINE (|?|) #-}
+{-# RULES "bool/if" forall f g x. bool g f x = if x then f else g #-}
 infixl 2 |?|
 
 
@@ -132,3 +139,12 @@ unnoticed f x = x <$ f x
 apart :: Functor f => f a -> b -> f b
 apart = ($>)
 {-# INLINE apart #-}
+
+
+liftAT2 :: Applicative f => (f a, f b) -> f (a, b)
+liftAT2 = uncurry $ liftA2 (,)
+{-# INLINE liftAT2 #-}
+
+liftAT3 :: Applicative f => (f a, f b, f c) -> f (a, b, c)
+liftAT3 = uncurry3 $ liftA3 (,,)
+{-# INLINE liftAT3 #-}

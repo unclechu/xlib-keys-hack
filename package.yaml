@@ -33,6 +33,7 @@ dependencies:
   - mtl
   - process
   - qm-interpolated-string
+  - safe
   - stm
   - template-haskell
   - text

@@ -2,6 +2,7 @@
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
 {-# LANGUAGE NoMonomorphismRestriction, ImpredicativeTypes #-}
+{-# LANGUAGE ScopedTypeVariables, FlexibleContexts #-}
 
 module Process.Keyboard.HandlingKeyEventFlow
      ( handleKeyEvent
@@ -14,12 +15,15 @@ import "containers" Data.Set (type Set, (\\))
 import qualified "containers" Data.Set as Set
 import "time" Data.Time.Clock.POSIX (type POSIXTime, getPOSIXTime)
 import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms, qns)
+import "safe" Safe (succSafe, predSafe)
 
 import "type-operators" Control.Type.Operator (type ($))
-import "base" Control.Monad ((>=>), when, unless, forM_, guard)
-import "transformers" Control.Monad.Trans.Class (lift)
+import "base" Control.Applicative ((<|>))
 import "base" Control.Concurrent (forkIO)
 import "base" Control.Concurrent.MVar (modifyMVar_)
+import "base" Control.Monad ((>=>), when, unless, forM_, guard)
+import "mtl" Control.Monad.State.Class (type MonadState)
+import "transformers" Control.Monad.Trans.Class (lift)
 import "transformers" Control.Monad.Trans.State (type StateT, execStateT)
 
 import "transformers" Control.Monad.Trans.Except ( type ExceptT
@@ -27,7 +31,7 @@ import "transformers" Control.Monad.Trans.Except ( type ExceptT
                                                  )
 
 import "lens" Control.Lens ( (.~), (%~), (^.), (&~), (.=), (%=)
-                           , set, mapped, view, _1, _2, _3
+                           , set, over, mapped, view, _1, _2, _3
                            , type Lens'
                            )
 
@@ -38,17 +42,20 @@ import "X11" Graphics.X11.Types (type KeyCode)
 
 -- local imports
 
-import           Utils.Sugar ((&), (<&>), (?), (|?|), unnoticed)
+import           Utils.Sugar ((&), (<&>), (?), (|?|), unnoticed, liftAT2)
 import           Utils.Lens ((%=<&~>))
 import           Options (type Options)
 import qualified Options as O
 import qualified Actions
-import           State (type State, CrossThreadVars)
+import           State (type State, type CrossThreadVars)
 import qualified State
-import           Keys (type KeyMap, type KeyName)
+import           Keys (type KeyMap, type KeyName, type AlternativeModeKeyAction)
 import qualified Keys
-import           Types (type AlternativeModeLevel (..))
 import           Process.Keyboard.Types (type HandledKey (HandledKey))
+
+import           Types ( type AlternativeModeState
+                       , type AlternativeModeLevel (..)
+                       )
 
 import qualified Process.CrossThread as CrossThread
                ( handleCapsLockModeChange
@@ -97,9 +104,26 @@ handleKeyEvent ctVars opts keyMap =
       -- | All pressed keys at this time excluding currently pressed key
       otherPressed = Set.delete keyName pressed
 
-      -- | Alternative version of currently pressed or released key
-      alternative :: Maybe (KeyName, KeyCode)
-      alternative = getAlternativeRemapByName keyName
+      -- | Alternative version of currently pressed or released key.
+      --
+      -- @Maybe@ indicates only that there's some alternative remapping for
+      -- current pressed or released key. It doesn't indicate whether
+      -- alternative mode is turned on or not. It trying to find alternative
+      -- remapping for current alternative mode level, if alternative mode is
+      -- turned off it will use first level by default.
+      alternativeRemap
+        :: Maybe $ Either AlternativeModeKeyAction (KeyName, KeyCode)
+
+      alternativeRemap = getAlternativeRemapByName level keyName where
+        level = def `maybe` view _1 $ State.alternative state
+
+      -- | See "alternativeRemap" for details
+      alternativeKeyAction :: Maybe AlternativeModeKeyAction
+      alternativeKeyAction = alternativeRemap >>= either Just (const Nothing)
+
+      -- | See "alternativeRemap" for details
+      alternativeKeyRemap :: Maybe (KeyName, KeyCode)
+      alternativeKeyRemap = alternativeRemap >>= either (const Nothing) Just
 
       onOnlyBothAltsPressed :: Bool
       onOnlyBothAltsPressed =
@@ -121,10 +145,6 @@ handleKeyEvent ctVars opts keyMap =
                       State.HeldRightAltForAlternativeMode -> Keys.AltLeftKey
                )
              _ -> False
-
-      -- | When Alternative mode is on and current key has alternative map
-      onAlternativeKey :: Bool
-      onAlternativeKey = isJust (State.alternative state) && isJust alternative
 
       onAppleMediaPressed :: Bool
       onAppleMediaPressed = Set.member Keys.FNKey pressed && isMediaKey keyName
@@ -225,6 +245,8 @@ handleKeyEvent ctVars opts keyMap =
         isPressed && keyName == Keys.SpaceKey && Set.size pressed == 1
 
       -- | When unholding Alt key which triggered alternative mode previously.
+      --
+      -- This preserves alternative mode is turned on.
       onUnholdAltForAlternativeMode :: Bool
       onUnholdAltForAlternativeMode =
         O.alternativeModeWithAltMod opts &&
@@ -239,7 +261,12 @@ handleKeyEvent ctVars opts keyMap =
                )
 
              Just State.AltIsReleasedBeforeAlternativeKey ->
-               all (not . hasAlternativeRemap) pressed
+               let
+                 hasAlternativeKey' keyName'
+                   = maybe False (flip hasAlternativeKey keyName' . view _1)
+                   $ State.alternative state
+               in
+                 all (not . hasAlternativeKey') pressed
 
       -- | Super-Double-Press feature.
       --
@@ -312,19 +339,23 @@ handleKeyEvent ctVars opts keyMap =
         not (state ^. State.comboState' . State.superDoublePressProceeded') &&
 
         -- see P.S. section which explains why this is commented
-        -- not (State.alternative state) &&
+        -- isNothing (State.alternative state) &&
 
         Just True ==
           state ^. State.comboState' . State.superDoublePress' <&> \x ->
             x ^. _2 == State.WaitForSecondReleaseOrPressAlternativeKey &&
-            hasAlternativeRemap keyName && isPressed &&
-
-            let superAndAlternative = [x ^. _1, keyName]
+            isPressed && (
+              let level = def `maybe` view _1 $ State.alternative state
+               in hasAlternativeRemap level keyName
+            ) && (
+              let
+                superAndAlternative = [x ^. _1, keyName]
                 onlyModifiers = foldr Set.delete pressed superAndAlternative
                 mappedAs = Set.map maybeAsName onlyModifiers
-
-             in Set.fromList superAndAlternative `Set.isSubsetOf` pressed &&
+              in
+                Set.fromList superAndAlternative `Set.isSubsetOf` pressed &&
                 Set.null (mappedAs \\ onlyRealModifiers)
+            )
 
       -- | Super-Double-Press feature.
       --
@@ -354,25 +385,41 @@ handleKeyEvent ctVars opts keyMap =
             -- Alternative mode on while holding Super key.
             x ^. _2 == State.WaitForSecondReleaseAfterAlternativeKeys
 
-      triggerCurrentKey, smartlyTriggerCurrentKey, alternativeTrigger :: IO ()
+      onAlternativeModeKeyAction :: Bool
+      onAlternativeModeKeyAction =
+        isJust (State.alternative state) && isJust alternativeKeyAction &&
+        isPressed && (
+          Set.size pressed == 1 || (
+            O.superDoublePress opts && Just True == (
+              state ^. State.comboState' . State.superDoublePress' <&> \x ->
+                x ^. _2 == State.WaitForSecondReleaseAfterAlternativeKeys &&
+                Set.size (Set.delete (x ^. _1) pressed) == 1
+            )
+          )
+        )
+
+      triggerCurrentKey, smartlyTriggerCurrentKey :: IO ()
 
       -- | Key could be remapped. It ignores alternative mode remapping.
       triggerCurrentKey = trigger keyName keyCode isPressed
 
       -- | Key could be remapped. If alternative mode is on and a key has
       --   alternative mode remap it triggers that alternative version.
-      smartlyTriggerCurrentKey =
-        onAlternativeKey ? alternativeTrigger $ triggerCurrentKey
+      --
+      -- Otherwise it triggers regular key
+      -- (which in case may be remapped apart from alternative mode mapping).
+      smartlyTriggerCurrentKey
+        = maybe triggerCurrentKey (alternativeTrigger . view _2)
+        $ liftAT2 (State.alternative state, alternativeKeyRemap)
 
-      alternativeTrigger = do
-
-        let Just (keyNameTo, keyCodeTo) = alternative
+      alternativeTrigger :: (KeyName, KeyCode) -> IO ()
+      alternativeTrigger (keyNameTo, keyCodeTo) = do
 
         noise [qms| Triggering {isPressed ? "pressing" $ "releasing"}
                     of alternative {keyNameTo}
                     (X key code: {keyCodeTo}) by {keyName}... |]
 
-        (isPressed ? pressKey $ releaseKey) keyCodeTo
+        (pressKey |?| releaseKey) isPressed keyCodeTo
 
       off :: KeyName -> IO ()
       off keyNameToOff =
@@ -491,26 +538,194 @@ handleKeyEvent ctVars opts keyMap =
     let superKey = view _1 $ fromJust $
           state ^. State.comboState' . State.superDoublePress'
 
-        superKeyCode = fromJust $ getKeyCodeByName superKey
-        alternativeKey = fromJust $ fmap fst $ alternative
+    let superKeyCode = fromJust $ getKeyCodeByName superKey
 
-    noise [qms| Pressed alternative {keyName} as {alternativeKey}
+    let ( shouldReleaseSuper   :: Bool                             ,
+          whatToDoNextAction   :: DoubleSuperWithAlternativeAction ,
+          alternativeModeState :: AlternativeModeState             ,
+          asKeyMark            :: String                           ,
+          actionMsg            :: String                           )
+                                                                   =
+          case fromJust alternativeRemap of
+               Left km@Keys.AlternativeModeFreeze ->
+                 let
+                   alternativeModeNewState =
+                     (State.alternative state <&> set _2 True) <|>
+                     Just (def, True)
+                 in
+                   ( False
+                   , AlternativeModeIsPermanentActLikeKeyIsNotPressed
+                   , alternativeModeNewState
+                   , show km
+                   , [qms| turning alternative mode on permanently,
+                           without need to hold {maybeAsKeyStr superKey}
+                           to keep alternative mode being turned on,
+                           leaving {maybeAsKeyStr superKey} being pressed
+                           in case a user need to press something with
+                           Super key combo and don't want to release and press
+                           it again (it's okay since it doesn't clash with any
+                           other key in this case, it doesn't lead to unwanted
+                           possible combo with Super) |]
+                   )
+
+               Left km@Keys.AlternativeModeLevelUp ->
+                 let
+                   next = NextStepFlowActLikeKeyIsNotPressed
+
+                   level = maybe (succSafe def) (succSafe . view _1)
+                         $ State.alternative state
+
+                   alternativeModeNewState = Just (level, False)
+
+                   msgPrefix :: String
+                   msgPrefix =
+                     [qm| triggering {maybeAsKeyStr superKey} off and |]
+
+                   msgWhenOn =
+                     [qms| {msgPrefix} making alternative mode being no longer
+                           permanent (since alternative mode have been turned on
+                           previously), so alternative mode is kept turned on
+                           until {maybeAsKeyStr superKey} will be released,
+                           and shifting alternative mode to {level} |]
+
+                   msgWhenOff =
+                     [qms| {msgPrefix} enabling alternative mode with {level} on
+                           until {maybeAsKeyStr superKey} will be released |]
+
+                   msg = msgWhenOn |?| msgWhenOff
+                       $ isJust $ State.alternative state
+                 in
+                   (True, next, alternativeModeNewState, show km, msg)
+
+               Left km@Keys.AlternativeModeLevelDown ->
+                 let
+                   -- | When alternative mode is either
+                   --   already turned off or is going to be.
+                   isLowerEdge =
+                     isNothing (State.alternative state) ||
+                     (State.alternative state <&> view _1) == Just minBound
+
+                   -- | Should release super key flag.
+                   --
+                   -- Release if alternative mode is turned on, and we are just
+                   -- shifting alternative mode level one step down.
+                   --
+                   -- No need for release when either alternative mode is off
+                   -- (so we don't have to do anything related to alternative
+                   -- mode) or alternative mode is on and its level is minimal
+                   -- (so we just turning alternative mode off, and user may
+                   -- want to press something with Super after that without need
+                   -- to release and press it again, it's okay since it doesn't
+                   -- clash with any other key in this case, it doesn't
+                   -- lead to unwanted possible combo with Super).
+                   releaseSuper = not isLowerEdge
+
+                   (next, alternativeModeNewState)
+                     = isLowerEdge
+                     ? ( NoNextStepActLikeKeyIsNotPressed, Nothing )
+                     $ ( NextStepFlowActLikeKeyIsNotPressed
+                       , State.alternative state <&> over _1 predSafe
+                                                 <&> set  _2 False
+                       )
+
+                   msg
+                     | isNothing (State.alternative state) =
+                         [qms| alternative mode is already turned off,
+                               so just kinda doing nothing, leaving
+                               {maybeAsKeyStr superKey} being pressed |]
+
+                     | (State.alternative state <&> view _1) == Just minBound =
+                         [qms| alternative mode is turned on with minimal level,
+                               so turning alternative mode off, leaving
+                               {maybeAsKeyStr superKey} being pressed |]
+
+                     | otherwise = -- not isLowerEdge
+                         [qms| shifting alternative mode one level down to
+                               {maybe def (view _1) alternativeModeNewState},
+                               making alternative mode being no longer
+                               permanent (since alternative mode have been
+                               turned on previously),
+                               triggering {maybeAsKeyStr superKey} off |]
+                 in
+                   (releaseSuper, next, alternativeModeNewState, show km, msg)
+
+               Right (asKeyName, _) ->
+                 let
+                   next = NextStepFlowAndTriggerAlternative
+
+                   -- | If alternative mode was previously turned on
+                   --   then it's no longer permanent.
+                   --
+                   -- I'm not sure if we should move it always back to
+                   -- @FirstAlternativeModeLevel@ or not... Maybe it will change
+                   -- in the future, or would be configurable via some option.
+                   alternativeModeNewState = x <|> y where
+                     x = State.alternative state <&> set _2 False
+                     y = Just (def, False)
+
+                   msgPrefix :: String
+                   msgPrefix =
+                     [qm| triggering {maybeAsKeyStr superKey} off and |]
+
+                   msgWhenOn =
+                     [qms| {msgPrefix} making alternative mode being no longer
+                           permanent (since alternative mode have been turned on
+                           previously), so alternative mode is kept turned on
+                           until {maybeAsKeyStr superKey} will be released |]
+
+                   msgWhenOff =
+                     [qms| {msgPrefix} enabling alternative mode on
+                           until {maybeAsKeyStr superKey} will be released,
+                           also triggering alternative {asKeyName} |]
+
+                   msg = msgWhenOn |?| msgWhenOff
+                       $ isJust $ State.alternative state
+                 in
+                   (True, next, alternativeModeNewState, show asKeyName, msg)
+
+    noise [qms| Pressed alternative {keyName} as {asKeyMark}
                 while {maybeAsKeyStr superKey} is pressed
                 in context of double press of Super key feature,
-                triggering {maybeAsKeyStr superKey} off and enabling alternative
-                mode on until {maybeAsKeyStr superKey} will be released... |]
+                {actionMsg}... |]
 
-    trigger superKey superKeyCode False
-    let alternativeModeState = Just (def, False)
+    when shouldReleaseSuper $ trigger superKey superKeyCode False
     notify $ Actions.XmobarAlternativeFlag alternativeModeState
 
-    reprocess $ state &~ do
+    let modifier :: MonadState State m => m ()
+        modifier = do
+          State.comboState' . State.superDoublePressProceeded' .= True
+          State.alternative' .= alternativeModeState
 
-      State.comboState' . State.superDoublePress' %=<&~> do
-        _2 .= State.WaitForSecondReleaseAfterAlternativeKeys
+          do
+            let waitForSecondReleaseAfterAlternativeKeys =
+                  State.comboState' . State.superDoublePress' %=<&~> do
+                    _2 .= State.WaitForSecondReleaseAfterAlternativeKeys
 
-      State.comboState' . State.superDoublePressProceeded' .= True
-      State.alternative' .= alternativeModeState
+            let actLikeKeyIsNotPressed = State.pressedKeys' .= otherPressed
+
+            let noNextStep =
+                  State.comboState' . State.superDoublePress' .= Nothing
+
+            case whatToDoNextAction of
+                 NextStepFlowAndTriggerAlternative ->
+                   waitForSecondReleaseAfterAlternativeKeys
+                 NextStepFlowActLikeKeyIsNotPressed -> do
+                   waitForSecondReleaseAfterAlternativeKeys
+                   actLikeKeyIsNotPressed
+                 NoNextStepActLikeKeyIsNotPressed ->
+                   noNextStep >> actLikeKeyIsNotPressed
+                 AlternativeModeIsPermanentActLikeKeyIsNotPressed ->
+                   noNextStep >> actLikeKeyIsNotPressed
+
+    let -- | Rerunning processing flow again if need to trigger a key
+        f :: State -> IO State
+        f = case whatToDoNextAction of
+                 NextStepFlowAndTriggerAlternative                -> reprocess
+                 NextStepFlowActLikeKeyIsNotPressed               -> pure
+                 NoNextStepActLikeKeyIsNotPressed                 -> pure
+                 AlternativeModeIsPermanentActLikeKeyIsNotPressed -> pure
+
+    f $ state &~ modifier
 
   | onSuperDoubleReleasedAfterAlternative -> do
 
@@ -520,7 +735,12 @@ handleKeyEvent ctVars opts keyMap =
                 turning alternative mode off and
                 resetting state of this feature... |]
 
-    alternativeMultipleTrigger (Set.toList pressed) False
+    let !level =
+          maybe (error "alternative mode is supposed to be turned on")
+                (view _1)
+                (State.alternative state)
+
+    alternativeMultipleTrigger (Just level) (Set.toList pressed) False
     notify $ Actions.XmobarAlternativeFlag Nothing
 
     pure $ state &~ do
@@ -540,6 +760,64 @@ handleKeyEvent ctVars opts keyMap =
     reprocess $ state &~ do
       State.comboState' . State.superDoublePress'          .= Nothing
       State.comboState' . State.superDoublePressProceeded' .= True
+
+  | onAlternativeModeKeyAction -> do
+
+    let !(!level, !isPermanent) = fromJust $ State.alternative state
+
+    let logMsg :: AlternativeModeKeyAction -> String -> String
+        logMsg km actionLogMsg =
+          [qms| Pressed {keyName} which have been interpreted as {km}
+                due to activate alternative mode on {level}, {actionLogMsg},
+                removing {keyName} from pressed keys set... |]
+
+    case fromJust alternativeKeyAction of
+         km@Keys.AlternativeModeFreeze -> do
+           noise $ logMsg km
+                 $ isPermanent
+                 ? [qm| doing nothing (since it's already permanent) |]
+                 $ [qm| making it being permanent |]
+
+           (isPermanent ? pure $ unnoticed notifyAboutAlternative) $
+             state &~ do
+               State.pressedKeys' .= otherPressed -- Without current key
+
+               unless isPermanent $ do
+                 State.alternative' %=<&~> _2 .= True -- Permanent
+                 State.comboState' . State.heldAltForAlternativeMode' .= Nothing
+                 State.comboState' . State.superDoublePress'          .= Nothing
+                 State.comboState' . State.superDoublePressProceeded' .= False
+
+         km@Keys.AlternativeModeLevelUp -> do
+           let !isLevelMax = level == maxBound
+           let shiftFunc = succSafe
+
+           noise $ logMsg km
+                 $ not isLevelMax
+                 ? [qm| shifting level up to {shiftFunc level} |]
+                 $ [qm| doing nothing (since level is maximum) |]
+
+           (isLevelMax ? pure $ unnoticed notifyAboutAlternative) $
+             state &~ do
+               State.pressedKeys' .= otherPressed -- Without current key
+               State.alternative' %=<&~> _1 %= shiftFunc
+
+         km@Keys.AlternativeModeLevelDown -> do
+           let !isLevelMin = level == minBound
+           let shiftFunc = predSafe
+
+           noise $ logMsg km
+                 $ not isLevelMin
+                 ? [qms| shifting level down to {shiftFunc level} |]
+                 $ [qms| turning alternative mode off
+                         (since level is minimum) |]
+
+           unnoticed notifyAboutAlternative $
+             state &~ do
+               State.pressedKeys' .= otherPressed -- Without current key
+
+               State.alternative' &
+                 (isLevelMin ? (.= Nothing) $ (%=<&~> _1 %= shiftFunc))
 
   | onEnterWithModsOnlyInProgress ->
 
@@ -933,8 +1211,17 @@ handleKeyEvent ctVars opts keyMap =
   getDefaultKeyCodeByName :: KeyName -> Maybe KeyCode
   getDefaultKeyCodeByName = Keys.getDefaultKeyCodeByName keyMap
 
-  hasAlternativeRemap = Keys.hasAlternativeRemap keyMap :: KeyName -> Bool
-  getAlternativeRemapByName :: KeyName -> Maybe (KeyName, KeyCode)
+  hasAlternativeRemap :: AlternativeModeLevel -> KeyName -> Bool
+  hasAlternativeRemap = Keys.hasAlternativeRemap keyMap
+
+  hasAlternativeKey :: AlternativeModeLevel -> KeyName -> Bool
+  hasAlternativeKey = Keys.hasAlternativeKey keyMap
+
+  getAlternativeRemapByName
+    :: AlternativeModeLevel
+    -> KeyName
+    -> Maybe $ Either AlternativeModeKeyAction (KeyName, KeyCode)
+
   getAlternativeRemapByName = Keys.getAlternativeRemapByName keyMap
 
   isMediaKey      = Keys.isMediaKey      keyMap :: KeyName -> Bool
@@ -991,16 +1278,16 @@ handleKeyEvent ctVars opts keyMap =
       modifyMVar_ (State.stateMVar ctVars) mapState
 
     mapState :: State -> IO State
-    mapState = fmap (either id id) . runExceptT . chain where
+    mapState = fmap (either id id) . runExceptT . chain' where
 
-      chain :: State -> ExceptT State IO State
-      chain = ignoreDuplicates
-              >=> storeKey
-              >=> lift . handleM
-              >=> lift . handleResetKbdLayout
-              >=> lift . handleCapsLockModeChange
-              >=> lift . handleAlternativeModeChange
-              >=> lift . pure . reset
+      chain' :: State -> ExceptT State IO State
+      chain' = ignoreDuplicates
+               >=> storeKey
+               >=> lift . handleM
+               >=> lift . handleResetKbdLayout
+               >=> lift . handleCapsLockModeChange
+               >=> lift . handleAlternativeModeChange
+               >=> lift . pure . reset
 
     reset :: State -> State
     reset = State.comboState' . State.superDoublePressProceeded' .~ False
@@ -1096,36 +1383,39 @@ handleKeyEvent ctVars opts keyMap =
     let asKeyName = getRemapByName keyName
 
     noise [qms| Triggering {isPressed ? "pressing" $ "releasing"}
-                of {keyName} {maybe mempty (("as " <>) . show) asKeyName}
+                of {keyName}{maybe mempty ((" as " <>) . show) asKeyName}
                 (X key code: {keyCode})... |]
 
-    (isPressed ? pressKey $ releaseKey) keyCode
+    (pressKey |?| releaseKey) isPressed keyCode
 
-  -- | Multiple version of "trigger" that supports alternative keys.
-  --
-  -- Alternative mode supposed to be enabled when calling this monad.
-  alternativeMultipleTrigger :: [KeyName] -> Bool -> IO ()
-  alternativeMultipleTrigger keyNames isPressed = do
+  -- | Multiple version of "trigger" (supports alternative remapping)
+  alternativeMultipleTrigger
+    :: Maybe AlternativeModeLevel -> [KeyName] -> Bool -> IO ()
 
-    let keys :: [(KeyName, KeyName, KeyCode)]
-        keys = flip map keyNames $ \k ->
-          let
-            mappedAlternative = getAlternativeRemapByName k
-            nonAlternative = (maybeAsName k, fromJust $ getKeyCodeByName k)
-            (asKeyName, code) = fromMaybe nonAlternative mappedAlternative
-          in
-            (k, asKeyName, code)
-
-    noise' $ flip map keys $ \(keyName, asKeyName, code) ->
-      let
-        alternativeStr = hasAlternativeRemap keyName ? "alternative " $ mempty
-        asKeyStr | keyName == asKeyName = show keyName
-                 | otherwise            = [qm| {keyName} (as {asKeyName}) |]
-      in
+  alternativeMultipleTrigger level keyNames isPressed = go where
+    go = do
+      noise' $ flip fmap keys $ \(keyName, asKeyName, code) ->
         [qms| Triggering {isPressed ? "pressing" $ "releasing"}
-              of {alternativeStr}{asKeyStr} (X key code: {code})... |]
+              of {keyStr keyName asKeyName} (X key code: {code})... |]
 
-    (isPressed ? pressKeys $ releaseKeys) $ view _3 <$> keys
+      (pressKeys |?| releaseKeys) isPressed $ view _3 <$> keys
+
+    keyStr keyName (Left Nothing) = show keyName
+    keyStr keyName (Left (Just asKeyName)) = [qm| {keyName} (as {asKeyName}) |]
+    keyStr keyName (Right asKeyName) =
+      [qm| alternative {keyName} (as {asKeyName}) |]
+
+    keys :: [(KeyName, Either (Maybe KeyName) KeyName, KeyCode)]
+    keys = foldl reducer [] keyNames where
+      reducer acc k = maybe acc (: acc) $
+        case level >>= flip getAlternativeRemapByName k of
+             Just (Left _) -> Nothing
+
+             Just (Right (asKeyName, keyCode)) ->
+               Just (k, Right asKeyName, keyCode)
+
+             Nothing ->
+               getKeyCodeByName k <&> \x -> (k, Left $ getRemapByName k, x)
 
   -- | Triggering both press and release events to X server.
   --
@@ -1173,3 +1463,11 @@ handleKeyEvent ctVars opts keyMap =
   maybeAsKeyStr keyName
     = getRemapByName keyName
     & show keyName `maybe` \asKeyName -> [qm| {keyName} (as {asKeyName}) |]
+
+
+data DoubleSuperWithAlternativeAction
+   = NextStepFlowAndTriggerAlternative
+   | NextStepFlowActLikeKeyIsNotPressed
+   | NoNextStepActLikeKeyIsNotPressed
+   | AlternativeModeIsPermanentActLikeKeyIsNotPressed
+     deriving (Show, Eq)
