@@ -1,8 +1,6 @@
 -- Author: Viacheslav Lotsmanov
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
-{-# OPTIONS_GHC -Wno-orphans #-}
-
 module Utils.Sugar
   ( (&), (<&>), (.&>), (<$.), (.>)
   , (?), (|?|) -- condition helpers
@@ -59,7 +57,8 @@ infixr 9 <$. -- Precedence of (.)
 -- Just like bind operator (>>=) for monads but for simple functions.
 (.>) :: (a -> b) -> (b -> c) -> a -> c
 (.>) = flip (.)
-{-# INLINE (.>) #-}
+{-# INLINE [0] (.>) #-}
+{-# RULES "(.>)/(.)" forall a b. (.>) a b = b . a #-}
 infixl 9 .>
 
 
@@ -70,8 +69,8 @@ infixl 9 .>
 --    in [foo (2+2 == 4), foo (2+2 == 5)] -- returns: ["Yes", "No"]
 (|?|) :: a -> a -> (Bool -> a)
 a |?| b = bool b a
-{-# INLINE (|?|) #-}
-{-# RULES "bool/if" forall f g x. bool g f x = if x then f else g #-}
+{-# INLINE [0] (|?|) #-}
+{-# RULES "(|?|)/if" forall a b c. (|?|) a b c = if c then a else b #-}
 infixl 2 |?|
 
 
