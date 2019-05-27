@@ -4,6 +4,29 @@
 
 Keyboard behavior customization utility.
 
+A scheme of what I achieved by using these options (just an example):
+- `--hold-alt-for-alternative-mode`
+- `--ergonomic-mode`
+- `--shift-hjkl`
+
+Full command to run (with my _Ducky One 2 Mini_ keyboard as an example):
+``` bash
+xlib-keys-hack \
+  --hold-alt-for-alternative-mode --ergonomic-mode --shift-hjkl \
+  '/dev/input/by-id/usb-Ducky_Ducky_One2_Mini_RGB_DK-V1.08-190201-event-if03' \
+  '/dev/input/by-id/usb-Ducky_Ducky_One2_Mini_RGB_DK-V1.08-190201-event-kbd' \
+  '/dev/input/by-id/usb-Ducky_Ducky_One2_Mini_RGB_DK-V1.08-190201-if01-event-mouse' \
+  '/dev/input/by-id/usb-Ducky_Ducky_One2_Mini_RGB_DK-V1.08-190201-if01-mouse' \
+  '/dev/input/by-id/usb-Ducky_Ducky_One2_Mini_RGB_DK-V1.08-190201-if02-event-kbd' \
+  --disable-xinput-device-name='Ducky Ducky One2 Mini RGB'
+```
+
+_P.S. It's just one of possible ways to configure this tool,
+it's neither limited to this nor urge you to remap your keyboard so radical,
+see detailed [usage info](#--help) for all possible options._
+
+![Keyboard scheme](./docs/scheme/ergonomic-mode-and-shifted-hjkl-render.png)
+
 **WARNING!** Work in progress, not released yet, look at
 [tasks board](https://github.com/unclechu/xlib-keys-hack/projects/1?fullscreen=true).
 Anyway, I'm using this tool for years already for myself, it's kinda in constant
@@ -154,7 +177,7 @@ directory, make sure you have this directory in your `$PATH` environment variabl
 
 ## More info
 
-### --help
+### <a name="--help"></a>--help
 
 ``` text
 Usage: xlib-keys-hack [OPTION...] DEVICES-FD-PATHS...
@@ -169,26 +192,56 @@ Usage: xlib-keys-hack [OPTION...] DEVICES-FD-PATHS...
       --shift-numeric-keys                                Shift numeric keys in numbers row one key righter, and move 'minus' key to the left side at '1' key position.
                                                           Could be more consistent for 10-fingers typing.
                                                           Default is: Off
+      --shift-hjkl                                        Shift 'HJKL' keys one column right ('semicolon' key would be moved on original 'H' key position).
+                                                          To place arrows keys (alternative mode, vim, tmux selection, etc.) under four fingers to provide more convenient experience.
+                                                          Default is: Off
       --right-control-as-super                            Remap Right Control as Right Super key.
                                                           Some keyboards doesn't have neither Right Super nor Menu key at the right side, since you can have Control key pressing Enter by "additional controls" feature, this could be a solution.
                                                           Default is: Off
       --hold-alt-for-alternative-mode                     When hold Alt key (left or right, doesn't matter) alternative mode is turned on (real Alt keys aren't triggered).
                                                           To trigger real Alt key you press Alt+Space, in this case alternative mode is turned off and real Alt is triggered from that moment.
                                                           To turn alternative mode on Alt key supposed to be pressed first before any other key or modifier.
+                                                          Do not use with --toggle-alternative-mode-by-alts to be able to press combo like Alt-2 by just both Alts pressed plus "w" key. Otherwise you'll just have turn alternative mode on permanently (by pressing both Alts or by double pressing Super key if such feature is enabled) and then press Alt-w to trigger actual Alt-2.
                                                           Default is: Off
-      --disable-toggling-alternative-mode-by-alts         Disable toggling alternative mode by pressing Alt keys (Left and Right) both at the same time
-                                                          Default is: On
+      --toggle-alternative-mode-by-alts                   Enable toggling alternative mode by pressing Alt keys (Left and Right) both at the same time.
+                                                          Default is: Off
       --turn-off-fourth-row                               Turns off fourth keys row completely.
                                                           This helps to change your reflexes when --hold-alt-for-alternative-mode feature is turned on.
+                                                          This option makes no sense with --ergonomic-mode option.
+                                                          Default is: Off
+      --ergonomic-mode                                    Turns on kinda hardcore ergonomic mode (an attempt to make the experience of using a traditional keyboard to be more convenient, or I would say less painful).
+                                                          WARNING! It may force you to change a lot of your reflexes!
+                                                          I urgently recommend to use this option with --hold-alt-for-alternative-mode option!
+                                                          Also --shift-hjkl would probably get you even more feeling of consistency.
+                                                          This mode implies --turn-off-fourth-row option.
+                                                          The main idea of this mode is that a finger moves vertically only one row up/down, and horizontally the index/pinky finger moves only one column left/right.
+                                                          Of course to achive this some keys wouldn't be available, to solve this issue some keys will be remapped and some moved to alternative mode (and those keys which don't satisfy the rules will be turned off completely):
+                                                            Remappings:
+                                                              * Apostrophe ( ' " ) key will become Enter key (which also will work as additional Ctrl key if related option is enabled);
+                                                              * Open Bracket ( [ { ) key will become Apostrophe key (which was Minus ( - _ ) key in alternative mode).
+                                                            Rest keys are moved to alternative mode (to first level):
+                                                              * "A" key will become Equal ( = + ) key;
+                                                              * "S" key will become Minus ( - _ ) key;
+                                                              * "D" key will become Open Bracket ( [ { ) key;
+                                                              * "F" key will become Close Bracket ( ] } ) key;
+                                                              * "V" key will become Backslash ( \ | ) key;
+                                                              * Open Bracket key will become Delete key (Apostrophe ( ' " ) key will be remapped to Enter key, so it can't be Delete key anymore because Enter key should be available in all modes).
+                                                            Also in second level of alternative mode some FN keys will be rearranged:
+                                                              * Open Bracket key will become F11 key;
+                                                              * Tab key will become F12 key (it could be F1 and all next in ascending order in this row but you loose consistency with regular number keys from first alternative mode level in this case).
+                                                          Real keys which will be disabled (along with fourth row):
+                                                            * Close Bracket ( ] } ) key;
+                                                            * Backslash ( \ | ) key;
+                                                            * Enter key.
                                                           Default is: Off
       --disable-super-double-press                        Disable handling of double Super key press.
                                                           Default is: On
       --super-double-press-cmd=COMMAND                    When Super key is pressed twice in short interval alternative mode will be toggled or specified shell command will be spawned.
-                                                          This option makes no sense with --disable-super-double-press
+                                                          This option makes no sense with --disable-super-double-press option.
       --left-super-double-press-cmd=COMMAND               Double Left Super key press will spawn specified shell command instead of toggling alternative mode.
-                                                          This option makes no sense with --disable-super-double-press
+                                                          This option makes no sense with --disable-super-double-press option.
       --right-super-double-press-cmd=COMMAND              Double Right Super key press will spawn specified shell command instead of toggling alternative mode.
-                                                          This option makes no sense with --disable-super-double-press
+                                                          This option makes no sense with --disable-super-double-press option.
       --disable-reset-by-escape-on-capslock               Disable resetting Caps Lock mode, Alternative mode and keyboard layout by Escape that triggered by Caps Lock key
                                                           (only when it's remapped, no need to use this option if you already use --real-capslock)
                                                           Default is: On
@@ -212,30 +265,30 @@ Usage: xlib-keys-hack [OPTION...] DEVICES-FD-PATHS...
                                                           You can use '%DISPLAY%' in your own value of this option (it will be automatically replaced).
                                                           '%DISPLAY%' will be replaced with view of '$DISPLAY' environment variable where ':' and '.' symbols are replaced to underscore '_'.
                                                           For example if we have '$DISPLAY' as ':0.0' 'foo.%DISPLAY%.bar' will be replaced to 'foo._0_0.bar'.
-                                                          This option makes sense only with --xmobar-indicators
+                                                          This option makes sense only with --xmobar-indicators option.
       --xmobar-indicators-dbus-bus=BUS                    DBus bus name for xmobar indicators.
                                                           Default is: 'com.github.unclechu.xmonadrc.%DISPLAY%' where '%DISPLAY%' is view of '$DISPLAY' environment variable where ':' and '.' symbols are replaced to underscore '_'.
                                                           For example if we have '$DISPLAY' as ':0.0' 'com.github.unclechu.xmonadrc.%DISPLAY%' will be replaced to 'com.github.unclechu.xmonadrc._0_0'.
                                                           You can use '%DISPLAY%' in your own value of this option (it will be automatically replaced).
-                                                          This option makes sense only with --xmobar-indicators
+                                                          This option makes sense only with --xmobar-indicators option.
                                                           Use --xmobar-indicators-dbus-bus=any to broadcast for everyone.
       --xmobar-indicators-dbus-interface=INTERFACE        DBus interface for xmobar indicators.
                                                           Default is: 'com.github.unclechu.xmonadrc'
                                                           You can use '%DISPLAY%' in your own value of this option (it will be automatically replaced).
                                                           '%DISPLAY%' will be replaced with view of '$DISPLAY' environment variable where ':' and '.' symbols are replaced to underscore '_'.
                                                           For example if we have '$DISPLAY' as ':0.0' 'foo.%DISPLAY%.bar' will be replaced to 'foo._0_0.bar'.
-                                                          This option makes sense only with --xmobar-indicators
+                                                          This option makes sense only with --xmobar-indicators option.
       --xmobar-indicators-dbus-flush-path=PATH            DBus object path for 'flush' request from xmobar indicators process.
                                                           Default is: '/com/github/unclechu/xmonadrc/%DISPLAY%' where '%DISPLAY%' is view of '$DISPLAY' environment variable where ':' and '.' symbols are replaced to underscore '_'.
                                                           For example if we have '$DISPLAY' as ':0.0' '/com/github/unclechu/xmonadrc/%DISPLAY%' will be replaced to '/com/github/unclechu/xmonadrc/_0_0'.
                                                           You can use '%DISPLAY%' in your own value of this option (it will be automatically replaced).
-                                                          This option makes sense only with --xmobar-indicators
+                                                          This option makes sense only with --xmobar-indicators option.
       --xmobar-indicators-dbus-flush-interface=INTERFACE  DBus interface for 'flush' request from xmobar indicators process.
                                                           Default is: 'com.github.unclechu.xmonadrc'
                                                           You can use '%DISPLAY%' in your own value of this option (it will be automatically replaced).
                                                           '%DISPLAY%' will be replaced with view of '$DISPLAY' environment variable where ':' and '.' symbols are replaced to underscore '_'.
                                                           For example if we have '$DISPLAY' as ':0.0' 'foo.%DISPLAY%.bar' will be replaced to 'foo._0_0.bar'.
-                                                          This option makes sense only with --xmobar-indicators
+                                                          This option makes sense only with --xmobar-indicators option.
       --external-control                                  Enabling handling of external control IPC-commands through DBus.
                                                           Default is: Off
       --external-control-dbus-path=PATH                   DBus object path of external control IPC.
@@ -243,18 +296,18 @@ Usage: xlib-keys-hack [OPTION...] DEVICES-FD-PATHS...
                                                           You can use '%DISPLAY%' in your own value of this option (it will be automatically replaced).
                                                           '%DISPLAY%' will be replaced with view of '$DISPLAY' environment variable where ':' and '.' symbols are replaced to underscore '_'.
                                                           For example if we have '$DISPLAY' as ':0.0' 'foo.%DISPLAY%.bar' will be replaced to 'foo._0_0.bar'.
-                                                          This option makes sense only with --external-control
+                                                          This option makes sense only with --external-control option.
       --external-control-dbus-bus=BUS                     DBus bus name of external control IPC.
                                                           Default is: 'com.github.unclechu.xlib_keys_hack.%DISPLAY%' where '%DISPLAY%' is view of '$DISPLAY' environment variable where ':' and '.' symbols are replaced to underscore '_'.
                                                           For example if we have '$DISPLAY' as ':0.0' 'com.github.unclechu.xlib_keys_hack.%DISPLAY%' will be replaced to 'com.github.unclechu.xlib_keys_hack._0_0'.
                                                           You can use '%DISPLAY%' in your own value of this option (it will be automatically replaced).
-                                                          This option makes sense only with --external-control
+                                                          This option makes sense only with --external-control option.
       --external-control-dbus-interface=INTERFACE         DBus interface of external control IPC.
                                                           Default is: 'com.github.unclechu.xlib_keys_hack'
                                                           You can use '%DISPLAY%' in your own value of this option (it will be automatically replaced).
                                                           '%DISPLAY%' will be replaced with view of '$DISPLAY' environment variable where ':' and '.' symbols are replaced to underscore '_'.
                                                           For example if we have '$DISPLAY' as ':0.0' 'foo.%DISPLAY%.bar' will be replaced to 'foo._0_0.bar'.
-                                                          This option makes sense only with --external-control
+                                                          This option makes sense only with --external-control option.
 ```
 
 ### Generating coverage report

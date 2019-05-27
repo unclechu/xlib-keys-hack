@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta name="author" content="unclechu">
+		<title>Keyboard scheme</title>
+		<style type="text/css">
+			body {
+				font-family: monospace;
+				font-size: 12px;
+				padding: 20px;
+				color: black;
+			}
+			table {
+				border-spacing: 6px;
+				margin: 0 auto;
+			}
+			table tr td {
+				padding: 5px;
+				border: 2px solid transparent;
+				text-align: center;
+				font-weight: bold;
+				box-sizing: border-box;
+			}
+			/*
+				it's okay on firefox 66.x,
+				but on chromium 71.x is for some reason messed up,
+				sizes are incorrect.
+			*/
+			table tr td.left, table tr td.right, table tr td.bottom {
+				border-color: gray;
+				width: 60px;
+				height: 60px;
+				min-width: 60px;
+				min-height: 60px;
+				max-width: 60px;
+				max-height: 60px;
+			}
+			/* two TDs later to avoid opacity */
+			table tr td.before-split + td + td {
+				position: relative;
+			}
+			table tr td.before-split + td + td:before {
+				content: '';
+				display: block;
+				position: absolute;
+				margin-right: 14px;
+				right: 200%;
+				top: -18px;
+				width: 2px;
+				height: 90px;
+				background: red;
+			}
+			table tr td.before-split[colspan="3"] + td + td:before {
+				right: 400%;
+				margin-right: 34px;
+			}
+			table tr td small small {
+				text-shadow: 1px 1px 5px white;
+			}
+			table tr td small { display: block; }
+			table tr td small i {
+				color: darkred;
+				text-shadow: 1px 1px 0px white;
+			}
+			table tr td.left, table tr td.right {
+				opacity: .5;
+			}
+			table tr td.left + td.left:not(.before-split),
+			table tr td.right + td.right:not(:last-child) {
+				opacity: 1;
+			}
+			table tr td.note-block {
+				text-align: left;
+				white-space: nowrap;
+				vertical-align: top;
+			}
+			.pinky { background: lightskyblue; }
+			.ring { background: lightgreen; }
+			.middle { background: gold; }
+			.index { background: orangered; }
+			.thumb { background: plum; }
+			.note { font-style: italic; font-weight: normal; }
+			.key-legend {
+				display: inline-block;
+				text-align: center;
+				width: 30px;
+				background: gainsboro;
+				padding: 2px 2px 0;
+			}
+			table tr td small small .key-legend {
+				padding-bottom: 2px;
+			}
+			ul {
+				padding: 0;
+				margin: 30px 0 0;
+				list-style: none;
+				position: relative;
+			}
+			li {
+				margin-left: 10px;
+				position: absolute;
+				margin-top: 2px;
+				width: 60px;
+				transform: rotate(-90deg);
+				left: 50px;
+			}
+			li:before {
+				content: '•';
+				display: block;
+				position: absolute;
+				left: -10px;
+				opacity: .3;
+			}
+			li.thumb {
+				transform: rotate(-145deg);
+				left: 5px;
+				top: 40px;
+				width: 38px;
+			}
+			li.thumb + li { margin-left: -5px; top: 7px; width: 50px; transform: rotate(-92deg); }
+			li.thumb + li + li { margin-left: 10px; top: 0px; }
+			li.thumb + li + li + li { margin-left: 32px; width: 55px; top: 3px; transform: rotate(-88deg); }
+			li.thumb + li + li + li + li { margin-left: 58px; width: 40px; top: 14px; transform: rotate(-85deg); }
+		</style>
+	</head>
+	<body>
+		<table>
+			<tr>
+				<td class="pinky  left">                           Tab    <small> ` ~           <small> F12     </small></small></td>
+				<td class="pinky  left">                           Q      <small> 1 !           <small> F1      </small></small></td>
+				<td class="ring   left">                           W      <small> 2 @           <small> F2      </small></small></td>
+				<td class="middle left">                           E      <small> 3 #           <small> F3      </small></small></td>
+				<td class="index  left">                           R      <small> 4 $           <small> F4      </small></small></td>
+				<td class="index  left before-split">              T      <small> 5 %           <small> F5      </small></small></td>
+				<td class="index  right">                          Y      <small> 6 ^           <small> F6      </small></small></td>
+				<td class="index  right">                          U      <small> 7 &amp;       <small> F7      </small></small></td>
+				<td class="middle right">                          I      <small> 8 *           <small> F8      </small></small></td>
+				<td class="ring   right">                          O      <small> 9 (           <small> F9      </small></small></td>
+				<td class="pinky  right">                          P      <small> 0 )           <small> F10     </small></small></td>
+				<td class="pinky  right">                          ' "    <small> Del           <small> F11     </small></small></td>
+			</tr>
+			<tr>
+				<td class="pinky  left">                           Esc    <i> LCtrl </i>                                        </td>
+				<td class="pinky  left">                           A      <small> = +                                   </small></td>
+				<td class="ring   left">                           S      <small> - _           <small> ⏹       </small></small></td>
+				<td class="middle left">                           D      <small> [ {                                   </small></td>
+				<td class="index  left">                           F      <small> ] }                                   </small></td>
+				<td class="index  left before-split">              G      <small> <i>Alt+</i>                           </small></td>
+				<td class="index  right">                          ; :    <small> BS            <small> ▶       </small></small></td>
+				<td class="index  right">                          H      <small> ←             <small> ⏮       </small></small></td>
+				<td class="middle right">                          J      <small> ↓             <small> 🔅      </small></small></td>
+				<td class="ring   right">                          K      <small> ↑             <small> 🔆      </small></small></td>
+				<td class="pinky  right">                          L      <small> →             <small> ⏭       </small></small></td>
+				<td class="pinky  right">                          Enter  <i> RCtrl </i>                                        </td>
+			</tr>
+			<tr>
+				<td class="pinky  left">                           LShift                                                       </td>
+				<td class="pinky  left">                           Z      <small> <i>AltFix</i>                         </small></td>
+				<td class="ring   left">                           X      <small> &nbsp;        <small> PrtScrn </small></small></td>
+				<td class="middle left">                           C      <small> &nbsp;        <small> ScrlLck </small></small></td>
+				<td class="index  left">                           V      <small> \ |           <small> Pause   </small></small></td>
+				<td class="index  left before-split">              B      <small> <i>Alt-</i>                           </small></td>
+				<td class="index  right">                          N      <small> Insert        <small> Calc    </small></small></td>
+				<td class="index  right">                          M      <small> Home          <small> 🔈      </small></small></td>
+				<td class="middle right">                          , &lt; <small> PgDown        <small> 🔉      </small></small></td>
+				<td class="ring   right">                          . &gt; <small> PgUp          <small> 🔊      </small></small></td>
+				<td class="pinky  right">                          / ?    <small> End           <small> Menu    </small></small></td>
+				<td class="pinky  right">                          RShift                                                       </td>
+			</tr>
+			<tr>
+				<td class="plug" colspan="1"></td>
+				<td class="pinky bottom">                          LSuper                                                       </td>
+				<td class="thumb bottom">                          LAlt                                                         </td>
+				<td class="thumb bottom before-split" colspan="3"> Space                                                        </td>
+				<td class="thumb bottom" colspan="3">              Space                                                        </td>
+				<td class="thumb bottom">                          RAlt                                                         </td>
+				<td class="pinky bottom">                          RSuper                                                       </td>
+				<td class="plug" colspan="1"></td>
+			</tr>
+			<tr>
+				<td class="plug" colspan="1"></td>
+				<td class="note-block" colspan="5" style="height: 140px;">
+					<span class="key-legend">Q</span>
+					<i class="note"> - Regular key</i>
+					<small>
+						<span class="key-legend">1 !</span>
+						<i class="note"> - Alternative level 1</i>
+						<small>
+							<span class="key-legend">F1</span>
+							<i class="note"> - Alternative level 2</i>
+						</small>
+					</small>
+				</td>
+				<td class="plug" colspan="2"></td>
+				<td class="note-block" colspan="3">
+					Finger colors:
+					<ul>
+						<li class="thumb">Thumb</li>
+						<li class="index">Index</li>
+						<li class="middle">Middle</li>
+						<li class="ring">Ring</li>
+						<li class="pinky">Pinky</li>
+					</ul>
+				</td>
+				<td class="plug" colspan="1"></td>
+			</tr>
+			<tr>
+				<td class="plug" colspan="1"></td>
+				<td class="plug" colspan="10" style="text-align: left;">
+					<p>
+						If <i>Esc</i>/<i>Enter</i> is pressed with some another key then
+						it's interpreted as <i>Left</i>/<i>Right Control</i> key.
+					</p>
+					<p>
+						If both <i>Esc</i> and <i>Enter</i> keys are pressed at the same time then <i>Caps Lock</i> is toggled.
+						Neither actual <i>Esc</i> nor <i>Enter</i> aren't triggered in this case.
+					</p>
+					<p>While holding <i>Alt</i> key alternative mode is turned on (real <i>Alt</i> key isn't triggered).</p>
+					<p>
+						<small style="display: inline;"><i>AltFix</i></small> - turns on alternative mode without need to hold <i>Alt</i>.<br>
+						<small style="display: inline;"><i>Alt-</i>/<i>Alt+</i></small> - decreases/increases alternative level.
+						Decreasing on 1st level turns alternative mode off and triggers real <i>Alt</i> key.
+						Increasing on 2nd level does nothing.
+					</p>
+					<p>Pressing <i>Alt+Space</i> also turns alternative mode off and triggers real <i>Alt</i> key.</p>
+					<p>
+						<i>HJKL</i> are shifted one column right (<i>Semicolon</i> key is swapped with <i>H</i> key)
+						to keep arrow keys under four fingers. In alternative mode, in Vim, in tmux selection mode,
+						in "less" shell command, etc. <i>HJKL</i> are standard in many places.
+					</p>
+				</td>
+				<td class="plug" colspan="1"></td>
+			</tr>
+		</table>
+	</body>
+</html>
