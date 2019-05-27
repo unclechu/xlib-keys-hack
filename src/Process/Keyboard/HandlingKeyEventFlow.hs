@@ -140,6 +140,12 @@ handleKeyEvent ctVars opts keyMap =
         $ [Keys.EnterKey]
         & ((Keys.ergoEnterKey :) `applyIf` O.ergonomicMode opts)
 
+      -- | @False@ when alternative mode is turned off
+      hasAlternativeKeyInCurrentLevel :: KeyName -> Bool
+      hasAlternativeKeyInCurrentLevel keyName'
+        = maybe False (flip hasAlternativeKey keyName' . view _1)
+        $ State.alternative state
+
       onOnlyBothAltsPressed :: Bool
       onOnlyBothAltsPressed =
         O.toggleAlternativeModeByAlts opts &&
@@ -265,11 +271,11 @@ handleKeyEvent ctVars opts keyMap =
                _                                          -> False ) &&
         isPressed && keyName == Keys.SpaceKey && Set.size pressed == 1
 
-      -- | When unholding Alt key which triggered alternative mode previously.
+      -- | When releasing Alt key which triggered alternative mode previously.
       --
       -- This preserves alternative mode is turned on.
-      onUnholdAltForAlternativeMode :: Bool
-      onUnholdAltForAlternativeMode =
+      onReleaseAltForAlternativeMode :: Bool
+      onReleaseAltForAlternativeMode =
         O.alternativeModeWithAltMod opts &&
         case state ^. State.comboState' . State.heldAltForAlternativeMode' of
              Nothing -> False
@@ -282,12 +288,7 @@ handleKeyEvent ctVars opts keyMap =
                )
 
              Just State.AltIsReleasedBeforeAlternativeKey ->
-               let
-                 hasAlternativeKey' keyName'
-                   = maybe False (flip hasAlternativeKey keyName' . view _1)
-                   $ State.alternative state
-               in
-                 all (not . hasAlternativeKey') pressed
+               all (not . hasAlternativeKeyInCurrentLevel) pressed
 
       -- | Super-Double-Press feature.
       --
@@ -944,7 +945,7 @@ handleKeyEvent ctVars opts keyMap =
       & State.alternative' .~ Nothing
       & unnoticed notifyAboutAlternative
 
-  | onUnholdAltForAlternativeMode ->
+  | onReleaseAltForAlternativeMode ->
 
     case state ^. State.comboState' . State.heldAltForAlternativeMode' of
          Nothing -> fail "Impossible case, it supposed to be checked earlier"
@@ -955,7 +956,7 @@ handleKeyEvent ctVars opts keyMap =
                       State.HeldLeftAltForAlternativeMode  -> Keys.AltLeftKey
                       State.HeldRightAltForAlternativeMode -> Keys.AltRightKey
 
-           if Set.null pressed
+           if all (not . hasAlternativeKeyInCurrentLevel) pressed
               then do
                    noise [qms| {altKey} is released,
                                turning alternative mode off... |]
