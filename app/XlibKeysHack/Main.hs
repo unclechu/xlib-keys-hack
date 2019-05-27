@@ -75,7 +75,7 @@ import qualified "xlib-keys-hack" Actions
 import qualified "xlib-keys-hack" XInput
 import qualified "xlib-keys-hack" Keys
 import "xlib-keys-hack" Types ( type AlternativeModeState
-                              , AlternativeModeLevel (..)
+                              , type AlternativeModeLevel (..)
                               )
 import "xlib-keys-hack" Actions (ActionType, Action, KeyAction)
 import "xlib-keys-hack" IPC ( openIPC
@@ -229,10 +229,9 @@ main = flip evalStateT ([] :: ThreadsState) $ do
                   modifyMVar_ (State.stateMVar ctVars) $
                     flip (CrossThread.turnAlternativeMode _noise' _notify') to
 
-                altModeChange :: Maybe Bool -> IO ()
-                altModeChange Nothing  = _toggleAlternative
-                altModeChange (Just x) = _turnAlternativeMode
-                                       $ x ? Just (def, True) $ Nothing
+                altModeChange :: Either () AlternativeModeState -> IO ()
+                altModeChange (Left ()) = _toggleAlternative
+                altModeChange (Right x) = _turnAlternativeMode x
 
              in lift $ openIPC (displayString dpy) opts flush altModeChange
 

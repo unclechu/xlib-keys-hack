@@ -5,14 +5,15 @@
 
 module Types
      ( type AlternativeModeState
-     , AlternativeModeLevel (..)
+     , type AlternativeModeLevel (..)
+     , numberToAlternativeModeLevel
      ) where
 
-import "base" GHC.Generics (Generic)
+import "base" GHC.Generics (type Generic)
 
-import "data-default" Data.Default (Default (def))
+import "data-default" Data.Default (type Default (def))
 
-import "deepseq" Control.DeepSeq (NFData)
+import "deepseq" Control.DeepSeq (type NFData)
 
 
 -- | @Bool@ indicates whether alternative mode is turned on permanently (@True@)
@@ -27,3 +28,8 @@ data AlternativeModeLevel
 
 instance Default AlternativeModeLevel where
   def = FirstAlternativeModeLevel
+
+numberToAlternativeModeLevel :: Integral a => a -> Maybe AlternativeModeLevel
+numberToAlternativeModeLevel 1 = Just FirstAlternativeModeLevel
+numberToAlternativeModeLevel 2 = Just SecondAlternativeModeLevel
+numberToAlternativeModeLevel _ = Nothing

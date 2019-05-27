@@ -14,56 +14,61 @@ module IPC
 import "base" System.Exit (die)
 import "base" System.IO (stderr, hPutStrLn)
 
-import "base" Data.Word (Word8)
+import "base" Data.Word (type Word8, type Word32)
 import "base" Data.Maybe (fromMaybe)
 import "base" Data.List (intercalate)
+import "data-default" Data.Default (def)
 import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qmb)
 
 import "base" Control.Monad (when)
 
-import "dbus" DBus ( ObjectPath
+import "dbus" DBus ( type ObjectPath
                    , objectPath_
-                   , BusName
+                   , type BusName
                    , busName_
-                   , InterfaceName
+                   , type InterfaceName
                    , interfaceName_
                    , signal
                    , signalDestination
-                   , IsVariant (fromVariant, toVariant)
-                   , Signal (signalBody)
+                   , type Variant
+                   , type IsVariant (fromVariant, toVariant)
+                   , type Signal (signalBody)
                    )
 
-import "dbus" DBus.Client ( Client
+import "dbus" DBus.Client ( type Client
                           , disconnect
                           , connectSession
                           , emit
                           , matchAny
                           , addMatch
                           , removeMatch
-                          , SignalHandler
-                          , RequestNameReply (NamePrimaryOwner)
-                          , ReleaseNameReply (NameReleased)
+                          , type SignalHandler
+                          , type RequestNameReply (NamePrimaryOwner)
+                          , type ReleaseNameReply (NameReleased)
                           , requestName
                           , releaseName
 
-                          , MatchRule ( matchPath
-                                      , matchInterface
-                                      , matchDestination
-                                      , matchMember
-                                      )
+                          , type MatchRule ( matchPath
+                                           , matchInterface
+                                           , matchDestination
+                                           , matchMember
+                                           )
                           )
 
 -- local imports
 
 import Utils.Sugar ((?))
-import Types (AlternativeModeLevel (..))
+import Types ( type AlternativeModeLevel (..)
+             , type AlternativeModeState
+             , numberToAlternativeModeLevel
+             )
 import qualified Options as O
-import Actions ( XmobarFlag ( XmobarNumLockFlag
-                            , XmobarCapsLockFlag
-                            , XmobarAlternativeFlag
-                            , XmobarXkbLayout
-                            , XmobarFlushAll
-                            )
+import Actions ( type XmobarFlag ( XmobarNumLockFlag
+                                 , XmobarCapsLockFlag
+                                 , XmobarAlternativeFlag
+                                 , XmobarXkbLayout
+                                 , XmobarFlushAll
+                                 )
                )
 
 
@@ -96,7 +101,13 @@ data IPCHandle
    }
 
 
-openIPC :: String -> Options -> IO () -> (Maybe Bool -> IO ()) -> IO IPCHandle
+openIPC
+  :: String -- ^ @dpyName@
+  -> Options -- ^ @opts@
+  -> IO () -- ^ @flushAllCallback@
+  -> (Either () AlternativeModeState -> IO ()) -- ^ @altModeChange@
+  -> IO IPCHandle
+
 openIPC dpyName opts flushAllCallback altModeChange = do
 
   dbusSession <- connectSession
@@ -149,17 +160,28 @@ openIPC dpyName opts flushAllCallback altModeChange = do
                              , matchInterface   = Just iface
                              }
 
+        -- | Takes either boolean which indicates whether to turn it on/off
+        --   or an unsigned number with alternative mode level
+        --   (zero stands for turning alternative mode off).
         matchAltOnOff  = matchRule
                            { matchMember = Just "switch_alternative_mode" }
 
+        -- | Takes no arguments
         matchAltToggle = matchRule
                            { matchMember = Just "toggle_alternative_mode" }
 
         altOnOffHandler (signalBody -> map fromVariant -> [Just (x :: Bool)])
-          = altModeChange $ Just x
+          = altModeChange $ Right $ x ? Just (def, True) $ Nothing
+        altOnOffHandler ( signalBody -> map fromVariant -> [Just (0 :: Word32)])
+          = altModeChange $ Right $ Nothing
+        altOnOffHandler ( signalBody ->
+                          map (fromVariant :: Variant -> Maybe Word32) ->
+                          [(>>= numberToAlternativeModeLevel) -> Just x]
+                        )
+          = altModeChange $ Right $ Just (x, True)
         altOnOffHandler _ = pure ()
 
-        altToggleHandler (signalBody -> []) = altModeChange Nothing
+        altToggleHandler (signalBody -> []) = altModeChange $ Left ()
         altToggleHandler _ = pure ()
 
     requestName dbusSession bus [] >>= \reply ->
