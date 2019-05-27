@@ -99,7 +99,7 @@ instance Default Options where
     , rightControlAsRightSuper     = False
 
     , alternativeModeWithAltMod    = False
-    , toggleAlternativeModeByAlts  = True
+    , toggleAlternativeModeByAlts  = False
     , turnOffFourthRow             = False
     , ergonomicMode                = False
     , superDoublePress             = True
@@ -197,7 +197,7 @@ options =
             Default is: {rightControlAsRightSuper def ? "On" $ "Off"}
             |]
 
-  , GetOpt.Option  [ ]  [holdAltForAlternativeMode]
+  , GetOpt.Option  [ ]  [holdAltForAlternativeModeOptName]
       (GetOpt.NoArg $ alternativeModeWithAltMod' .~ True)
       [qmb| When hold Alt key (left or right, doesn't matter) \
               alternative mode is turned on (real Alt keys aren't triggered).
@@ -206,25 +206,25 @@ options =
               from that moment.
             To turn alternative mode on Alt key supposed to be pressed first \
               before any other key or modifier.
-            Use --{disableToggleAlternativeModeByAlts} to be able to press \
-              combo like Alt-2 by just both Alts pressed plus "w" key. \
-              Otherwise you'll just have turn alternative mode on permanently \
-              (by pressing both Alts or by double pressing Super key \
-              if such feature is enabled) \
+            Do not use with --{toggleAlternativeModeByAltsOptName} to be able \
+              to press combo like Alt-2 by just both Alts pressed plus "w" \
+              key. Otherwise you'll just have turn alternative mode on \
+              permanently (by pressing both Alts or by double pressing Super \
+              key if such feature is enabled) \
               and then press Alt-w to trigger actual Alt-2.
             Default is: {alternativeModeWithAltMod def ? "On" $ "Off"}
             |]
-  , GetOpt.Option  [ ]  [disableToggleAlternativeModeByAlts]
-      (GetOpt.NoArg $ toggleAlternativeModeByAlts' .~ False)
-      [qmb| Disable toggling alternative mode \
-              by pressing Alt keys (Left and Right) both at the same time
+  , GetOpt.Option  [ ]  [toggleAlternativeModeByAltsOptName]
+      (GetOpt.NoArg $ toggleAlternativeModeByAlts' .~ True)
+      [qmb| Enable toggling alternative mode \
+              by pressing Alt keys (Left and Right) both at the same time.
             Default is: {toggleAlternativeModeByAlts def ? "On" $ "Off"}
             |]
   , GetOpt.Option  [ ]  [turnOffFourthRowOptName]
       (GetOpt.NoArg $ turnOffFourthRow' .~ True)
       [qmb| Turns off fourth keys row completely.
             This helps to change your reflexes when \
-              --{holdAltForAlternativeMode} feature is turned on.
+              --{holdAltForAlternativeModeOptName} feature is turned on.
             {makesNoSense ergonomicModeOptName}
             Default is: {turnOffFourthRow def ? "On" $ "Off"}
             |]
@@ -235,7 +235,7 @@ options =
               keyboard to be more convenient, or I would say less painful).
             WARNING! It may force you to change a lot of your reflexes!
             I urgently recommend to use this option with \
-              --{holdAltForAlternativeMode} option!
+              --{holdAltForAlternativeModeOptName} option!
             Also --{shiftHjklOptName} would probably get you even more \
               feeling of consistency.
             This mode implies --{turnOffFourthRowOptName} option.
@@ -275,7 +275,7 @@ options =
             \  * Enter key.
             Default is: {ergonomicMode def ? "On" $ "Off"}
             |]
-  , GetOpt.Option  [ ]  [disableSuperDoublePress]
+  , GetOpt.Option  [ ]  [disableSuperDoublePressOptName]
       (GetOpt.NoArg $ superDoublePress' .~ False)
       [qmb| Disable handling of double Super key press.
             Default is: {superDoublePress def ? "On" $ "Off"}
@@ -288,19 +288,19 @@ options =
       [qmb| When Super key is pressed twice in short interval \
               alternative mode will be toggled or \
               specified shell command will be spawned.
-            {makesNoSense disableSuperDoublePress}
+            {makesNoSense disableSuperDoublePressOptName}
             |]
   , GetOpt.Option  [ ]  ["left-super-double-press-cmd"]
       (GetOpt.ReqArg (Just .> set leftSuperDoublePressCmd') "COMMAND")
       [qmb| Double Left Super key press will spawn specified shell command \
               instead of toggling alternative mode.
-            {makesNoSense disableSuperDoublePress}
+            {makesNoSense disableSuperDoublePressOptName}
             |]
   , GetOpt.Option  [ ]  ["right-super-double-press-cmd"]
       (GetOpt.ReqArg (Just .> set rightSuperDoublePressCmd') "COMMAND")
       [qmb| Double Right Super key press will spawn specified shell command \
               instead of toggling alternative mode.
-            {makesNoSense disableSuperDoublePress}
+            {makesNoSense disableSuperDoublePressOptName}
             |]
 
   , GetOpt.Option  [ ]  ["disable-reset-by-escape-on-capslock"]
@@ -458,15 +458,14 @@ options =
         makesNoSense :: String -> String
         makesNoSense x = [qm| This option makes no sense with --{x} option. |]
 
-        holdAltForAlternativeMode :: String
-        holdAltForAlternativeMode = "hold-alt-for-alternative-mode"
+        holdAltForAlternativeModeOptName :: String
+        holdAltForAlternativeModeOptName = "hold-alt-for-alternative-mode"
 
-        disableToggleAlternativeModeByAlts :: String
-        disableToggleAlternativeModeByAlts =
-          "disable-toggling-alternative-mode-by-alts"
+        toggleAlternativeModeByAltsOptName :: String
+        toggleAlternativeModeByAltsOptName = "toggle-alternative-mode-by-alts"
 
-        disableSuperDoublePress :: String
-        disableSuperDoublePress = "disable-super-double-press"
+        disableSuperDoublePressOptName :: String
+        disableSuperDoublePressOptName = "disable-super-double-press"
 
         xmobarIndicatorsOptName, externalControlOptName :: String
         xmobarIndicatorsOptName = "xmobar-indicators"
