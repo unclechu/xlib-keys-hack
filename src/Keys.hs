@@ -462,6 +462,10 @@ alternativeModeRemaps isErgo = (,)
         Map.union
           [ (TabKey,         Right F12Key)
           , (BracketLeftKey, Right F11Key)
+
+          -- Get back Stop key since Apostrophe (remapped to Open Bracket)
+          -- is taken by F11 (and original Apostrophe is remapped to Enter key).
+          , (SKey,           Right MAudioStopKey)
           ]
       )
     )
