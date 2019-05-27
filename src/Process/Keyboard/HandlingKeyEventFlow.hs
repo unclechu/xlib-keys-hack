@@ -1124,7 +1124,7 @@ handleKeyEvent ctVars opts keyMap =
         -- `CapsLockKey` or `EnterKey` with combo (see below)
         -- it triggers Control pressing.
         | state ^. withCombosFlagLens -> do
-          noise' [ [qms| {controlKeyCode} released after pressed with combos,
+          noise' [ [qms| {keyName} released after pressed with combos,
                          it means it was interpreted as {controlKeyName} |]
                  , [qms| Triggering releasing of {controlKeyName}
                          (X key code: {controlKeyCode})... |]
