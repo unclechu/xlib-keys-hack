@@ -52,6 +52,7 @@ data Options
    , alternativeModeWithAltMod    :: Bool
    , toggleAlternativeModeByAlts  :: Bool
    , turnOffFourthRow             :: Bool
+   , ergonomicMode                :: Bool
    , superDoublePress             :: Bool
    , leftSuperDoublePressCmd      :: Maybe String
    , rightSuperDoublePressCmd     :: Maybe String
@@ -100,6 +101,7 @@ instance Default Options where
     , alternativeModeWithAltMod    = False
     , toggleAlternativeModeByAlts  = True
     , turnOffFourthRow             = False
+    , ergonomicMode                = False
     , superDoublePress             = True
     , leftSuperDoublePressCmd      = Nothing
     , rightSuperDoublePressCmd     = Nothing
@@ -178,7 +180,7 @@ options =
             Could be more consistent for 10-fingers typing.
             Default is: {shiftNumericKeys def ? "On" $ "Off"}
             |]
-  , GetOpt.Option  [ ]  ["shift-hjkl"]
+  , GetOpt.Option  [ ]  [shiftHjklOptName]
       (GetOpt.NoArg $ shiftHJKLKeys' .~ True)
       [qmb| Shift 'HJKL' keys one column right \
               ('semicolon' key would be moved on original 'H' key position).
@@ -218,12 +220,60 @@ options =
               by pressing Alt keys (Left and Right) both at the same time
             Default is: {toggleAlternativeModeByAlts def ? "On" $ "Off"}
             |]
-  , GetOpt.Option  [ ]  ["turn-off-fourth-row"]
+  , GetOpt.Option  [ ]  [turnOffFourthRowOptName]
       (GetOpt.NoArg $ turnOffFourthRow' .~ True)
       [qmb| Turns off fourth keys row completely.
             This helps to change your reflexes when \
               --{holdAltForAlternativeMode} feature is turned on.
+            {makesNoSense ergonomicModeOptName}
             Default is: {turnOffFourthRow def ? "On" $ "Off"}
+            |]
+  , GetOpt.Option  [ ]  [ergonomicModeOptName]
+      (GetOpt.NoArg $ (turnOffFourthRow' .~ True) . (ergonomicMode' .~ True))
+      [qmb| Turns on kinda hardcore ergonomic mode \
+              (an attempt to make the experience of using a traditional \
+              keyboard to be more convenient, or I would say less painful).
+            WARNING! It may force you to change a lot of your reflexes!
+            I urgently recommend to use this option with \
+              --{holdAltForAlternativeMode} option!
+            Also --{shiftHjklOptName} would probably get you even more \
+              feeling of consistency.
+            This mode implies --{turnOffFourthRowOptName} option.
+            The main idea of this mode is that a finger moves vertically only \
+              one row up/down, and horizontally the index/pinky finger moves \
+              only one column left/right.
+            Of course to achive this some keys wouldn't be available, to \
+              solve this issue some keys will be remapped and some moved to \
+              alternative mode (and those keys which don't satisfy the rules \
+              will be turned off completely):
+            \  Remappings:
+            \    * Apostrophe ( ' " ) key will become Enter key \
+                   (which also will work as additional Ctrl key \
+                   if related option is enabled);
+            \    * Open Bracket ( [ \{ ) key will become Apostrophe key \
+                   (which was Minus ( - _ ) key in alternative mode).
+            \  Rest keys are moved to alternative mode (to first level):
+            \    * "A" key will become Equal ( = + ) key;
+            \    * "S" key will become Minus ( - _ ) key;
+            \    * "D" key will become Open Bracket ( [ \{ ) key;
+            \    * "F" key will become Close Bracket ( ] } ) key;
+            \    * "V" key will become Backslash ( \\ | ) key;
+            \    * Open Bracket key will become Delete key \
+                   (Apostrophe ( ' " ) key will be remapped to Enter key, so \
+                   it can't be Delete key anymore because Enter key should be \
+                   available in all modes).
+            \  Also in second level of alternative mode some FN keys will be \
+               rearranged:
+            \    * Open Bracket key will become F11 key;
+            \    * Tab key will become F12 key (it could be F1 and all next in \
+                   ascending order in this row but you loose consistency with \
+                   regular number keys from first alternative mode level in \
+                   this case).
+            Real keys which will be disabled (along with fourth row):
+            \  * Close Bracket ( ] } ) key;
+            \  * Backslash ( \\ | ) key;
+            \  * Enter key.
+            Default is: {ergonomicMode def ? "On" $ "Off"}
             |]
   , GetOpt.Option  [ ]  [disableSuperDoublePress]
       (GetOpt.NoArg $ superDoublePress' .~ False)
@@ -403,10 +453,10 @@ options =
                               |]
 
         makesSense :: String -> String
-        makesSense = ("This option makes sense only with --" <>)
+        makesSense x = [qm| This option makes sense only with --{x} option. |]
 
         makesNoSense :: String -> String
-        makesNoSense = ("This option makes no sense with --" <>)
+        makesNoSense x = [qm| This option makes no sense with --{x} option. |]
 
         holdAltForAlternativeMode :: String
         holdAltForAlternativeMode = "hold-alt-for-alternative-mode"
@@ -421,6 +471,15 @@ options =
         xmobarIndicatorsOptName, externalControlOptName :: String
         xmobarIndicatorsOptName = "xmobar-indicators"
         externalControlOptName  = "external-control"
+
+        turnOffFourthRowOptName :: String
+        turnOffFourthRowOptName = "turn-off-fourth-row"
+
+        ergonomicModeOptName :: String
+        ergonomicModeOptName = "ergonomic-mode"
+
+        shiftHjklOptName :: String
+        shiftHjklOptName = "shift-hjkl"
 
         _forExample :: String -> String
         _forExample ((\x -> _hasDpy x ? x $ "foo.%DISPLAY%.bar") -> d) =

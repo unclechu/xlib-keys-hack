@@ -42,7 +42,10 @@ import "X11" Graphics.X11.Types (type KeyCode)
 
 -- local imports
 
-import           Utils.Sugar ((&), (<&>), (?), (|?|), unnoticed, liftAT2)
+import           Utils.Sugar ( (&), (<&>), (?), (|?|)
+                             , applyIf, unnoticed, liftAT2
+                             )
+
 import           Utils.Lens ((%=<&~>))
 import           Options (type Options)
 import qualified Options as O
@@ -125,6 +128,18 @@ handleKeyEvent ctVars opts keyMap =
       alternativeKeyRemap :: Maybe (KeyName, KeyCode)
       alternativeKeyRemap = alternativeRemap >>= either (const Nothing) Just
 
+      additionalControls :: Set KeyName
+      additionalControls
+        = Set.fromList
+        $ [Keys.CapsLockKey, Keys.EnterKey]
+        & ((Keys.ergoEnterKey :) `applyIf` O.ergonomicMode opts)
+
+      enters :: Set KeyName
+      enters
+        = Set.fromList
+        $ [Keys.EnterKey]
+        & ((Keys.ergoEnterKey :) `applyIf` O.ergonomicMode opts)
+
       onOnlyBothAltsPressed :: Bool
       onOnlyBothAltsPressed =
         O.toggleAlternativeModeByAlts opts &&
@@ -151,19 +166,25 @@ handleKeyEvent ctVars opts keyMap =
 
       onOnlyTwoControlsPressed :: Bool
       onOnlyTwoControlsPressed =
-        let ctrls = Set.fromList [Keys.ControlLeftKey, Keys.ControlRightKey]
-            additionalControls = Set.fromList [Keys.CapsLockKey, Keys.EnterKey]
-         in pressed == ctrls
-         || (O.additionalControls opts && pressed == additionalControls)
+        pressed == Set.fromList [Keys.ControlLeftKey, Keys.ControlRightKey] ||
+        (
+          O.additionalControls opts &&
+          -- Either @CapsLockKey@+@EnterKey@ or @CapsLockKey@+@ApostropheKey@
+          -- (in case ergonomic mode feature is enabled
+          -- and @ApostropheKey@ is ergonomic remap/version of @EnterKey@).
+          any (pressed ==)
+              (Set.map (\x -> Set.fromList [Keys.CapsLockKey, x]) enters)
+        )
+
 
       -- | Caps Lock or Enter pressed (current key)
       --   but not Enter with modifiers.
       onAdditionalControlKey :: Bool
       onAdditionalControlKey =
         O.additionalControls opts &&
-        keyName `elem` [Keys.CapsLockKey, Keys.EnterKey] &&
+        keyName `Set.member` additionalControls &&
         not (
-          keyName == Keys.EnterKey &&
+          keyName `Set.member` enters &&
           isJust (state ^. State.comboState' . State.isEnterPressedWithMods')
         )
 
@@ -172,9 +193,9 @@ handleKeyEvent ctVars opts keyMap =
       onWithAdditionalControlKey :: Bool
       onWithAdditionalControlKey =
         O.additionalControls opts &&
-        any (`Set.member` pressed) [Keys.CapsLockKey, Keys.EnterKey] &&
+        any (`Set.member` pressed) additionalControls &&
         not (
-          Keys.EnterKey `Set.member` pressed &&
+          any (`Set.member` pressed) enters &&
           Keys.CapsLockKey `Set.notMember` pressed &&
           isJust (state ^. State.comboState' . State.isEnterPressedWithMods')
         )
@@ -186,7 +207,7 @@ handleKeyEvent ctVars opts keyMap =
       onEnterOnlyWithMods :: Bool
       onEnterOnlyWithMods =
         O.additionalControls opts &&
-        keyName == Keys.EnterKey &&
+        keyName `Set.member` enters &&
 
         let -- | When Enter key just pressed
             --   after some modifiers pressed before.
@@ -216,7 +237,7 @@ handleKeyEvent ctVars opts keyMap =
 
          in O.additionalControls opts &&
             isJust mods &&
-            keyName /= Keys.EnterKey &&
+            keyName `Set.notMember` enters &&
 
             -- Preventing infinite loop, it's already stored in state,
             -- so we're just going to handle it recursively again.
@@ -850,7 +871,7 @@ handleKeyEvent ctVars opts keyMap =
              -- and flush modifiers for enter list in state.
              state
                & lens .~ Nothing
-               & State.pressedKeys' %~ (Set.delete Keys.EnterKey)
+               & State.pressedKeys' %~ flip (foldr Set.delete) enters
                & reprocess
 
            -- Another modifier pressed, adding it to stored list
@@ -1026,7 +1047,7 @@ handleKeyEvent ctVars opts keyMap =
 
     let toDelete = [Keys.ControlLeftKey, Keys.ControlRightKey]
                      ++ if O.additionalControls opts
-                           then [Keys.CapsLockKey, Keys.EnterKey]
+                           then Set.toList additionalControls
                            else []
      in state
           & State.pressedKeys' .~ foldr Set.delete pressed toDelete
@@ -1072,7 +1093,7 @@ handleKeyEvent ctVars opts keyMap =
                  , Keys.ControlLeftKey
                  , getDefaultKeyCodeByName Keys.ControlLeftKey
                  )
-               Keys.EnterKey ->
+               k | k `Set.member` enters ->
                  ( State.comboState' . State.isEnterUsedWithCombos'
                  , State.comboState' . State.keysPressedBeforeEnter'
                  , Keys.ControlRightKey
@@ -1121,7 +1142,9 @@ handleKeyEvent ctVars opts keyMap =
                     then execStateT (runExceptT resetAll) state
                     else pure state
 
-               Keys.EnterKey -> state <$ triggerPressRelease keyName keyCode
+               k | k `Set.member` enters ->
+                 state <$ triggerPressRelease keyName keyCode
+
                _ -> pure state
 
   -- When either `CapsLockKey` or `EnterKey` pressed with combo.
@@ -1140,7 +1163,7 @@ handleKeyEvent ctVars opts keyMap =
              , Keys.ControlLeftKey
              , getDefaultKeyCodeByName Keys.ControlLeftKey
              )
-           | Keys.EnterKey `Set.member` pressed =
+           | any (`Set.member` pressed) enters =
              ( Keys.EnterKey
              , State.comboState' . State.isEnterUsedWithCombos'
              , State.comboState' . State.keysPressedBeforeEnter'

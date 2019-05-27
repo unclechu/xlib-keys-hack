@@ -33,4 +33,9 @@ test-command:
 		-v --shift-numeric-keys --shift-hjkl \
 		--right-super-double-press-cmd='place-cursor-at' \
 		--xmobar-indicators --software-debouncer=25 \
-		--hold-alt-for-alternative-mode --turn-off-fourth-row
+		--hold-alt-for-alternative-mode --ergonomic-mode
+
+test-usage-command:
+	stack build -j'$(shell nproc --all)'
+	env PATH='$(shell stack path --local-install-root)/bin/:${PATH}' \
+		xlib-keys-hack --help

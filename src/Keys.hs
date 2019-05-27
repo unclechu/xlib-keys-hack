@@ -14,6 +14,7 @@ module Keys
      , getAliasByKeyDevNum
      , getKeyCodeByName
      , getDefaultKeyCodeByName
+     , ergoEnterKey
 
      , getAlternativeRemapByName
      , hasAlternativeRemap
@@ -50,7 +51,7 @@ import "mtl" Control.Monad.Except (type MonadError (throwError))
 import "deepseq" Control.DeepSeq (type NFData)
 import "type-operators" Control.Type.Operator (type ($))
 import "lens" Control.Lens ( type Lens', type Field1, type Field2
-                           , (&~), (.=)
+                           , (&~), (.=), (%~)
                            , view, use, set, _1, _2, _3
                            )
 
@@ -321,13 +322,23 @@ defaultKeyAliases =
 -- It could be extended in "getKeyMap" depending on provided "O.Options".
 --
 -- To remap a key you replace "KeyCode" in original mapping inside "getKeyMap".
-basicKeyRemapping :: Map KeyName KeyName
-basicKeyRemapping =
+basicKeyRemapping
+  :: Bool -- ^ Indicates whether ergonomic mode feature is enabled
+  -> Map KeyName KeyName
+
+basicKeyRemapping isErgo =
   [ (FNKey,       InsertKey)
   , (CapsLockKey, EscapeKey)
   , (LessKey,     ShiftLeftKey)
   , (MenuKey,     SuperRightKey)
   ]
+
+  & flip applyIf isErgo (
+      Map.union
+        [ (ergoEnterKey,   EnterKey)
+        , (BracketLeftKey, ApostropheKey)
+        ]
+    )
 
 
 -- | A representation of a key action that do something inside and with
@@ -340,12 +351,13 @@ data AlternativeModeKeyAction
 
 
 -- | Remapping for keys when Alternative mode is turned on
-alternativeModeRemaps ::
-  ( Map KeyName $ Either AlternativeModeKeyAction KeyName -- First  level
-  , Map KeyName $ Either AlternativeModeKeyAction KeyName -- Second level
-  )
+alternativeModeRemaps
+  :: Bool -- ^ Indicates whether ergonomic mode feature is enabled
+  -> ( Map KeyName $ Either AlternativeModeKeyAction KeyName -- First  level
+     , Map KeyName $ Either AlternativeModeKeyAction KeyName -- Second level
+     )
 
-alternativeModeRemaps = (,)
+alternativeModeRemaps isErgo = (,)
   -- 4th row shifted down to 3rd
   [ (TabKey,          Right GraveKey)
   , (QKey,            Right Number1Key)
@@ -430,6 +442,30 @@ alternativeModeRemaps = (,)
   , (BKey,            Left AlternativeModeLevelDown)
   ]
 
+  & flip applyIf isErgo (
+      (_1 %~ delete ergoEnterKey)
+      .
+      (_2 %~ delete ergoEnterKey)
+      .
+      (_1 %~) (
+        Map.union
+          [ (BracketLeftKey, Right DeleteKey)
+          , (AKey,           Right EqualKey)
+          , (SKey,           Right MinusKey)
+          , (DKey,           Right BracketLeftKey)
+          , (FKey,           Right BracketRightKey)
+          , (VKey,           Right BackslashKey)
+          ]
+      )
+      .
+      (_2 %~) (
+        Map.union
+          [ (TabKey,         Right F12Key)
+          , (BracketLeftKey, Right F11Key)
+          ]
+      )
+    )
+
 
 -- | Device key numbers aliases for media keys
 mediaDevNums :: Map KeyName Word16
@@ -477,13 +513,18 @@ hjklShift =
   ]
 
 
-fourhRow :: [KeyName]
-fourhRow =
+fourthRow :: [KeyName]
+fourthRow =
   [ GraveKey
   , Number1Key , Number2Key , Number3Key , Number4Key , Number5Key
   , Number6Key , Number7Key , Number8Key , Number9Key , Number0Key
   , MinusKey   , EqualKey   , BackSpaceKey
   ]
+
+
+-- | "fourthRow" is also part of this set.
+outOfErgonomicZoneKeys :: [KeyName]
+outOfErgonomicZoneKeys = [BracketRightKey, BackslashKey, EnterKey]
 
 
 -- | Returns "Map" of aliases list using key name as a "Map" key
@@ -546,7 +587,8 @@ getKeyMap opts mediaKeyCodes = go where
   keyAliases = go' where
     go' = pure defaultKeyAliases
         <**> fmap mappend resolvedMediaKeys
-        <**> pure (turnOffFourthRow `applyIf` O.turnOffFourthRow opts)
+        <**> pure (turnOffFourthRow          `applyIf` O.turnOffFourthRow opts)
+        <**> pure (turnOffOutOfErgonomicZone `applyIf` O.ergonomicMode    opts)
 
     resolvedMediaKeys =
       Set.fromList . Map.elems <$>
@@ -556,15 +598,18 @@ getKeyMap opts mediaKeyCodes = go where
       = throwError [qm| Unexpected media key: {keyName} |] `maybe` pure
       $ (keyName,,keyCode) <$> keyName `lookup` mediaDevNums
 
-    turnOffFourthRow =
-      Set.map (&~ do whenM (use _1 <&> (`elem` fourhRow)) $ _2 .= minBound)
+    turnOffFourthRow = Set.map (&~ f) where
+      f = whenM (use _1 <&> (`elem` fourthRow)) $ _2 .= minBound
+
+    turnOffOutOfErgonomicZone = Set.map (&~ f) where
+      f = whenM (use _1 <&> (`elem` outOfErgonomicZoneKeys)) $ _2 .= minBound
 
   defaultKeyCodes :: m $ Map KeyName KeyCode
   defaultKeyCodes =
     keyAliases <&> Map.fromList . Set.toList . Set.map (view _1 &&& view _3)
 
   remaps :: Map KeyName KeyName
-  remaps = f basicKeyRemapping where
+  remaps = f $ basicKeyRemapping $ O.ergonomicMode opts where
     f = (delete CapsLockKey `applyIf` O.realCapsLock             opts)
      .> (rightCtrlAsSuper   `applyIf` O.rightControlAsRightSuper opts)
      .> ((<> numericShift)  `applyIf` O.shiftNumericKeys         opts)
@@ -617,7 +662,10 @@ getKeyMap opts mediaKeyCodes = go where
     )
 
   alternativeModeKeyCodes = go' where
-    go' = liftAT2 $ handle *** handle $ alternativeModeRemaps
+    go'
+      = liftAT2 $ handle *** handle
+      $ alternativeModeRemaps $ O.ergonomicMode opts
+
     handle = followRemaps <$. Map.traverseWithKey f
 
     followRemaps result = g $ foldl reducer intialAcc remapsMirror where
@@ -733,6 +781,10 @@ getKeyCodeByName keyMap keyName = keyName `lookup` byNameMap keyMap <&> view _3
 getDefaultKeyCodeByName :: KeyMap -> KeyName -> Maybe KeyCode
 getDefaultKeyCodeByName keyMap keyName =
   keyName `lookup` byNameDefaultKeyCode keyMap
+
+
+ergoEnterKey :: KeyName
+ergoEnterKey = ApostropheKey
 
 
 alternativeLevelToLens
