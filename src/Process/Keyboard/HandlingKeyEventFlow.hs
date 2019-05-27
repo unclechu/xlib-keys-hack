@@ -182,7 +182,6 @@ handleKeyEvent ctVars opts keyMap =
               (Set.map (\x -> Set.fromList [Keys.CapsLockKey, x]) enters)
         )
 
-
       -- | Caps Lock or Enter pressed (current key)
       --   but not Enter with modifiers.
       onAdditionalControlKey :: Bool
@@ -401,9 +400,10 @@ handleKeyEvent ctVars opts keyMap =
 
         Just False == -- Letting modifiers to be passed.
           state ^. State.comboState' . State.superDoublePress' <&> \x ->
-            -- Some modifier is pressed.
-            (x ^. _2 == State.WaitForSecondReleaseOrPressAlternativeKey &&
-            isPressed && maybeAsName keyName `Set.member` onlyRealModifiers) ||
+            ( -- Some modifier is pressed.
+              x ^. _2 == State.WaitForSecondReleaseOrPressAlternativeKey &&
+              isPressed && maybeAsName keyName `Set.member` onlyRealModifiers
+            ) ||
             -- Alternative mode on while holding Super key.
             x ^. _2 == State.WaitForSecondReleaseAfterAlternativeKeys
 
@@ -751,24 +751,39 @@ handleKeyEvent ctVars opts keyMap =
 
   | onSuperDoubleReleasedAfterAlternative -> do
 
+    let !(!toRelease, !mods) = go where
+          go = Set.partition (not . filterMods) pressed
+
+          filterMods x =
+            x `Set.member` allModifiersKeys ||
+            (O.additionalControls opts && x `Set.member` additionalControls)
+
+    let toReleaseLog
+          = Set.null toRelease ? (mempty :: String)
+          $ [qms| triggering off events for unreleased keys:
+                  {Set.toList toRelease},\ |]
+
+    let modsLog
+          = Set.null mods ? (mempty :: String)
+          $ [qm| \ (some modifiers left being pressed: {Set.toList mods}) |]
+
     noise [qms| {maybeAsKeyStr keyName} released after some alternative keys
                 had triggered in context of double press of Super key feature,
-                triggering off events for unreleased keys: {Set.toList pressed},
-                turning alternative mode off and
-                resetting state of this feature... |]
+                {toReleaseLog}turning alternative mode off and
+                resetting state of this feature{modsLog}... |]
 
     let !level =
           maybe (error "alternative mode is supposed to be turned on")
                 (view _1)
                 (State.alternative state)
 
-    alternativeMultipleTrigger (Just level) (Set.toList pressed) False
+    alternativeMultipleTrigger (Just level) toRelease False
     notify $ Actions.XmobarAlternativeFlag Nothing
 
     pure $ state &~ do
       State.comboState' . State.superDoublePressProceeded' .= True
       State.comboState' . State.superDoublePress'          .= Nothing
-      State.pressedKeys'                                   .= Set.empty
+      State.pressedKeys'                                   .= mods
       State.alternative'                                   .= Nothing
 
   | onSuperDoubleElse -> do
@@ -1414,7 +1429,7 @@ handleKeyEvent ctVars opts keyMap =
 
   -- | Multiple version of "trigger" (supports alternative remapping)
   alternativeMultipleTrigger
-    :: Maybe AlternativeModeLevel -> [KeyName] -> Bool -> IO ()
+    :: Maybe AlternativeModeLevel -> Set KeyName -> Bool -> IO ()
 
   alternativeMultipleTrigger level keyNames isPressed = go where
     go = do
