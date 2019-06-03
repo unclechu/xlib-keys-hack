@@ -398,8 +398,8 @@ alternativeModeRemaps isErgo = (,)
 
   -- Alternative mode operations
   , (ZKey,            Left AlternativeModeFreeze)
-  , (GKey,            Left AlternativeModeLevelUp)
-  , (BKey,            Left AlternativeModeLevelDown)
+  , (XKey,            Left AlternativeModeLevelDown)
+  , (CKey,            Left AlternativeModeLevelUp)
   ]
 
   -- FN keys row shifted down to 3rd row
@@ -418,9 +418,9 @@ alternativeModeRemaps isErgo = (,)
   , (BracketRightKey, Right F12Key)
   , (BackslashKey,    Right PrintScreenKey)
 
-  , (XKey,            Right PrintScreenKey)
-  , (CKey,            Right ScrollLockKey)
-  , (VKey,            Right PauseKey)
+  , (AKey,            Right PrintScreenKey)
+  , (SKey,            Right ScrollLockKey)
+  , (DKey,            Right PauseKey)
 
   , (HKey,            Right MAudioPrevKey)
   , (JKey,            Right MMonBrightnessDownKey)
@@ -438,8 +438,8 @@ alternativeModeRemaps isErgo = (,)
 
   -- Alternative mode operations
   , (ZKey,            Left AlternativeModeFreeze)
-  , (GKey,            Left AlternativeModeLevelUp)
-  , (BKey,            Left AlternativeModeLevelDown)
+  , (XKey,            Left AlternativeModeLevelDown)
+  , (CKey,            Left AlternativeModeLevelUp)
   ]
 
   & flip applyIf isErgo (
@@ -450,11 +450,11 @@ alternativeModeRemaps isErgo = (,)
       (_1 %~) (
         Map.union
           [ (BracketLeftKey, Right DeleteKey)
-          , (AKey,           Right EqualKey)
-          , (SKey,           Right MinusKey)
+          , (AKey,           Right MinusKey)
+          , (SKey,           Right EqualKey)
           , (DKey,           Right BracketLeftKey)
           , (FKey,           Right BracketRightKey)
-          , (VKey,           Right BackslashKey)
+          , (GKey,           Right BackslashKey)
           ]
       )
       .
@@ -465,7 +465,7 @@ alternativeModeRemaps isErgo = (,)
 
           -- Get back Stop key since Apostrophe (remapped to Open Bracket)
           -- is taken by F11 (and original Apostrophe is remapped to Enter key).
-          , (SKey,           Right MAudioStopKey)
+          , (GKey,           Right MAudioStopKey)
           ]
       )
     )

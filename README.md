@@ -220,11 +220,11 @@ Usage: xlib-keys-hack [OPTION...] DEVICES-FD-PATHS...
                                                               * Apostrophe ( ' " ) key will become Enter key (which also will work as additional Ctrl key if related option is enabled);
                                                               * Open Bracket ( [ { ) key will become Apostrophe key (which was Minus ( - _ ) key in alternative mode).
                                                             Rest keys are moved to alternative mode (to first level):
-                                                              * "A" key will become Equal ( = + ) key;
-                                                              * "S" key will become Minus ( - _ ) key;
+                                                              * "A" key will become Minus ( - _ ) key;
+                                                              * "S" key will become Equal ( = + ) key;
                                                               * "D" key will become Open Bracket ( [ { ) key;
                                                               * "F" key will become Close Bracket ( ] } ) key;
-                                                              * "V" key will become Backslash ( \ | ) key;
+                                                              * "G" key will become Backslash ( \ | ) key;
                                                               * Open Bracket key will become Delete key (Apostrophe ( ' " ) key will be remapped to Enter key, so it can't be Delete key anymore because Enter key should be available in all modes).
                                                             Also in second level of alternative mode some FN keys will be rearranged:
                                                               * Open Bracket key will become F11 key;
