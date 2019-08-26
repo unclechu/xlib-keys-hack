@@ -1,4 +1,4 @@
-resolver: lts-13.23 # ghc 8.6.5
+resolver: lts-14.3 # ghc 8.6.5
 system-ghc: false
 packages: [.]
 
