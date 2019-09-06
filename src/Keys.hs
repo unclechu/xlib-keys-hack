@@ -421,6 +421,7 @@ alternativeModeRemaps isErgo = (,)
   , (AKey,            Right PrintScreenKey)
   , (SKey,            Right ScrollLockKey)
   , (DKey,            Right PauseKey)
+  , (FKey,            Right MEjectKey)
 
   , (HKey,            Right MAudioPrevKey)
   , (JKey,            Right MMonBrightnessDownKey)
