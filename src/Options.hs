@@ -15,7 +15,6 @@ module Options
 
 import "base" GHC.Generics (Generic)
 
-import "base" Data.Monoid ((<>))
 import "base" Data.Maybe (fromJust)
 import "data-default" Data.Default (Default, def)
 import "base" Data.Word (Word8)
