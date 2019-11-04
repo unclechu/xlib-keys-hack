@@ -322,21 +322,24 @@ defaultKeyAliases =
 -- It could be extended in "getKeyMap" depending on provided "O.Options".
 --
 -- To remap a key you replace "KeyCode" in original mapping inside "getKeyMap".
-basicKeyRemapping
-  :: Bool -- ^ Indicates whether ergonomic mode feature is enabled
-  -> Map KeyName KeyName
-
-basicKeyRemapping isErgo =
+basicKeyRemapping :: O.ErgonomicMode -> Map KeyName KeyName
+basicKeyRemapping ergoMode =
   [ (FNKey,       InsertKey)
   , (CapsLockKey, EscapeKey)
   , (LessKey,     ShiftLeftKey)
   , (MenuKey,     SuperRightKey)
   ]
 
-  & flip applyIf isErgo (
+  & flip applyIf (ergoMode == O.ErgonomicMode) (
       Map.union
         [ (ergoEnterKey,   EnterKey)
         , (BracketLeftKey, ApostropheKey)
+        ]
+    )
+
+  & flip applyIf (ergoMode == O.ErgoDoxErgonomicMode) (
+      Map.union
+        [ (BackslashKey, ApostropheKey)
         ]
     )
 
@@ -352,12 +355,12 @@ data AlternativeModeKeyAction
 
 -- | Remapping for keys when Alternative mode is turned on
 alternativeModeRemaps
-  :: Bool -- ^ Indicates whether ergonomic mode feature is enabled
+  :: O.ErgonomicMode
   -> ( Map KeyName $ Either AlternativeModeKeyAction KeyName -- First  level
      , Map KeyName $ Either AlternativeModeKeyAction KeyName -- Second level
      )
 
-alternativeModeRemaps isErgo = (,)
+alternativeModeRemaps ergoMode = (,)
   -- 4th row shifted down to 3rd
   [ (TabKey,          Right GraveKey)
   , (QKey,            Right Number1Key)
@@ -400,6 +403,8 @@ alternativeModeRemaps isErgo = (,)
   , (ZKey,            Left AlternativeModeFreeze)
   , (XKey,            Left AlternativeModeLevelDown)
   , (CKey,            Left AlternativeModeLevelUp)
+
+  , (BKey,            Right CapsLockKey)
   ]
 
   -- FN keys row shifted down to 3rd row
@@ -443,7 +448,7 @@ alternativeModeRemaps isErgo = (,)
   , (CKey,            Left AlternativeModeLevelUp)
   ]
 
-  & flip applyIf isErgo (
+  & flip applyIf (ergoMode == O.ErgonomicMode) (
       (_1 %~ delete ergoEnterKey)
       .
       (_2 %~ delete ergoEnterKey)
@@ -470,6 +475,38 @@ alternativeModeRemaps isErgo = (,)
           ]
       )
     )
+
+  & flip applyIf (ergoMode == O.ErgoDoxErgonomicMode) (
+      (
+        let
+          keys :: Set KeyName
+          keys = [ApostropheKey, BracketLeftKey, BracketRightKey]
+
+          reducer accFunc k = accFunc . (_1 %~ delete k) . (_2 %~ delete k)
+        in
+          foldl reducer id keys
+      )
+      .
+      (_1 %~) (
+        Map.union
+          [ (BackslashKey, Right DeleteKey)
+          , (AKey,         Right MinusKey)
+          , (SKey,         Right EqualKey)
+          , (DKey,         Right BracketLeftKey)
+          , (FKey,         Right BracketRightKey)
+          , (GKey,         Right BackslashKey)
+          ]
+      )
+      .
+      (_2 %~) (
+        Map.union
+          [ (TabKey,       Right F12Key)
+          , (BackslashKey, Right F11Key)
+          , (GKey,         Right MAudioStopKey)
+          ]
+      )
+    )
+
 
 
 -- | Device key numbers aliases for media keys
@@ -592,8 +629,10 @@ getKeyMap opts mediaKeyCodes = go where
   keyAliases = go' where
     go' = pure defaultKeyAliases
         <**> fmap mappend resolvedMediaKeys
-        <**> pure (turnOffFourthRow          `applyIf` O.turnOffFourthRow opts)
-        <**> pure (turnOffOutOfErgonomicZone `applyIf` O.ergonomicMode    opts)
+        <**> pure (turnOffFourthRow `applyIf` O.turnOffFourthRow opts)
+
+        <**> pure (turnOffOutOfErgonomicZone
+                    `applyIf` (O.ergonomicMode opts == O.ErgonomicMode))
 
     resolvedMediaKeys =
       Set.fromList . Map.elems <$>

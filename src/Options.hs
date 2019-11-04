@@ -5,13 +5,14 @@
 {-# LANGUAGE DeriveGeneric, DeriveAnyClass, TemplateHaskell #-}
 
 module Options
-  ( Options (..)
-  , HasOptions (..)
-  , extractOptions
-  , usageInfo
-  , noise
-  , subsDisplay
-  ) where
+     ( Options (..)
+     , HasOptions (..)
+     , ErgonomicMode (..)
+     , extractOptions
+     , usageInfo
+     , noise
+     , subsDisplay
+     ) where
 
 import "base" GHC.Generics (Generic)
 
@@ -37,6 +38,14 @@ import Utils.Sugar ((.>), (&), (?))
 import Utils.Lens (makeApoClassy)
 
 
+-- ^ Indicates whether Ergonomic (ErgoDox) Mode feature is enabled
+data ErgonomicMode
+   = NoErgonomicMode
+   | ErgonomicMode
+   | ErgoDoxErgonomicMode
+     deriving (Eq, Show, Generic, NFData)
+
+
 data Options
    = Options
    { showHelp                     :: Bool
@@ -51,7 +60,7 @@ data Options
    , alternativeModeWithAltMod    :: Bool
    , toggleAlternativeModeByAlts  :: Bool
    , turnOffFourthRow             :: Bool
-   , ergonomicMode                :: Bool
+   , ergonomicMode                :: ErgonomicMode
    , superDoublePress             :: Bool
    , leftSuperDoublePressCmd      :: Maybe String
    , rightSuperDoublePressCmd     :: Maybe String
@@ -100,7 +109,7 @@ instance Default Options where
     , alternativeModeWithAltMod    = False
     , toggleAlternativeModeByAlts  = False
     , turnOffFourthRow             = False
-    , ergonomicMode                = False
+    , ergonomicMode                = NoErgonomicMode
     , superDoublePress             = True
     , leftSuperDoublePressCmd      = Nothing
     , rightSuperDoublePressCmd     = Nothing
@@ -228,7 +237,8 @@ options =
             Default is: {turnOffFourthRow def ? "On" $ "Off"}
             |]
   , GetOpt.Option  [ ]  [ergonomicModeOptName]
-      (GetOpt.NoArg $ (turnOffFourthRow' .~ True) . (ergonomicMode' .~ True))
+      (GetOpt.NoArg $ (turnOffFourthRow' .~ True)
+                    . (ergonomicMode' .~ ErgonomicMode))
       [qmb| Turns on kinda hardcore ergonomic mode \
               (an attempt to make the experience of using a traditional \
               keyboard to be more convenient, or I would say less painful).
@@ -272,8 +282,12 @@ options =
             \  * Close Bracket ( ] } ) key;
             \  * Backslash ( \\ | ) key;
             \  * Enter key.
-            Default is: {ergonomicMode def ? "On" $ "Off"}
+            Default is: {ergonomicMode def /= ErgonomicMode ? "On" $ "Off"}
             |]
+  , GetOpt.Option  [ ]  ["ergonomic-ergodox-mode"]
+      (GetOpt.NoArg $ (turnOffFourthRow' .~ False)
+                    . (ergonomicMode' .~ ErgoDoxErgonomicMode))
+      [qmb| TODO add description |]
   , GetOpt.Option  [ ]  [disableSuperDoublePressOptName]
       (GetOpt.NoArg $ superDoublePress' .~ False)
       [qmb| Disable handling of double Super key press.

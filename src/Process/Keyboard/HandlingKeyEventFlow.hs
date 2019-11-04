@@ -132,13 +132,17 @@ handleKeyEvent ctVars opts keyMap =
       additionalControls
         = Set.fromList
         $ [Keys.CapsLockKey, Keys.EnterKey]
-        & ((Keys.ergoEnterKey :) `applyIf` O.ergonomicMode opts)
+
+        & ((Keys.ergoEnterKey :)
+            `applyIf` (O.ergonomicMode opts == O.ErgonomicMode))
 
       enters :: Set KeyName
       enters
         = Set.fromList
         $ [Keys.EnterKey]
-        & ((Keys.ergoEnterKey :) `applyIf` O.ergonomicMode opts)
+
+        & ((Keys.ergoEnterKey :)
+            `applyIf` (O.ergonomicMode opts == O.ErgonomicMode))
 
       -- | @False@ when alternative mode is turned off
       hasAlternativeKeyInCurrentLevel :: KeyName -> Bool
