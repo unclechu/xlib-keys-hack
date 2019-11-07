@@ -8,6 +8,7 @@ module Process.Keyboard.HandlingKeyEventFlow
      ( handleKeyEvent
      ) where
 
+import "base" Data.Tuple (swap)
 import "base" Data.Function (fix)
 import "data-default" Data.Default (def)
 import "base" Data.Maybe (fromMaybe, fromJust, isJust, isNothing)
@@ -423,6 +424,9 @@ handleKeyEvent ctVars opts keyMap =
             )
           )
         )
+
+      onF24asVerticalBarKey :: Bool
+      onF24asVerticalBarKey = O.f24asVerticalBar opts && keyName == Keys.F24Key
 
       triggerCurrentKey, smartlyTriggerCurrentKey :: IO ()
 
@@ -1231,6 +1235,22 @@ handleKeyEvent ctVars opts keyMap =
     if O.resetByEscapeOnCapsLock opts && not isPressed
        then triggerCurrentKey >> execStateT (runExceptT resetAll) state
        else state <$ triggerCurrentKey
+
+  | onF24asVerticalBarKey -> do
+
+    let (a, b) = go where
+          go = ab & if isPressed then id else swap
+          ab = (Keys.ShiftLeftKey, Keys.BackslashKey)
+
+    noise [qms|
+      {keyName} was {isPressed ? "pressed" $ "released"},
+      interpreting it as a vertical bar,
+      triggering {isPressed ? "pressing" $ "releasing"} of both {a} and {b}...
+    |]
+
+    state <$
+      let f k = trigger k (fromJust $ getDefaultKeyCodeByName k) isPressed
+       in f a >> f b
 
   -- Usual key handling
   | otherwise -> state <$ smartlyTriggerCurrentKey

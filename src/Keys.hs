@@ -76,8 +76,9 @@ data KeyName
    | PrintScreenKey | ScrollLockKey | PauseKey
 
    -- Apple keyboard additional fn keys
-   | F13Key | F14Key | F15Key
-   | F16Key | F17Key | F18Key | F19Key
+   | F13Key | F14Key | F15Key | F16Key
+   | F17Key | F18Key | F19Key | F20Key
+   | F21Key | F22Key | F23Key | F24Key
 
    | GraveKey
    | Number1Key | Number2Key | Number3Key | Number4Key | Number5Key
@@ -165,11 +166,15 @@ defaultKeyAliases =
   , (F13Key,          183, 191)
   , (F14Key,          184, 192)
   , (F15Key,          185, 193)
-
   , (F16Key,          186, 194)
   , (F17Key,          187, 195)
   , (F18Key,          188, 196)
   , (F19Key,          189, 197)
+  , (F20Key,          190, 198)
+  , (F21Key,          191, 199)
+  , (F22Key,          192, 200)
+  , (F23Key,          193, 201)
+  , (F24Key,          194, 202)
 
 
   -- Numbers line

@@ -64,6 +64,7 @@ data Options
    , superDoublePress             :: Bool
    , leftSuperDoublePressCmd      :: Maybe String
    , rightSuperDoublePressCmd     :: Maybe String
+   , f24asVerticalBar             :: Bool
 
    , resetByEscapeOnCapsLock      :: Bool
    , resetByWindowFocusEvent      :: Bool
@@ -113,6 +114,7 @@ instance Default Options where
     , superDoublePress             = True
     , leftSuperDoublePressCmd      = Nothing
     , rightSuperDoublePressCmd     = Nothing
+    , f24asVerticalBar             = False
 
     , resetByEscapeOnCapsLock      = True
     , resetByWindowFocusEvent      = True
@@ -315,6 +317,9 @@ options =
               instead of toggling alternative mode.
             {makesNoSense disableSuperDoublePressOptName}
             |]
+  , GetOpt.Option  [ ]  ["f24-as-vertical-bar"]
+      (GetOpt.NoArg (f24asVerticalBar' .~ True))
+      [qmb| TODO add description |]
 
   , GetOpt.Option  [ ]  ["disable-reset-by-escape-on-capslock"]
       (GetOpt.NoArg $ resetByEscapeOnCapsLock' .~ False)
