@@ -66,6 +66,7 @@ data Options
    , rightSuperDoublePressCmd     :: Maybe String
    , f24asVerticalBar             :: Bool
 
+   , resetByRealEscape            :: Bool
    , resetByEscapeOnCapsLock      :: Bool
    , resetByWindowFocusEvent      :: Bool
 
@@ -116,6 +117,7 @@ instance Default Options where
     , rightSuperDoublePressCmd     = Nothing
     , f24asVerticalBar             = False
 
+    , resetByRealEscape            = False
     , resetByEscapeOnCapsLock      = True
     , resetByWindowFocusEvent      = True
 
@@ -321,6 +323,12 @@ options =
       (GetOpt.NoArg (f24asVerticalBar' .~ True))
       [qmb| TODO add description |]
 
+  , GetOpt.Option  [ ]  ["reset-by-real-escape"]
+      (GetOpt.NoArg $ resetByRealEscape' .~ True)
+      [qmb| Enable resetting Caps Lock mode, Alternative mode \
+              and keyboard layout by real Escape key.
+            Default is: {resetByRealEscape def ? "On" $ "Off"}
+            |]
   , GetOpt.Option  [ ]  ["disable-reset-by-escape-on-capslock"]
       (GetOpt.NoArg $ resetByEscapeOnCapsLock' .~ False)
       [qmb| Disable resetting Caps Lock mode, Alternative mode \

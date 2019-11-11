@@ -428,6 +428,10 @@ handleKeyEvent ctVars opts keyMap =
       onF24asVerticalBarKey :: Bool
       onF24asVerticalBarKey = O.f24asVerticalBar opts && keyName == Keys.F24Key
 
+      onRealEscapeReset :: Bool
+      onRealEscapeReset =
+        O.resetByRealEscape opts && keyName == Keys.EscapeKey && not isPressed
+
       triggerCurrentKey, smartlyTriggerCurrentKey :: IO ()
 
       -- | Key could be remapped. It ignores alternative mode remapping.
@@ -1251,6 +1255,11 @@ handleKeyEvent ctVars opts keyMap =
     state <$
       let f k = trigger k (fromJust $ getDefaultKeyCodeByName k) isPressed
        in f a >> f b
+
+  | onRealEscapeReset -> do
+
+    triggerCurrentKey
+    execStateT (runExceptT resetAll) state
 
   -- Usual key handling
   | otherwise -> state <$ smartlyTriggerCurrentKey
