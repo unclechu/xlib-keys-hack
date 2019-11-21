@@ -64,6 +64,7 @@ data Options
    , superDoublePress             :: Bool
    , leftSuperDoublePressCmd      :: Maybe String
    , rightSuperDoublePressCmd     :: Maybe String
+   , rightSuperAsSpace            :: Bool
    , f24asVerticalBar             :: Bool
 
    , resetByRealEscape            :: Bool
@@ -115,6 +116,7 @@ instance Default Options where
     , superDoublePress             = True
     , leftSuperDoublePressCmd      = Nothing
     , rightSuperDoublePressCmd     = Nothing
+    , rightSuperAsSpace            = False
     , f24asVerticalBar             = False
 
     , resetByRealEscape            = False
@@ -318,6 +320,18 @@ options =
       [qmb| Double Right Super key press will spawn specified shell command \
               instead of toggling alternative mode.
             {makesNoSense disableSuperDoublePressOptName}
+            |]
+  , GetOpt.Option  [ ]  ["right-super-as-space"]
+      (GetOpt.NoArg (rightSuperAsSpace' .~ True))
+      [qms| It makes sense to turn this on when I use my ErgoDox EZ layout and
+            play videogames. I got 3 bottom keys for thumb mapped as
+            Super, Alt and Control.
+            Super keys are used by a window manager which in my case blocks some
+            other events (in a game) when it's pressed, e.g. when I hold it
+            mouse for some reason doesn't work.\n\
+            Remapping Super key to something else could solve the problem
+            (like remapping it to the Spacebar by turning this option on).\n\
+            Default is: {rightSuperAsSpace def ? "On" $ "Off"}
             |]
   , GetOpt.Option  [ ]  ["f24-as-vertical-bar"]
       (GetOpt.NoArg (f24asVerticalBar' .~ True))

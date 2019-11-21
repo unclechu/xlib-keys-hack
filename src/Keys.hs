@@ -661,10 +661,12 @@ getKeyMap opts mediaKeyCodes = go where
   remaps = f $ basicKeyRemapping $ O.ergonomicMode opts where
     f = (delete CapsLockKey `applyIf` O.realCapsLock             opts)
      .> (rightCtrlAsSuper   `applyIf` O.rightControlAsRightSuper opts)
+     .> (rightSuperAsSpace  `applyIf` O.rightSuperAsSpace        opts)
      .> ((<> numericShift)  `applyIf` O.shiftNumericKeys         opts)
      .> ((<> hjklShift)     `applyIf` O.shiftHJKLKeys            opts)
 
-    rightCtrlAsSuper = insert ControlRightKey SuperRightKey
+    rightCtrlAsSuper  = insert ControlRightKey SuperRightKey
+    rightSuperAsSpace = insert SuperRightKey   SpaceKey
 
   remapsMirror = Set.fromList $ swap <$> Map.toList remaps
 
