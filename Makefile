@@ -3,7 +3,7 @@ STACK := stack --no-nix
 all: build
 
 build:
-	$(STACK) build --install-ghc
+	$(STACK) build --install-ghc --ghc-options=-fllvm -j'$(shell nproc --all)'
 	$(STACK) install
 
 dist: clean build
@@ -14,7 +14,7 @@ clean:
 
 test-command:
 	sudo setfacl -m 'u:$(shell whoami):r' /dev/input/by-id/*
-	$(STACK) build -j'$(shell nproc --all)'
+	$(STACK) build --install-ghc --ghc-options=-fllvm -j'$(shell nproc --all)'
 	env PATH='$(shell $(STACK) path --local-install-root)/bin/:${PATH}' \
 		xlib-keys-hack \
 		\
@@ -38,6 +38,6 @@ test-command:
 		--hold-alt-for-alternative-mode --ergonomic-mode
 
 test-usage-command:
-	$(STACK) build -j'$(shell nproc --all)'
+	$(STACK) build --install-ghc --ghc-options=-fllvm -j'$(shell nproc --all)'
 	env PATH='$(shell $(STACK) path --local-install-root)/bin/:${PATH}' \
 		xlib-keys-hack --help
