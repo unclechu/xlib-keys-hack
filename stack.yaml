@@ -1,4 +1,4 @@
-resolver: nightly-2019-11-20 # ghc 8.8.1
+resolver: nightly-2019-11-29 # ghc 8.8.1
 system-ghc: false
 packages: [.]
 
@@ -8,3 +8,15 @@ extra-deps:
     commit: f948132fdc74a3dbe622eb35b0d0cfadeaa6aae7
   - git: https://github.com/unclechu/haskell-data-maybe-preserve
     commit: 705e3e4e85661c6c3c34f43a408b111433abb27e
+
+nix:
+  enable: true
+  packages:
+    - xorg.libX11
+    - xorg.libXtst
+    - xorg.libXrandr
+    - xorg.libXScrnSaver
+    - xorg.libXext
+    - libxml2
+    - gmp
+    - zlib

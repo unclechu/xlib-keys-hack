@@ -1,19 +1,21 @@
+STACK := stack --no-nix
+
 all: build
 
 build:
-	stack build --install-ghc
-	stack install
+	$(STACK) build --install-ghc
+	$(STACK) install
 
 dist: clean build
 
 clean:
-	stack clean --full
+	$(STACK) clean --full
 	rm -rf dist/ .stack-work/ .hpc/
 
 test-command:
 	sudo setfacl -m 'u:$(shell whoami):r' /dev/input/by-id/*
-	stack build -j'$(shell nproc --all)'
-	env PATH='$(shell stack path --local-install-root)/bin/:${PATH}' \
+	$(STACK) build -j'$(shell nproc --all)'
+	env PATH='$(shell $(STACK) path --local-install-root)/bin/:${PATH}' \
 		xlib-keys-hack \
 		\
 		'/dev/input/by-id/usb-Corsair_Corsair_Gaming_K63_Keyboard_0B008012AF0C1D2558ED9875F5001945-event-if01' \
@@ -36,6 +38,6 @@ test-command:
 		--hold-alt-for-alternative-mode --ergonomic-mode
 
 test-usage-command:
-	stack build -j'$(shell nproc --all)'
-	env PATH='$(shell stack path --local-install-root)/bin/:${PATH}' \
+	$(STACK) build -j'$(shell nproc --all)'
+	env PATH='$(shell $(STACK) path --local-install-root)/bin/:${PATH}' \
 		xlib-keys-hack --help
