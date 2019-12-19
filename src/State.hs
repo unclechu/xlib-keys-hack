@@ -93,7 +93,7 @@ data ComboState
 
    -- What Just or Nothing indicates:
    --   If Enter key works as additional Control
-   --   and it pressed with modifiers like for example
+   --   and it is pressed with modifiers like for example
    --   Shift+Enter or Alt+Enter.
    -- About value inside Just:
    --   Modifiers keys Set that was pressed before Enter key

@@ -177,14 +177,17 @@ handleKeyEvent ctVars opts keyMap =
 
       onOnlyTwoControlsPressed :: Bool
       onOnlyTwoControlsPressed =
-        pressed == Set.fromList [Keys.ControlLeftKey, Keys.ControlRightKey] ||
-        (
-          O.additionalControls opts &&
-          -- Either @CapsLockKey@+@EnterKey@ or @CapsLockKey@+@ApostropheKey@
-          -- (in case ergonomic mode feature is enabled
-          -- and @ApostropheKey@ is ergonomic remap/version of @EnterKey@).
-          any (pressed ==)
-              (Set.map (\x -> Set.fromList [Keys.CapsLockKey, x]) enters)
+        not (state ^. State.comboState' . State.isCapsLockUsedWithCombos') &&
+        not (state ^. State.comboState' . State.isEnterUsedWithCombos') && (
+          pressed == Set.fromList [Keys.ControlLeftKey, Keys.ControlRightKey] ||
+          (
+            O.additionalControls opts &&
+            -- Either @CapsLockKey@+@EnterKey@ or @CapsLockKey@+@ApostropheKey@
+            -- (in case ergonomic mode feature is enabled
+            -- and @ApostropheKey@ is ergonomic remap/version of @EnterKey@).
+            any (pressed ==)
+                (Set.map (\x -> Set.fromList [Keys.CapsLockKey, x]) enters)
+          )
         )
 
       -- | Caps Lock or Enter pressed (current key)
@@ -458,8 +461,13 @@ handleKeyEvent ctVars opts keyMap =
       off :: KeyName -> IO ()
       off keyNameToOff =
         when (keyNameToOff `Set.member` pressed) $
-          trigger keyNameToOff (fromJust $ getKeyCodeByName keyNameToOff) False
+          off' keyNameToOff
 
+      -- | Strict version of @off@, always triggers event of a key,
+      --   even if it's not in @pressed@ list.
+      off' :: KeyName -> IO ()
+      off' keyNameToOff =
+        trigger keyNameToOff (fromJust $ getKeyCodeByName keyNameToOff) False
   in
   if
 
@@ -1070,8 +1078,8 @@ handleKeyEvent ctVars opts keyMap =
 
     noise "Two controls pressed, it means Caps Lock mode toggling"
 
-    off Keys.ControlLeftKey
-    off Keys.ControlRightKey
+    off' Keys.ControlLeftKey
+    off' Keys.ControlRightKey
 
     let toDelete = [Keys.ControlLeftKey, Keys.ControlRightKey]
                      ++ if O.additionalControls opts
