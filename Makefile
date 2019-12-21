@@ -2,8 +2,10 @@ STACK := stack --no-nix
 
 all: build
 
-build:
+just-build:
 	$(STACK) build --install-ghc --ghc-options=-fllvm -j'$(shell nproc --all)'
+
+build: just-build
 	$(STACK) install
 
 dist: clean build

@@ -290,7 +290,7 @@ options =
             \  * Enter key.
             Default is: {ergonomicMode def /= ErgonomicMode ? "On" $ "Off"}
             |]
-  , GetOpt.Option  [ ]  ["ergonomic-ergodox-mode"]
+  , GetOpt.Option  [ ]  [ergonomicErgoDoxModeOptName]
       (GetOpt.NoArg $ (turnOffFourthRow' .~ False)
                     . (ergonomicMode' .~ ErgoDoxErgonomicMode))
       [qmb| TODO add description |]
@@ -335,7 +335,24 @@ options =
             |]
   , GetOpt.Option  [ ]  ["f24-as-vertical-bar"]
       (GetOpt.NoArg (f24asVerticalBar' .~ True))
-      [qmb| TODO add description |]
+      [qms| This option makes F24 key (which isn't presented on most of the
+            keyboards, at least I've never seen such a keyboard, only up to F19
+            on Apple's keyboard) being interpreted as two keys pressed in
+            sequence: Shift + Backslash.\
+            \n\
+            This has to do with my own ErgoDox EZ layout where there is another
+            layout layer which has a lot of "shifted punctuation" keys including
+            vertical bar (which means it is an automated combo of both Shfit and
+            Backslash keys) but at the same time I have Backslash key remapped
+            to Apostrophe key (see --{ergonomicErgoDoxModeOptName} option). So
+            it would trigger Shift + Apostrophe which would give you a double
+            quote. This option is an experimental attempt to solve it, by
+            remapping that shifted punctuation vertical bar key to F24 on the
+            keyboard firmware level and trigger that vertical bar by this tool
+            instead.\
+            \n\
+            Default is: {f24asVerticalBar def ? "On" $ "Off"}
+            |]
 
   , GetOpt.Option  [ ]  ["reset-by-real-escape"]
       (GetOpt.NoArg $ resetByRealEscape' .~ True)
@@ -516,6 +533,9 @@ options =
 
         ergonomicModeOptName :: String
         ergonomicModeOptName = "ergonomic-mode"
+
+        ergonomicErgoDoxModeOptName :: String
+        ergonomicErgoDoxModeOptName = "ergonomic-ergodox-mode"
 
         shiftHjklOptName :: String
         shiftHjklOptName = "shift-hjkl"
