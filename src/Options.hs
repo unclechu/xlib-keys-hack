@@ -293,7 +293,33 @@ options =
   , GetOpt.Option  [ ]  [ergonomicErgoDoxModeOptName]
       (GetOpt.NoArg $ (turnOffFourthRow' .~ False)
                     . (ergonomicMode' .~ ErgoDoxErgonomicMode))
-      [qmb| TODO add description |]
+      [qms| It's an ErgoDox-oriented version of --{ergonomicModeOptName} which
+            doesn't turn off numbers row (to keep them for "shifted punctuation"
+            keys defined on ErgoDox firmware level).\
+            \n\
+            Remaps provided by this option are tied to my own ErgoDox EZ
+            layout.\
+            \n\
+            Remappings (mostly based on --{ergonomicModeOptName} option,
+            here are only the different ones):\
+            \n\
+            \  * Backslash ( \\ ) key will become Apostrophe ( ' " ) key
+                 (on the keyboard layout I have Backslash coming right after P
+                 key and at the position of Apostrophe key I have Enter key,
+                 so this making Apostrophe key being reachable like with the
+                 --{ergonomicModeOptName} option, on the same physical
+                 position whilst Backslash is being reachable via alternative
+                 mode);\
+            \n\
+            \  * In the alternative mode Delete (first level) and F11
+                 (second level) keys are reachable by Backslash key
+                 (instead of Open Bracket key becuase on my ErgoDox EZ layout
+                 Backslash key goes right after P key instead of
+                 Open Bracket key on a regular archaically designed keyboard).\
+            \n\
+            Default is: \
+              {ergonomicMode def == ErgoDoxErgonomicMode ? "On" $ "Off"}
+            |]
   , GetOpt.Option  [ ]  [disableSuperDoublePressOptName]
       (GetOpt.NoArg $ superDoublePress' .~ False)
       [qmb| Disable handling of double Super key press.
@@ -347,7 +373,7 @@ options =
             to Apostrophe key (see --{ergonomicErgoDoxModeOptName} option). So
             it would trigger Shift + Apostrophe which would give you a double
             quote. This option is an experimental attempt to solve it, by
-            remapping that shifted punctuation vertical bar key to F24 on the
+            remapping that "shifted punctuation" vertical bar key to F24 on the
             keyboard firmware level and trigger that vertical bar by this tool
             instead.\
             \n\
