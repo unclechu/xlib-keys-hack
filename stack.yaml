@@ -1,4 +1,4 @@
-resolver: nightly-2020-01-17 # ghc 8.8.1
+resolver: nightly-2020-01-25 # ghc 8.8.2
 system-ghc: false
 packages: [.]
 
