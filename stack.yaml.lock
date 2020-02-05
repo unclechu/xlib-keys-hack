@@ -5,19 +5,12 @@
 
 packages:
 - completed:
-    cabal-file:
-      size: 1017
-      sha256: ed9670fb871d006afcc9edbc2e3c65624305b53c1baafe6315bb852c2071689f
-    name: linux-evdev
-    version: 0.3.2
-    git: https://github.com/unclechu/haskell-linux-evdev
+    hackage: linux-evdev-0.3.2@sha256:021bc71880cba6ca10da787763f6455c9e04f98a1c0a33ea0506f78311f3d2be,1059
     pantry-tree:
-      size: 425
-      sha256: 9ffa0deeac1a3d59138499e1559a21ba36a9a184e4c5749a27b4764a298f0672
-    commit: f948132fdc74a3dbe622eb35b0d0cfadeaa6aae7
+      size: 373
+      sha256: 46d7e19478603bd9e38e8b1b1cd3fb92bccf42ff9b4896c67cd3418b825c2ccd
   original:
-    git: https://github.com/unclechu/haskell-linux-evdev
-    commit: f948132fdc74a3dbe622eb35b0d0cfadeaa6aae7
+    hackage: linux-evdev-0.3.2
 - completed:
     cabal-file:
       size: 1295

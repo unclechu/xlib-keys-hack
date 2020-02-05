@@ -3,9 +3,7 @@ system-ghc: false
 packages: [.]
 
 extra-deps:
-  # my own fork with updated "time" dependency version bounds
-  - git: https://github.com/unclechu/haskell-linux-evdev
-    commit: f948132fdc74a3dbe622eb35b0d0cfadeaa6aae7
+  - linux-evdev-0.3.2
   - git: https://github.com/unclechu/haskell-data-maybe-preserve
     commit: 705e3e4e85661c6c3c34f43a408b111433abb27e
 
