@@ -5,17 +5,17 @@
 {-# LANGUAGE DeriveGeneric, DeriveAnyClass, TemplateHaskell #-}
 
 module Options
-  ( Options (..)
-  , HasOptions (..)
-  , extractOptions
-  , usageInfo
-  , noise
-  , subsDisplay
-  ) where
+     ( Options (..)
+     , HasOptions (..)
+     , ErgonomicMode (..)
+     , extractOptions
+     , usageInfo
+     , noise
+     , subsDisplay
+     ) where
 
 import "base" GHC.Generics (Generic)
 
-import "base" Data.Monoid ((<>))
 import "base" Data.Maybe (fromJust)
 import "data-default" Data.Default (Default, def)
 import "base" Data.Word (Word8)
@@ -38,6 +38,14 @@ import Utils.Sugar ((.>), (&), (?))
 import Utils.Lens (makeApoClassy)
 
 
+-- ^ Indicates whether Ergonomic (ErgoDox) Mode feature is enabled
+data ErgonomicMode
+   = NoErgonomicMode
+   | ErgonomicMode
+   | ErgoDoxErgonomicMode
+     deriving (Eq, Show, Generic, NFData)
+
+
 data Options
    = Options
    { showHelp                     :: Bool
@@ -52,11 +60,14 @@ data Options
    , alternativeModeWithAltMod    :: Bool
    , toggleAlternativeModeByAlts  :: Bool
    , turnOffFourthRow             :: Bool
-   , ergonomicMode                :: Bool
+   , ergonomicMode                :: ErgonomicMode
    , superDoublePress             :: Bool
    , leftSuperDoublePressCmd      :: Maybe String
    , rightSuperDoublePressCmd     :: Maybe String
+   , rightSuperAsSpace            :: Bool
+   , f24asVerticalBar             :: Bool
 
+   , resetByRealEscape            :: Bool
    , resetByEscapeOnCapsLock      :: Bool
    , resetByWindowFocusEvent      :: Bool
 
@@ -101,11 +112,14 @@ instance Default Options where
     , alternativeModeWithAltMod    = False
     , toggleAlternativeModeByAlts  = False
     , turnOffFourthRow             = False
-    , ergonomicMode                = False
+    , ergonomicMode                = NoErgonomicMode
     , superDoublePress             = True
     , leftSuperDoublePressCmd      = Nothing
     , rightSuperDoublePressCmd     = Nothing
+    , rightSuperAsSpace            = False
+    , f24asVerticalBar             = False
 
+    , resetByRealEscape            = False
     , resetByEscapeOnCapsLock      = True
     , resetByWindowFocusEvent      = True
 
@@ -229,7 +243,8 @@ options =
             Default is: {turnOffFourthRow def ? "On" $ "Off"}
             |]
   , GetOpt.Option  [ ]  [ergonomicModeOptName]
-      (GetOpt.NoArg $ (turnOffFourthRow' .~ True) . (ergonomicMode' .~ True))
+      (GetOpt.NoArg $ (turnOffFourthRow' .~ True)
+                    . (ergonomicMode' .~ ErgonomicMode))
       [qmb| Turns on kinda hardcore ergonomic mode \
               (an attempt to make the experience of using a traditional \
               keyboard to be more convenient, or I would say less painful).
@@ -273,7 +288,37 @@ options =
             \  * Close Bracket ( ] } ) key;
             \  * Backslash ( \\ | ) key;
             \  * Enter key.
-            Default is: {ergonomicMode def ? "On" $ "Off"}
+            Default is: {ergonomicMode def /= ErgonomicMode ? "On" $ "Off"}
+            |]
+  , GetOpt.Option  [ ]  [ergonomicErgoDoxModeOptName]
+      (GetOpt.NoArg $ (turnOffFourthRow' .~ False)
+                    . (ergonomicMode' .~ ErgoDoxErgonomicMode))
+      [qms| It's an ErgoDox-oriented version of --{ergonomicModeOptName} which
+            doesn't turn off numbers row (to keep them for "shifted punctuation"
+            keys defined on ErgoDox firmware level).\
+            \n\
+            Remaps provided by this option are tied to my own ErgoDox EZ
+            layout.\
+            \n\
+            Remappings (mostly based on --{ergonomicModeOptName} option,
+            here are only the different ones):\
+            \n\
+            \  * Backslash ( \\ ) key will become Apostrophe ( ' " ) key
+                 (on the keyboard layout I have Backslash coming right after P
+                 key and at the position of Apostrophe key I have Enter key,
+                 so this making Apostrophe key being reachable like with the
+                 --{ergonomicModeOptName} option, on the same physical
+                 position whilst Backslash is being reachable via alternative
+                 mode);\
+            \n\
+            \  * In the alternative mode Delete (first level) and F11
+                 (second level) keys are reachable by Backslash key
+                 (instead of Open Bracket key becuase on my ErgoDox EZ layout
+                 Backslash key goes right after P key instead of
+                 Open Bracket key on a regular archaically designed keyboard).\
+            \n\
+            Default is: \
+              {ergonomicMode def == ErgoDoxErgonomicMode ? "On" $ "Off"}
             |]
   , GetOpt.Option  [ ]  [disableSuperDoublePressOptName]
       (GetOpt.NoArg $ superDoublePress' .~ False)
@@ -302,7 +347,45 @@ options =
               instead of toggling alternative mode.
             {makesNoSense disableSuperDoublePressOptName}
             |]
+  , GetOpt.Option  [ ]  ["right-super-as-space"]
+      (GetOpt.NoArg (rightSuperAsSpace' .~ True))
+      [qms| It makes sense to turn this on when I use my ErgoDox EZ layout and
+            play videogames. I got 3 bottom keys for thumb mapped as
+            Super, Alt and Control.
+            Super keys are used by a window manager which in my case blocks some
+            other events (in a game) when it's pressed, e.g. when I hold it
+            mouse for some reason doesn't work.\n\
+            Remapping Super key to something else could solve the problem
+            (like remapping it to the Spacebar by turning this option on).\n\
+            Default is: {rightSuperAsSpace def ? "On" $ "Off"}
+            |]
+  , GetOpt.Option  [ ]  ["f24-as-vertical-bar"]
+      (GetOpt.NoArg (f24asVerticalBar' .~ True))
+      [qms| This option makes F24 key (which isn't presented on most of the
+            keyboards, at least I've never seen such a keyboard, only up to F19
+            on Apple's keyboard) being interpreted as two keys pressed in
+            sequence: Shift + Backslash.\
+            \n\
+            This has to do with my own ErgoDox EZ layout where there is another
+            layout layer which has a lot of "shifted punctuation" keys including
+            vertical bar (which means it is an automated combo of both Shfit and
+            Backslash keys) but at the same time I have Backslash key remapped
+            to Apostrophe key (see --{ergonomicErgoDoxModeOptName} option). So
+            it would trigger Shift + Apostrophe which would give you a double
+            quote. This option is an experimental attempt to solve it, by
+            remapping that "shifted punctuation" vertical bar key to F24 on the
+            keyboard firmware level and trigger that vertical bar by this tool
+            instead.\
+            \n\
+            Default is: {f24asVerticalBar def ? "On" $ "Off"}
+            |]
 
+  , GetOpt.Option  [ ]  ["reset-by-real-escape"]
+      (GetOpt.NoArg $ resetByRealEscape' .~ True)
+      [qmb| Enable resetting Caps Lock mode, Alternative mode \
+              and keyboard layout by real Escape key.
+            Default is: {resetByRealEscape def ? "On" $ "Off"}
+            |]
   , GetOpt.Option  [ ]  ["disable-reset-by-escape-on-capslock"]
       (GetOpt.NoArg $ resetByEscapeOnCapsLock' .~ False)
       [qmb| Disable resetting Caps Lock mode, Alternative mode \
@@ -476,6 +559,9 @@ options =
 
         ergonomicModeOptName :: String
         ergonomicModeOptName = "ergonomic-mode"
+
+        ergonomicErgoDoxModeOptName :: String
+        ergonomicErgoDoxModeOptName = "ergonomic-ergodox-mode"
 
         shiftHjklOptName :: String
         shiftHjklOptName = "shift-hjkl"

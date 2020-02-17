@@ -8,6 +8,7 @@ module Process.Keyboard.HandlingKeyEventFlow
      ( handleKeyEvent
      ) where
 
+import "base" Data.Tuple (swap)
 import "base" Data.Function (fix)
 import "data-default" Data.Default (def)
 import "base" Data.Maybe (fromMaybe, fromJust, isJust, isNothing)
@@ -132,13 +133,17 @@ handleKeyEvent ctVars opts keyMap =
       additionalControls
         = Set.fromList
         $ [Keys.CapsLockKey, Keys.EnterKey]
-        & ((Keys.ergoEnterKey :) `applyIf` O.ergonomicMode opts)
+
+        & ((Keys.ergoEnterKey :)
+            `applyIf` (O.ergonomicMode opts == O.ErgonomicMode))
 
       enters :: Set KeyName
       enters
         = Set.fromList
         $ [Keys.EnterKey]
-        & ((Keys.ergoEnterKey :) `applyIf` O.ergonomicMode opts)
+
+        & ((Keys.ergoEnterKey :)
+            `applyIf` (O.ergonomicMode opts == O.ErgonomicMode))
 
       -- | @False@ when alternative mode is turned off
       hasAlternativeKeyInCurrentLevel :: KeyName -> Bool
@@ -172,14 +177,17 @@ handleKeyEvent ctVars opts keyMap =
 
       onOnlyTwoControlsPressed :: Bool
       onOnlyTwoControlsPressed =
-        pressed == Set.fromList [Keys.ControlLeftKey, Keys.ControlRightKey] ||
-        (
-          O.additionalControls opts &&
-          -- Either @CapsLockKey@+@EnterKey@ or @CapsLockKey@+@ApostropheKey@
-          -- (in case ergonomic mode feature is enabled
-          -- and @ApostropheKey@ is ergonomic remap/version of @EnterKey@).
-          any (pressed ==)
-              (Set.map (\x -> Set.fromList [Keys.CapsLockKey, x]) enters)
+        not (state ^. State.comboState' . State.isCapsLockUsedWithCombos') &&
+        not (state ^. State.comboState' . State.isEnterUsedWithCombos') && (
+          pressed == Set.fromList [Keys.ControlLeftKey, Keys.ControlRightKey] ||
+          (
+            O.additionalControls opts &&
+            -- Either @CapsLockKey@+@EnterKey@ or @CapsLockKey@+@ApostropheKey@
+            -- (in case ergonomic mode feature is enabled
+            -- and @ApostropheKey@ is ergonomic remap/version of @EnterKey@).
+            any (pressed ==)
+                (Set.map (\x -> Set.fromList [Keys.CapsLockKey, x]) enters)
+          )
         )
 
       -- | Caps Lock or Enter pressed (current key)
@@ -420,6 +428,13 @@ handleKeyEvent ctVars opts keyMap =
           )
         )
 
+      onF24asVerticalBarKey :: Bool
+      onF24asVerticalBarKey = O.f24asVerticalBar opts && keyName == Keys.F24Key
+
+      onRealEscapeReset :: Bool
+      onRealEscapeReset =
+        O.resetByRealEscape opts && keyName == Keys.EscapeKey && not isPressed
+
       triggerCurrentKey, smartlyTriggerCurrentKey :: IO ()
 
       -- | Key could be remapped. It ignores alternative mode remapping.
@@ -446,8 +461,13 @@ handleKeyEvent ctVars opts keyMap =
       off :: KeyName -> IO ()
       off keyNameToOff =
         when (keyNameToOff `Set.member` pressed) $
-          trigger keyNameToOff (fromJust $ getKeyCodeByName keyNameToOff) False
+          off' keyNameToOff
 
+      -- | Strict version of @off@, always triggers event of a key,
+      --   even if it's not in @pressed@ list.
+      off' :: KeyName -> IO ()
+      off' keyNameToOff =
+        trigger keyNameToOff (fromJust $ getKeyCodeByName keyNameToOff) False
   in
   if
 
@@ -1058,8 +1078,8 @@ handleKeyEvent ctVars opts keyMap =
 
     noise "Two controls pressed, it means Caps Lock mode toggling"
 
-    off Keys.ControlLeftKey
-    off Keys.ControlRightKey
+    off' Keys.ControlLeftKey
+    off' Keys.ControlRightKey
 
     let toDelete = [Keys.ControlLeftKey, Keys.ControlRightKey]
                      ++ if O.additionalControls opts
@@ -1227,6 +1247,27 @@ handleKeyEvent ctVars opts keyMap =
     if O.resetByEscapeOnCapsLock opts && not isPressed
        then triggerCurrentKey >> execStateT (runExceptT resetAll) state
        else state <$ triggerCurrentKey
+
+  | onF24asVerticalBarKey -> do
+
+    let (a, b) = go where
+          go = ab & if isPressed then id else swap
+          ab = (Keys.ShiftLeftKey, Keys.BackslashKey)
+
+    noise [qms|
+      {keyName} was {isPressed ? "pressed" $ "released"},
+      interpreting it as a vertical bar,
+      triggering {isPressed ? "pressing" $ "releasing"} of both {a} and {b}...
+    |]
+
+    state <$
+      let f k = trigger k (fromJust $ getDefaultKeyCodeByName k) isPressed
+       in f a >> f b
+
+  | onRealEscapeReset -> do
+
+    triggerCurrentKey
+    execStateT (runExceptT resetAll) state
 
   -- Usual key handling
   | otherwise -> state <$ smartlyTriggerCurrentKey

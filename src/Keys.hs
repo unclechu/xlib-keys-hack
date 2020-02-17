@@ -76,8 +76,9 @@ data KeyName
    | PrintScreenKey | ScrollLockKey | PauseKey
 
    -- Apple keyboard additional fn keys
-   | F13Key | F14Key | F15Key
-   | F16Key | F17Key | F18Key | F19Key
+   | F13Key | F14Key | F15Key | F16Key
+   | F17Key | F18Key | F19Key | F20Key
+   | F21Key | F22Key | F23Key | F24Key
 
    | GraveKey
    | Number1Key | Number2Key | Number3Key | Number4Key | Number5Key
@@ -165,11 +166,15 @@ defaultKeyAliases =
   , (F13Key,          183, 191)
   , (F14Key,          184, 192)
   , (F15Key,          185, 193)
-
   , (F16Key,          186, 194)
   , (F17Key,          187, 195)
   , (F18Key,          188, 196)
   , (F19Key,          189, 197)
+  , (F20Key,          190, 198)
+  , (F21Key,          191, 199)
+  , (F22Key,          192, 200)
+  , (F23Key,          193, 201)
+  , (F24Key,          194, 202)
 
 
   -- Numbers line
@@ -322,21 +327,24 @@ defaultKeyAliases =
 -- It could be extended in "getKeyMap" depending on provided "O.Options".
 --
 -- To remap a key you replace "KeyCode" in original mapping inside "getKeyMap".
-basicKeyRemapping
-  :: Bool -- ^ Indicates whether ergonomic mode feature is enabled
-  -> Map KeyName KeyName
-
-basicKeyRemapping isErgo =
+basicKeyRemapping :: O.ErgonomicMode -> Map KeyName KeyName
+basicKeyRemapping ergoMode =
   [ (FNKey,       InsertKey)
   , (CapsLockKey, EscapeKey)
   , (LessKey,     ShiftLeftKey)
   , (MenuKey,     SuperRightKey)
   ]
 
-  & flip applyIf isErgo (
+  & flip applyIf (ergoMode == O.ErgonomicMode) (
       Map.union
         [ (ergoEnterKey,   EnterKey)
         , (BracketLeftKey, ApostropheKey)
+        ]
+    )
+
+  & flip applyIf (ergoMode == O.ErgoDoxErgonomicMode) (
+      Map.union
+        [ (BackslashKey, ApostropheKey)
         ]
     )
 
@@ -352,12 +360,12 @@ data AlternativeModeKeyAction
 
 -- | Remapping for keys when Alternative mode is turned on
 alternativeModeRemaps
-  :: Bool -- ^ Indicates whether ergonomic mode feature is enabled
+  :: O.ErgonomicMode
   -> ( Map KeyName $ Either AlternativeModeKeyAction KeyName -- First  level
      , Map KeyName $ Either AlternativeModeKeyAction KeyName -- Second level
      )
 
-alternativeModeRemaps isErgo = (,)
+alternativeModeRemaps ergoMode = (,)
   -- 4th row shifted down to 3rd
   [ (TabKey,          Right GraveKey)
   , (QKey,            Right Number1Key)
@@ -400,6 +408,8 @@ alternativeModeRemaps isErgo = (,)
   , (ZKey,            Left AlternativeModeFreeze)
   , (XKey,            Left AlternativeModeLevelDown)
   , (CKey,            Left AlternativeModeLevelUp)
+
+  , (BKey,            Right CapsLockKey)
   ]
 
   -- FN keys row shifted down to 3rd row
@@ -443,7 +453,7 @@ alternativeModeRemaps isErgo = (,)
   , (CKey,            Left AlternativeModeLevelUp)
   ]
 
-  & flip applyIf isErgo (
+  & flip applyIf (ergoMode == O.ErgonomicMode) (
       (_1 %~ delete ergoEnterKey)
       .
       (_2 %~ delete ergoEnterKey)
@@ -470,6 +480,38 @@ alternativeModeRemaps isErgo = (,)
           ]
       )
     )
+
+  & flip applyIf (ergoMode == O.ErgoDoxErgonomicMode) (
+      (
+        let
+          keys :: Set KeyName
+          keys = [ApostropheKey, BracketLeftKey, BracketRightKey]
+
+          reducer accFunc k = accFunc . (_1 %~ delete k) . (_2 %~ delete k)
+        in
+          foldl reducer id keys
+      )
+      .
+      (_1 %~) (
+        Map.union
+          [ (BackslashKey, Right DeleteKey)
+          , (AKey,         Right MinusKey)
+          , (SKey,         Right EqualKey)
+          , (DKey,         Right BracketLeftKey)
+          , (FKey,         Right BracketRightKey)
+          , (GKey,         Right BackslashKey)
+          ]
+      )
+      .
+      (_2 %~) (
+        Map.union
+          [ (TabKey,       Right F12Key)
+          , (BackslashKey, Right F11Key)
+          , (GKey,         Right MAudioStopKey)
+          ]
+      )
+    )
+
 
 
 -- | Device key numbers aliases for media keys
@@ -592,8 +634,10 @@ getKeyMap opts mediaKeyCodes = go where
   keyAliases = go' where
     go' = pure defaultKeyAliases
         <**> fmap mappend resolvedMediaKeys
-        <**> pure (turnOffFourthRow          `applyIf` O.turnOffFourthRow opts)
-        <**> pure (turnOffOutOfErgonomicZone `applyIf` O.ergonomicMode    opts)
+        <**> pure (turnOffFourthRow `applyIf` O.turnOffFourthRow opts)
+
+        <**> pure (turnOffOutOfErgonomicZone
+                    `applyIf` (O.ergonomicMode opts == O.ErgonomicMode))
 
     resolvedMediaKeys =
       Set.fromList . Map.elems <$>
@@ -617,10 +661,12 @@ getKeyMap opts mediaKeyCodes = go where
   remaps = f $ basicKeyRemapping $ O.ergonomicMode opts where
     f = (delete CapsLockKey `applyIf` O.realCapsLock             opts)
      .> (rightCtrlAsSuper   `applyIf` O.rightControlAsRightSuper opts)
+     .> (rightSuperAsSpace  `applyIf` O.rightSuperAsSpace        opts)
      .> ((<> numericShift)  `applyIf` O.shiftNumericKeys         opts)
      .> ((<> hjklShift)     `applyIf` O.shiftHJKLKeys            opts)
 
-    rightCtrlAsSuper = insert ControlRightKey SuperRightKey
+    rightCtrlAsSuper  = insert ControlRightKey SuperRightKey
+    rightSuperAsSpace = insert SuperRightKey   SpaceKey
 
   remapsMirror = Set.fromList $ swap <$> Map.toList remaps
 

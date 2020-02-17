@@ -233,6 +233,12 @@ Usage: xlib-keys-hack [OPTION...] DEVICES-FD-PATHS...
                                                             * Close Bracket ( ] } ) key;
                                                             * Backslash ( \ | ) key;
                                                             * Enter key.
+                                                          Default is: On
+      --ergonomic-ergodox-mode                            It's an ErgoDox-oriented version of --ergonomic-mode which doesn't turn off numbers row (to keep them for "shifted punctuation" keys defined on ErgoDox firmware level).
+                                                          Remaps provided by this option are tied to my own ErgoDox EZ layout.
+                                                          Remappings (mostly based on --ergonomic-mode option, here are only the different ones):
+                                                            * Backslash ( \ ) key will become Apostrophe ( ' " ) key (on the keyboard layout I have Backslash coming right after P key and at the position of Apostrophe key I have Enter key, so this making Apostrophe key being reachable like with the --ergonomic-mode option, on the same physical position whilst Backslash is being reachable via alternative mode);
+                                                            * In the alternative mode Delete (first level) and F11 (second level) keys are reachable by Backslash key (instead of Open Bracket key becuase on my ErgoDox EZ layout Backslash key goes right after P key instead of Open Bracket key on a regular archaically designed keyboard).
                                                           Default is: Off
       --disable-super-double-press                        Disable handling of double Super key press.
                                                           Default is: On
@@ -242,6 +248,14 @@ Usage: xlib-keys-hack [OPTION...] DEVICES-FD-PATHS...
                                                           This option makes no sense with --disable-super-double-press option.
       --right-super-double-press-cmd=COMMAND              Double Right Super key press will spawn specified shell command instead of toggling alternative mode.
                                                           This option makes no sense with --disable-super-double-press option.
+      --right-super-as-space                              It makes sense to turn this on when I use my ErgoDox EZ layout and play videogames. I got 3 bottom keys for thumb mapped as Super, Alt and Control. Super keys are used by a window manager which in my case blocks some other events (in a game) when it's pressed, e.g. when I hold it mouse for some reason doesn't work.
+                                                          Remapping Super key to something else could solve the problem (like remapping it to the Spacebar by turning this option on).
+                                                          Default is: Off
+      --f24-as-vertical-bar                               This option makes F24 key (which isn't presented on most of the keyboards, at least I've never seen such a keyboard, only up to F19 on Apple's keyboard) being interpreted as two keys pressed in sequence: Shift + Backslash.
+                                                          This has to do with my own ErgoDox EZ layout where there is another layout layer which has a lot of "shifted punctuation" keys including vertical bar (which means it is an automated combo of both Shfit and Backslash keys) but at the same time I have Backslash key remapped to Apostrophe key (see --ergonomic-ergodox-mode option). So it would trigger Shift + Apostrophe which would give you a double quote. This option is an experimental attempt to solve it, by remapping that "shifted punctuation" vertical bar key to F24 on the keyboard firmware level and trigger that vertical bar by this tool instead.
+                                                          Default is: Off
+      --reset-by-real-escape                              Enable resetting Caps Lock mode, Alternative mode and keyboard layout by real Escape key.
+                                                          Default is: Off
       --disable-reset-by-escape-on-capslock               Disable resetting Caps Lock mode, Alternative mode and keyboard layout by Escape that triggered by Caps Lock key
                                                           (only when it's remapped, no need to use this option if you already use --real-capslock)
                                                           Default is: On

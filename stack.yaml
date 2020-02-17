@@ -1,8 +1,20 @@
-resolver: lts-14.4 # ghc 8.6.5
+resolver: lts-15.0 # ghc-8.8.2
 system-ghc: false
 packages: [.]
 
 extra-deps:
-  - linux-evdev-0.3.2 # getting events from devices files descriptors
+  - linux-evdev-0.3.2
   - git: https://github.com/unclechu/haskell-data-maybe-preserve
     commit: 705e3e4e85661c6c3c34f43a408b111433abb27e
+
+nix:
+  enable: true
+  packages:
+    - xorg.libX11
+    - xorg.libXtst
+    - xorg.libXrandr
+    - xorg.libXScrnSaver
+    - xorg.libXext
+    - libxml2
+    - gmp
+    - zlib

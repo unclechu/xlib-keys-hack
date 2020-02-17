@@ -5,10 +5,10 @@
 
 packages:
 - completed:
-    hackage: linux-evdev-0.3.2@sha256:133cb7b0784af72a62aa1336eadccb630097048cb45478c5263717c8795afe68,1039
+    hackage: linux-evdev-0.3.2@sha256:021bc71880cba6ca10da787763f6455c9e04f98a1c0a33ea0506f78311f3d2be,1059
     pantry-tree:
       size: 373
-      sha256: 4c85141fcb56cf71a35c79fc5ee0bffce363ad0606919dfbfa57ecfbd58b91a5
+      sha256: 46d7e19478603bd9e38e8b1b1cd3fb92bccf42ff9b4896c67cd3418b825c2ccd
   original:
     hackage: linux-evdev-0.3.2
 - completed:
@@ -27,7 +27,7 @@ packages:
     commit: 705e3e4e85661c6c3c34f43a408b111433abb27e
 snapshots:
 - completed:
-    size: 523884
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/14/4.yaml
-    sha256: 16f24be248b42c9e16d59db84378836b1e7c239448a041cae46d32daffa45a8b
-  original: lts-14.4
+    size: 488576
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/15/0.yaml
+    sha256: e4b6a87b47ec1cf63a7f1a0884a3b276fce2b0d174a10e8753c4f618e7983568
+  original: lts-15.0
