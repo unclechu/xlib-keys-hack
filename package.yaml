@@ -49,6 +49,7 @@ ghc-options:
 
 library:
   source-dirs: src
+  extra-libraries: [Xtst]
 
 executables:
 

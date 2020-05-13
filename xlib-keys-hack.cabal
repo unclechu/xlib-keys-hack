@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 44265a302cfb951474b51b20a408dcfd2cc3063d8c8ee440348d1ceefe429c57
+-- hash: 4112990ca7b34b5d692dc32e1dd4160236f60ccfde6195a47cc1d9ef4c390f19
 
 name:                xlib-keys-hack
 version:             0.1.0
@@ -28,6 +28,8 @@ library
   hs-source-dirs:
       src
   ghc-options: -Wall -O2
+  extra-libraries:
+      Xtst
   default-extensions: ExplicitNamespaces PackageImports TypeOperators BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
   exposed-modules:
       Actions
