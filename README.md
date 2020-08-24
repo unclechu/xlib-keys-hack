@@ -61,15 +61,46 @@ __**TODO**__ This description isn't complete yet,
 
 ## Requirements
 
+Either use [Nix](https://nixos.org/nix/manual/#ch-about-nix) which will provide
+all the requirements automatically or install these manually:
+
 - [Haskell Tool Stack](https://haskellstack.org/)
 - Development files of `libX11`, `libXtst` and `libXrandr`
   (for `X11` dependency)
 - Development files of `libxml2` (for `libxml-sax` dependency)
 - Development files of `libgmp` (for some other dependencies)
-- Superuser access (for giving to yourself read access permission (using ACL)
-  to keyboard device file descriptor)
+
+### Other requirements
+
+You would also need the superuser access in order to give to yourself read
+access permission (using ACL) to a keyboard device file descriptor
+(a file from this directory: `/dev/input/`).
+
+See how I’m doing it in my NixOS config by adding a wrapper with `root` SUID to
+an executable which gives ACL permissions to a specific user:
+
+- https://github.com/unclechu/nixos-config/blob/e8fee01/configuration.nix#L360
+- https://github.com/unclechu/nixos-config/tree/e8fee01/utils/grant-access-to-input-devices
+
+And here I’m calling it when I start `xlib-keys-hack`:
+
+https://github.com/unclechu/nixos-config/blob/e8fee01/apps/wenzels-xlib-keys-hack/main.bash#L6
+
+Also you can use the link above as a general usage example of `xlib-keys-hack`.
+
+*P.S. Note that links from above are sticked to a specific commit which may be
+out of date and may not represent the latest state of my NixOS config. Look at
+`master` branch of that repository if you need the latest state.*
 
 ## Build and install
+
+### Nix
+
+``` bash
+nix-shell --run 'xlib-keys-hack --help'
+```
+
+### Other GNU/Linux distro
 
 ``` bash
 $ make --always-make
