@@ -1,5 +1,5 @@
 let
-  defaultPkgs = import <nixpkgs> {};
+  defaultPkgs = (import nix/default-nixpkgs-pick.nix).pkgs;
 
   default-data-maybe-preserve = pkgs:
     let

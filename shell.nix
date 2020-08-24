@@ -1,8 +1,7 @@
-args@
-{ pkgs ? import <nixpkgs> {}
+{ pkgs ? (import nix/default-nixpkgs-pick.nix).pkgs
 }:
 let
-  xlib-keys-hack = import ./. args;
+  xlib-keys-hack = import ./. { inherit pkgs; };
 in
 pkgs.mkShell {
   buildInputs = [ xlib-keys-hack ];
