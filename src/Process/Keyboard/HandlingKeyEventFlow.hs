@@ -129,44 +129,6 @@ handleKeyEvent ctVars opts keyMap =
       alternativeKeyRemap :: Maybe (KeyName, KeyCode)
       alternativeKeyRemap = alternativeRemap >>= either (const Nothing) Just
 
-      additionalControls :: Set KeyName
-      additionalControls = additionalLeftControls <> additionalRightControls
-
-      -- | A set of all possible pairs of left and right additional controls.
-      additionalControlsPairs :: Set (Set KeyName)
-      additionalControlsPairs = Set.fromList
-        [ Set.fromList [l, r]
-        | l <- Set.toList additionalLeftControls
-        , r <- Set.toList additionalRightControls
-        ]
-
-      additionalLeftControls :: Set KeyName
-      additionalLeftControls
-        = Set.fromList
-        $ [Keys.CapsLockKey]
-        & ((Keys.EscapeKey :) `applyIf` (O.escapeIsAdditionalControl opts))
-
-      additionalRightControls :: Set KeyName
-      additionalRightControls = enters -- There are no more Right Controls yet
-
-      -- | All additional controls except those which are also representing
-      -- Enter key.
-      --
-      -- This helps to handle Enter pressed with modifiers.
-      nonEntersAdditionalControls :: Set KeyName
-      nonEntersAdditionalControls = Set.difference additionalControls enters
-
-      -- | List of enter keys for “additional controls” feature.
-      --
-      -- It helps to handle “modifiers only + enter” combos properly.
-      enters :: Set KeyName
-      enters
-        = Set.fromList
-        $ [Keys.EnterKey]
-
-        & ((Keys.ergoEnterKey :)
-            `applyIf` (O.ergonomicMode opts == O.ErgonomicMode))
-
       -- | @False@ when alternative mode is turned off
       hasAlternativeKeyInCurrentLevel :: KeyName -> Bool
       hasAlternativeKeyInCurrentLevel keyName'
@@ -1585,6 +1547,44 @@ handleKeyEvent ctVars opts keyMap =
     -- so it means that this key is a modifier too.
     remappedMods :: Set KeyName
     remappedMods = Set.foldr (Set.union . getExtraKeys) Set.empty mods
+
+  additionalControls :: Set KeyName
+  additionalControls = additionalLeftControls <> additionalRightControls
+
+  -- | A set of all possible pairs of left and right additional controls.
+  additionalControlsPairs :: Set (Set KeyName)
+  additionalControlsPairs = Set.fromList
+    [ Set.fromList [l, r]
+    | l <- Set.toList additionalLeftControls
+    , r <- Set.toList additionalRightControls
+    ]
+
+  additionalLeftControls :: Set KeyName
+  additionalLeftControls
+    = Set.fromList
+    $ [Keys.CapsLockKey]
+    & ((Keys.EscapeKey :) `applyIf` (O.escapeIsAdditionalControl opts))
+
+  additionalRightControls :: Set KeyName
+  additionalRightControls = enters -- There are no more Right Controls yet
+
+  -- | All additional controls except those which are also representing
+  -- Enter key.
+  --
+  -- This helps to handle Enter pressed with modifiers.
+  nonEntersAdditionalControls :: Set KeyName
+  nonEntersAdditionalControls = Set.difference additionalControls enters
+
+  -- | List of enter keys for “additional controls” feature.
+  --
+  -- It helps to handle “modifiers only + enter” combos properly.
+  enters :: Set KeyName
+  enters
+    = Set.fromList
+    $ [Keys.EnterKey]
+
+    & ((Keys.ergoEnterKey :)
+        `applyIf` (O.ergonomicMode opts == O.ErgonomicMode))
 
   -- | A helper for logging (to also show remapped key).
   maybeAsKeyStr :: KeyName -> String
