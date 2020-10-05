@@ -14,6 +14,7 @@ import "data-default" Data.Default (def)
 import "base" Data.Maybe (fromMaybe, fromJust, isJust, isNothing)
 import "containers" Data.Set (type Set, (\\))
 import qualified "containers" Data.Set as Set
+import qualified "containers" Data.Map as Map
 import "time" Data.Time.Clock.POSIX (type POSIXTime, getPOSIXTime)
 import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms, qns)
 import "safe" Safe (succSafe, predSafe)
@@ -33,7 +34,6 @@ import "transformers" Control.Monad.Trans.Except ( type ExceptT
 
 import "lens" Control.Lens ( (.~), (%~), (^.), (&~), (.=), (%=)
                            , set, over, mapped, view, _1, _2, _3
-                           , type Lens'
                            )
 
 import "base" System.IO (type IOMode (WriteMode), withFile)
@@ -130,13 +130,35 @@ handleKeyEvent ctVars opts keyMap =
       alternativeKeyRemap = alternativeRemap >>= either (const Nothing) Just
 
       additionalControls :: Set KeyName
-      additionalControls
+      additionalControls = additionalLeftControls <> additionalRightControls
+
+      -- | A set of all possible pairs of left and right additional controls.
+      additionalControlsPairs :: Set (Set KeyName)
+      additionalControlsPairs = Set.fromList
+        [ Set.fromList [l, r]
+        | l <- Set.toList additionalLeftControls
+        , r <- Set.toList additionalRightControls
+        ]
+
+      additionalLeftControls :: Set KeyName
+      additionalLeftControls
         = Set.fromList
-        $ [Keys.CapsLockKey, Keys.EnterKey]
+        $ [Keys.CapsLockKey]
+        & ((Keys.EscapeKey :) `applyIf` (O.escapeIsAdditionalControl opts))
 
-        & ((Keys.ergoEnterKey :)
-            `applyIf` (O.ergonomicMode opts == O.ErgonomicMode))
+      additionalRightControls :: Set KeyName
+      additionalRightControls = enters -- There are no more Right Controls yet
 
+      -- | All additional controls except those which are also representing
+      -- Enter key.
+      --
+      -- This helps to handle Enter pressed with modifiers.
+      nonEntersAdditionalControls :: Set KeyName
+      nonEntersAdditionalControls = Set.difference additionalControls enters
+
+      -- | List of enter keys for “additional controls” feature.
+      --
+      -- It helps to handle “modifiers only + enter” combos properly.
       enters :: Set KeyName
       enters
         = Set.fromList
@@ -177,16 +199,18 @@ handleKeyEvent ctVars opts keyMap =
 
       onOnlyTwoControlsPressed :: Bool
       onOnlyTwoControlsPressed =
-        not (state ^. State.comboState' . State.isCapsLockUsedWithCombos') &&
-        not (state ^. State.comboState' . State.isEnterUsedWithCombos') && (
+        all (not . fst)
+            (state ^. State.comboState' . State.additonalControlsState')
+        -- Checking for size first is a potential micro-optimization
+        && Set.size pressed == 2 &&
+        (
           pressed == Set.fromList [Keys.ControlLeftKey, Keys.ControlRightKey] ||
           (
             O.additionalControls opts &&
-            -- Either @CapsLockKey@+@EnterKey@ or @CapsLockKey@+@ApostropheKey@
-            -- (in case ergonomic mode feature is enabled
-            -- and @ApostropheKey@ is ergonomic remap/version of @EnterKey@).
-            any (pressed ==)
-                (Set.map (\x -> Set.fromList [Keys.CapsLockKey, x]) enters)
+            -- A pair of left and right additional controls pressed
+            -- (e.g. @CapsLockKey@+@EnterKey@ or some other possible pair,
+            -- depends on the config of additional controls).
+            any (pressed ==) additionalControlsPairs
           )
         )
 
@@ -203,13 +227,15 @@ handleKeyEvent ctVars opts keyMap =
 
       -- | Caps Lock or Enter pressed (previously pressed)
       --   but ignoring just Enter with modifiers.
+      --
+      -- When some key pressed with additional control.
       onWithAdditionalControlKey :: Bool
       onWithAdditionalControlKey =
         O.additionalControls opts &&
         any (`Set.member` pressed) additionalControls &&
         not (
           any (`Set.member` pressed) enters &&
-          Keys.CapsLockKey `Set.notMember` pressed &&
+          all (`Set.notMember` pressed) nonEntersAdditionalControls &&
           isJust (state ^. State.comboState' . State.isEnterPressedWithMods')
         )
 
@@ -1087,6 +1113,7 @@ handleKeyEvent ctVars opts keyMap =
                            else []
      in state
           & State.pressedKeys' .~ foldr Set.delete pressed toDelete
+          & State.comboState' . State.additonalControlsState' .~ mempty
           & toggleCapsLock
 
   -- Ability to press combos like Shift+Enter, Alt+Enter, etc.
@@ -1117,128 +1144,149 @@ handleKeyEvent ctVars opts keyMap =
   -- They can't be pressed both in the same time here, it handled above.
   | onAdditionalControlKey ->
 
-    let ( withCombosFlagLens,
-          pressedBeforeLens,
-          controlKeyName,
-          Just controlKeyCode ) =
+    if
 
-          case keyName of
-               Keys.CapsLockKey ->
-                 ( State.comboState' . State.isCapsLockUsedWithCombos'
-                 , State.comboState' . State.keysPressedBeforeCapsLock'
-                 , Keys.ControlLeftKey
-                 , getDefaultKeyCodeByName Keys.ControlLeftKey
-                 )
-               k | k `Set.member` enters ->
-                 ( State.comboState' . State.isEnterUsedWithCombos'
-                 , State.comboState' . State.keysPressedBeforeEnter'
-                 , Keys.ControlRightKey
-                 , getDefaultKeyCodeByName Keys.ControlRightKey
-                 )
-               _ -> error [qms| Got unexpected key, it supposed to be only
-                                {Keys.CapsLockKey} or {Keys.EnterKey} |]
+    -- Prevent triggering when just pressed.
+    -- But store keys that hadn't released in time.
+    | isPressed -> do
+      unless (Set.null otherPressed) $
+        noise' [ [qms| {keyName} was pressed with some another keys
+                       that hadn't be released in time, these another keys
+                       WONT be taken as combo with additional control |]
+               , [qms| Storing keys was pressed before {keyName}:
+                       {Set.toList otherPressed}... |]
+               ]
+      pure
+        $ state
+        & State.comboState' . State.additonalControlsState' %~
+            Map.insert keyName (False, otherPressed)
 
-          :: ( Lens' State Bool,
-               Lens' State (Set KeyName),
-               KeyName,
-               Maybe KeyCode )
-     in if
+    -- Trigger Control releasing because when you press
+    -- `CapsLockKey` or `EnterKey` with combo (see below)
+    -- it triggers Control pressing.
+    --
+    -- If it’s a release the key must exist in the "Map.Map".
+    | maybe (error [qms| The key {keyName} unexpectedly does not exist in
+                         the Map of pressed additional controls! |]) fst
+    $ Map.lookup keyName
+    $ state ^. State.comboState' . State.additonalControlsState' -> do
 
-        -- Prevent triggering when just pressed.
-        -- But store keys that hadn't released in time.
-        | isPressed -> do
-          unless (Set.null otherPressed) $
-            noise' [ [qms| {keyName} was pressed with some another keys
-                           that hadn't be released in time, these another keys
-                           WONT be taken as combo with additional control |]
-                   , [qms| Storing keys was pressed before {keyName}:
-                           {Set.toList otherPressed}... |]
-                   ]
-          pure $ state & pressedBeforeLens .~ otherPressed
+      let
+        controlKeyName
+          | keyName `Set.member` additionalLeftControls =
+              Keys.ControlLeftKey
+          | keyName `Set.member` additionalRightControls =
+              Keys.ControlRightKey
+          | otherwise =
+              error [qms| {keyName} is unexpectedly not one of the
+                                    additional controls! |]
 
-        -- Trigger Control releasing because when you press
-        -- `CapsLockKey` or `EnterKey` with combo (see below)
-        -- it triggers Control pressing.
-        | state ^. withCombosFlagLens -> do
-          noise' [ [qms| {keyName} released after pressed with combos,
-                         it means it was interpreted as {controlKeyName} |]
-                 , [qms| Triggering releasing of {controlKeyName}
-                         (X key code: {controlKeyCode})... |]
-                 ]
-          releaseKey controlKeyCode
-          pure $ state & withCombosFlagLens .~ False
+        Just controlKeyCode = getDefaultKeyCodeByName controlKeyName
 
-        -- Just triggering default aliased key code
-        -- to `CapsLockKey` or `EnterKey`.
-        | otherwise ->
-          case keyName of
-               Keys.CapsLockKey -> do
-                 triggerPressRelease keyName keyCode
-                 if O.resetByEscapeOnCapsLock opts
-                    then execStateT (runExceptT resetAll) state
-                    else pure state
+      noise' [ [qms| {keyName} released after pressed with combos,
+                     it means it was interpreted as {controlKeyName} |]
+             , [qms| Triggering releasing of {controlKeyName}
+                     (X key code: {controlKeyCode})... |]
+             ]
 
-               k | k `Set.member` enters ->
-                 state <$ triggerPressRelease keyName keyCode
+      releaseKey controlKeyCode
 
-               _ -> pure state
+      pure
+        $ state
+        & State.comboState' . State.additonalControlsState' %~
+            Map.delete keyName
+
+    -- Just triggering default aliased key code to `CapsLockKey` or `EnterKey`
+    -- (or any other additional modifier).
+    --
+    -- On release, when there were no combos.
+    | otherwise ->
+
+      let
+        removeFromState =
+          State.comboState' . State.additonalControlsState' %~
+            Map.delete keyName
+      in
+      if
+
+      | keyName `Set.member` additionalLeftControls -> do
+          triggerPressRelease keyName keyCode
+          let reset' = execStateT (runExceptT resetAll)
+
+          state
+            & removeFromState
+            & case keyName of
+                   Keys.CapsLockKey
+                     | O.resetByEscapeOnCapsLock opts -> reset'
+                   Keys.EscapeKey
+                     | O.escapeIsAdditionalControl opts &&
+                       O.resetByRealEscape opts -> reset'
+                   _ -> pure
+
+      | keyName `Set.member` additionalRightControls ->
+          removeFromState state <$ triggerPressRelease keyName keyCode
+
+      | otherwise -> error [qms| {keyName} is unexpectedly not one of the
+                                           additional controls! |]
 
   -- When either `CapsLockKey` or `EnterKey` pressed with combo.
   -- They couldn't be pressed both, it handled above.
   | onWithAdditionalControlKey ->
 
-    let _f :: ( KeyName,
-                Lens' State Bool,
-                Lens' State (Set KeyName),
-                KeyName, Maybe KeyCode )
+    let
+      (additionalControlKey : _) =
+        Map.keys $ state ^. State.comboState' . State.additonalControlsState'
 
-        _f | Keys.CapsLockKey `Set.member` pressed =
-             ( Keys.CapsLockKey
-             , State.comboState' . State.isCapsLockUsedWithCombos'
-             , State.comboState' . State.keysPressedBeforeCapsLock'
-             , Keys.ControlLeftKey
-             , getDefaultKeyCodeByName Keys.ControlLeftKey
-             )
-           | any (`Set.member` pressed) enters =
-             ( Keys.EnterKey
-             , State.comboState' . State.isEnterUsedWithCombos'
-             , State.comboState' . State.keysPressedBeforeEnter'
-             , Keys.ControlRightKey
-             , getDefaultKeyCodeByName Keys.ControlRightKey
-             )
-           | otherwise =
-             error [qms| Got unexpected key, it supposed to be only
-                         {Keys.CapsLockKey} or {Keys.EnterKey} |]
+      Just (withCombos, pressedBefore) =
+        Map.lookup additionalControlKey $
+          state ^. State.comboState' . State.additonalControlsState'
+    in
+    if
 
-        ( mainKeyName,
-          withCombosFlagLens,
-          pressedBeforeLens,
-          controlKeyName,
-          Just controlKeyCode ) = _f
+    -- Some key is released and this key was pressed before
+    -- additional control, so we just remove this key from
+    -- list of keys that pressed before additional control.
+    | not isPressed && (keyName `Set.member` pressedBefore) ->
 
-        pressedBeforeList = state ^. pressedBeforeLens
+      let
+        newState =
+          state & State.comboState' . State.additonalControlsState' %~
+              Map.update (Just . (_2 %~ Set.delete keyName))
+                         additionalControlKey
+      in
+        newState <$ smartlyTriggerCurrentKey
 
-     in if
+    -- When pressing of Control already triggered
+    | withCombos -> state <$ smartlyTriggerCurrentKey
 
-        -- Some key is released and this key was pressed before
-        -- additional control, so we just remove this key from
-        -- list of keys that pressed before additional control.
-        | not isPressed && (keyName `Set.member` pressedBeforeList) ->
-          let newState = state & pressedBeforeLens %~ Set.delete keyName
-           in newState <$ smartlyTriggerCurrentKey
+    -- `CapsLockKey` or `EnterKey` pressed with combo,
+    -- it means it should be interpreted as Control key.
+    | otherwise -> do
 
-        -- When pressing of Control already triggered
-        | state ^. withCombosFlagLens -> state <$ smartlyTriggerCurrentKey
+      let
+        controlKeyName
+          | additionalControlKey `Set.member` additionalLeftControls =
+              Keys.ControlLeftKey
+          | additionalControlKey `Set.member` additionalRightControls =
+              Keys.ControlRightKey
+          | otherwise =
+              error [qms| {keyName} is unexpectedly not one of the
+                                    additional controls! |]
 
-        -- `CapsLockKey` or `EnterKey` pressed with combo,
-        -- it means it should be interpreted as Control key.
-        | otherwise -> do
-          noise [qms| {mainKeyName} pressed with combo,
-                      triggering {controlKeyName}
-                      (X key code: {controlKeyCode})... |]
-          pressKey controlKeyCode -- Press Control before current key
-          smartlyTriggerCurrentKey
-          pure $ state & withCombosFlagLens .~ True
+        Just controlKeyCode = getDefaultKeyCodeByName controlKeyName
+
+
+      noise [qms| {additionalControlKey} pressed with combo,
+                  triggering {controlKeyName}
+                  (X key code: {controlKeyCode})... |]
+
+      pressKey controlKeyCode -- Press Control before current key
+      smartlyTriggerCurrentKey
+
+      pure
+        $ state
+        & State.comboState' . State.additonalControlsState' %~
+            Map.update (Just . (_1 .~ True)) additionalControlKey
 
   -- When Caps Lock remapped as Escape key.
   -- Resetting stuff (if it's enabled)

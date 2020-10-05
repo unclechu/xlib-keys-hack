@@ -27,6 +27,7 @@ import "type-operators" Control.Type.Operator (type ($))
 import "base" Data.Word (Word8)
 import "data-default" Data.Default (Default, def)
 import qualified "containers" Data.Set as Set
+import qualified "containers" Data.Map as Map
 import "time" Data.Time.Clock.POSIX (POSIXTime)
 
 -- local imports
@@ -79,18 +80,6 @@ data ComboState
    = ComboState
    { appleMediaPressed :: Bool
 
-   -- When Caps Lock works as additional Control
-   , isCapsLockUsedWithCombos  :: Bool
-   -- For fast-typing cases
-   -- (keys pressed before Caps Lock wont go to a combo).
-   , keysPressedBeforeCapsLock :: Set.Set KeyName
-
-   -- When Enter works as additional Control
-   , isEnterUsedWithCombos  :: Bool
-   -- For fast-typing cases
-   -- (keys pressed before Enter wont go to a combo).
-   , keysPressedBeforeEnter :: Set.Set KeyName
-
    -- What Just or Nothing indicates:
    --   If Enter key works as additional Control
    --   and it is pressed with modifiers like for example
@@ -101,6 +90,48 @@ data ComboState
    --   before Enter key and it means that we need to trigger
    --   Enter key before release this modifier.
    , isEnterPressedWithMods :: Maybe $ Set.Set KeyName
+
+   , additonalControlsState :: Map.Map KeyName (Bool, Set.Set KeyName)
+   -- ^ When “additional controls” feature is turned on
+   --   and when you hold an “additional control” key.
+   --
+   -- TODO I’m not sure if a "Map.Map" is necessary.
+   --      Not sure if more than one key can be presented at a moment.
+   --
+   -- Presence of a key ("KeyName" which is an additional control key) in this
+   -- "Map.Map" indicates that such key is currently pressed and is held.
+   --
+   -- "Bool" indicates that such additional control key is pressed with combos
+   -- so it is interpreted as a Control key. It’s always starts with @False@
+   -- when you just press it and only after some further key press (a combo) it
+   -- becomes @True@.
+   --
+   -- "Set.Set" of "KeyName"s indicates a set of keys held before a press of an
+   -- additional control (usually it’s a fast-typing accident). Those keys
+   -- should not be treated as combos pressed with additional controls but
+   -- instead they should act like regular keys, like no additional controls
+   -- were pressed with them.
+   --
+   -- Well, it doesn’t mean that a control key shouldn’t be triggered if you
+   -- press some another key as a combo, but it means that it should behave kind
+   -- of as a regular keyboard. So basically it means that if you’re still
+   -- holding some key before you press an additional control it should not set
+   -- "Bool" value to @True@.
+   --
+   -- A bit more of clarification about this:
+   -- In a fast-typing scenario you might not release some keys in time before
+   -- you press an additional control key. Those keys should not trigger
+   -- additional control combos. It’s okay to release them at any time. Even if
+   -- you release them after you press and release a combo with additional
+   -- control key.
+   --
+   -- If you release an additional control then associated key from "Map.Map"
+   -- will be removed. And it’s okay to forget that "Set.Set" of "KeyName"s even
+   -- if you didn’t release yet all those keys because any further releases of
+   -- them will be handled as usual after anyway, no special handling required
+   -- in this case. The point of that "Set.Set" is that while you’re holding an
+   -- additional control those keys should not be associated with additional
+   -- control combos (as parts of those combos).
 
    -- Modes that will be changed to specified state
    -- after all currently pressed keys will be released.
@@ -129,13 +160,8 @@ instance Default ComboState where
     = ComboState
     { appleMediaPressed         = False
 
-    , isCapsLockUsedWithCombos  = False
-    , keysPressedBeforeCapsLock = Set.empty
-
-    , isEnterUsedWithCombos     = False
-    , keysPressedBeforeEnter    = Set.empty
-
     , isEnterPressedWithMods    = Nothing
+    , additonalControlsState    = mempty
 
     , capsLockModeChange        = Nothing
     , alternativeModeChange     = Nothing

@@ -53,6 +53,7 @@ data Options
 
    , realCapsLock                 :: Bool
    , additionalControls           :: Bool
+   , escapeIsAdditionalControl    :: Bool
    , shiftNumericKeys             :: Bool
    , shiftHJKLKeys                :: Bool
    , rightControlAsRightSuper     :: Bool
@@ -105,6 +106,7 @@ instance Default Options where
 
     , realCapsLock                 = False
     , additionalControls           = True
+    , escapeIsAdditionalControl    = False
     , shiftNumericKeys             = False
     , shiftHJKLKeys                = False
     , rightControlAsRightSuper     = False
@@ -181,11 +183,20 @@ options =
       [qmb| Use real Caps Lock instead of remapping it to Escape
             Default is: {realCapsLock def ? "On" $ "Off"}
             |]
-  , GetOpt.Option  [ ]  ["no-additional-controls"]
+  , GetOpt.Option  [ ]  [noAdditionalControlsOptName]
       (GetOpt.NoArg $ additionalControls' .~ False)
       [qmb| Disable additional controls behavior for Caps Lock and Enter keys
             (could be comfortable for playing some video games)
             Default is: {additionalControls def ? "On" $ "Off"}
+            |]
+  , GetOpt.Option  [ ]  ["escape-is-additional-control"]
+      (GetOpt.NoArg $ escapeIsAdditionalControl' .~ True)
+      [qmb| Make Escape work as additional control
+            (I have Plank EZ layout which has Escape mapped on the key where \
+              Caps Lock usually is, with this option I can use it as \
+              additional control)
+            {makesNoSense noAdditionalControlsOptName}
+            Default is: {escapeIsAdditionalControl def ? "On" $ "Off"}
             |]
   , GetOpt.Option  [ ]  ["shift-numeric-keys"]
       (GetOpt.NoArg $ shiftNumericKeys' .~ True)
@@ -565,6 +576,9 @@ options =
 
         shiftHjklOptName :: String
         shiftHjklOptName = "shift-hjkl"
+
+        noAdditionalControlsOptName :: String
+        noAdditionalControlsOptName = "no-additional-controls"
 
         _forExample :: String -> String
         _forExample ((\x -> _hasDpy x ? x $ "foo.%DISPLAY%.bar") -> d) =
