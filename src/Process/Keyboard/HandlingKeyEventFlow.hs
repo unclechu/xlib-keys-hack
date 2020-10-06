@@ -14,7 +14,6 @@ import "data-default" Data.Default (def)
 import "base" Data.Maybe (fromMaybe, fromJust, isJust, isNothing)
 import "containers" Data.Set (type Set, (\\))
 import qualified "containers" Data.Set as Set
-import qualified "containers" Data.Map as Map
 import "time" Data.Time.Clock.POSIX (type POSIXTime, getPOSIXTime)
 import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms, qns)
 import "safe" Safe (succSafe, predSafe)
@@ -32,8 +31,8 @@ import "transformers" Control.Monad.Trans.Except ( type ExceptT
                                                  , runExceptT, throwE
                                                  )
 
-import "lens" Control.Lens ( (.~), (%~), (^.), (&~), (.=), (%=)
-                           , set, over, mapped, view, _1, _2, _3
+import "lens" Control.Lens ( (.~), (%~), (^.), (^?), (&~), (.=), (%=)
+                           , set, over, mapped, view, _1, _2, _3, _Just
                            )
 
 import "base" System.IO (type IOMode (WriteMode), withFile)
@@ -138,8 +137,8 @@ handleKeyEvent ctVars opts keyMap =
       onOnlyBothAltsPressed :: Bool
       onOnlyBothAltsPressed =
         O.toggleAlternativeModeByAlts opts &&
-        let altsSet = Set.fromList [Keys.AltLeftKey, Keys.AltRightKey]
-         in keyName `Set.member` altsSet && pressed == altsSet
+        keyName `Set.member` bothTwoRealAlts &&
+        pressed == bothTwoRealAlts
 
       -- | @onOnlyBothAltsPressed@ works when @not isPressed@.
       onBothAltsAreHeldForAlternativeMode :: Bool
@@ -161,12 +160,19 @@ handleKeyEvent ctVars opts keyMap =
 
       onOnlyTwoControlsPressed :: Bool
       onOnlyTwoControlsPressed =
-        all (not . fst)
-            (state ^. State.comboState' . State.additonalControlsState')
-        -- Checking for size first is a potential micro-optimization
+        -- Isn’t interpreted as an additional control
+        not (
+          fromMaybe False $
+            state ^? State.comboState'
+                   . State.additonalControlState'
+                   . _Just . _2
+        )
+        -- Checking for size first is a potential micro-optimization.
+        -- Also pressing more than two additional controls is technically
+        -- possible, not sure how it should behave in this case.
         && Set.size pressed == 2 &&
         (
-          pressed == Set.fromList [Keys.ControlLeftKey, Keys.ControlRightKey] ||
+          pressed == bothTwoRealControls ||
           (
             O.additionalControls opts &&
             -- A pair of left and right additional controls pressed
@@ -209,40 +215,37 @@ handleKeyEvent ctVars opts keyMap =
       onEnterOnlyWithMods =
         O.additionalControls opts &&
         keyName `Set.member` enters &&
+        (pressedCase || releasedCase)
+        where
+          -- | When Enter key just pressed
+          --   after some modifiers pressed before.
+          pressedCase =
+            isPressed &&
+            not (Set.null otherPressed) && -- Have some keys pressed
+                                           -- along with Enter key.
+            -- Enter key was pressed with modifiers only,
+            -- not any other key was pressed before.
+            Set.null (Set.foldr Set.delete otherPressed allModifiersKeys)
 
-        let -- | When Enter key just pressed
-            --   after some modifiers pressed before.
-            pressedCase =
-              isPressed &&
-              not (Set.null otherPressed) && -- Have some keys pressed
-                                             -- along with Enter key.
-              -- Enter key was pressed with modifiers only,
-              -- not any other key was pressed before.
-              Set.null (Set.foldr Set.delete otherPressed allModifiersKeys)
-
-            -- | When Enter key is just released
-            --   and before it was pressed only with modifiers.
-            releasedCase =
-              not isPressed &&
-              isJust
-                (state ^. State.comboState' . State.isEnterPressedWithMods')
-
-         in pressedCase || releasedCase
+          -- | When Enter key is just released
+          --   and before it was pressed only with modifiers.
+          releasedCase =
+            not isPressed &&
+            isJust
+              (state ^. State.comboState' . State.isEnterPressedWithMods')
 
       -- | When Enter pressed with only modifiers before and not released yet
       onEnterWithModsOnlyInProgress :: Bool
       onEnterWithModsOnlyInProgress =
-
-        let lens = State.comboState' . State.isEnterPressedWithMods'
-            mods = state ^. lens
-
-         in O.additionalControls opts &&
-            isJust mods &&
-            keyName `Set.notMember` enters &&
-
-            -- Preventing infinite loop, it's already stored in state,
-            -- so we're just going to handle it recursively again.
-            not (isPressed && keyName `Set.member` fromJust mods)
+        O.additionalControls opts && (
+          flip
+            (maybe False)
+            (state ^. State.comboState' . State.isEnterPressedWithMods') $
+            \mods -> keyName `Set.notMember` enters &&
+                     -- Preventing infinite loop, it’s already stored in state,
+                     -- so we’re just going to handle it recursively again.
+                     not (isPressed && keyName `Set.member` mods)
+        )
 
       intervalLimit :: Rational
       intervalLimit = 0.5
@@ -254,7 +257,7 @@ handleKeyEvent ctVars opts keyMap =
         isNothing (State.alternative state) &&
         isNothing ( state ^. State.comboState'
                            . State.heldAltForAlternativeMode' ) &&
-        isPressed && keyName `elem` [Keys.AltLeftKey, Keys.AltRightKey] &&
+        isPressed && keyName `elem` bothTwoRealAlts &&
         Set.size pressed == 1
 
       -- | To turn off alternative mode and trigger real Alt key.
@@ -292,7 +295,7 @@ handleKeyEvent ctVars opts keyMap =
       onSuperDoubleFirstPress =
         O.superDoublePress opts &&
         not (state ^. State.comboState' . State.superDoublePressProceeded') &&
-        maybeAsName keyName `elem` [Keys.SuperLeftKey, Keys.SuperRightKey] &&
+        maybeAsName keyName `Set.member` bothTwoRealSupers &&
         isPressed && Set.size pressed == 1 &&
         isNothing (state ^. State.comboState' . State.superDoublePress')
 
@@ -1017,10 +1020,10 @@ handleKeyEvent ctVars opts keyMap =
     noise [qns| Two Alts are pressed at the same time,
                 it means Alternative mode toggling |]
 
-    let toDelete = [Keys.AltLeftKey, Keys.AltRightKey]
-    forM_ toDelete off
+    forM_ bothTwoRealAlts off
+
     state
-      & State.pressedKeys' .~ foldr Set.delete pressed toDelete
+      & State.pressedKeys' .~ foldr Set.delete pressed bothTwoRealAlts
       & toggleAlternative
 
   -- See @onOnlyBothAltsPressed@ for details
@@ -1065,18 +1068,17 @@ handleKeyEvent ctVars opts keyMap =
   | onOnlyTwoControlsPressed -> do
 
     noise "Two controls pressed, it means Caps Lock mode toggling"
+    mapM_ off' bothTwoRealControls
 
-    off' Keys.ControlLeftKey
-    off' Keys.ControlRightKey
+    let
+      toDelete
+        = bothTwoRealControls
+        & ((<> additionalControls) `applyIf` O.additionalControls opts)
 
-    let toDelete = [Keys.ControlLeftKey, Keys.ControlRightKey]
-                     ++ if O.additionalControls opts
-                           then Set.toList additionalControls
-                           else []
-     in state
-          & State.pressedKeys' .~ foldr Set.delete pressed toDelete
-          & State.comboState' . State.additonalControlsState' .~ mempty
-          & toggleCapsLock
+    state
+      & State.pressedKeys' .~ foldr Set.delete pressed toDelete
+      & State.comboState' . State.additonalControlState' .~ Nothing
+      & toggleCapsLock
 
   -- Ability to press combos like Shift+Enter, Alt+Enter, etc.
   | onEnterOnlyWithMods ->
@@ -1106,11 +1108,12 @@ handleKeyEvent ctVars opts keyMap =
   -- They can't be pressed both in the same time here, it handled above.
   | onAdditionalControlKey ->
 
-    if
+    case state ^. State.comboState' . State.additonalControlState' of
 
     -- Prevent triggering when just pressed.
     -- But store keys that hadn't released in time.
-    | isPressed -> do
+    Nothing | isPressed -> do
+
       unless (Set.null otherPressed) $
         noise' [ [qms| {keyName} was pressed with some another keys
                        that hadn't be released in time, these another keys
@@ -1120,88 +1123,123 @@ handleKeyEvent ctVars opts keyMap =
                ]
       pure
         $ state
-        & State.comboState' . State.additonalControlsState' %~
-            Map.insert keyName (False, otherPressed)
+        & State.comboState' . State.additonalControlState' .~
+            Just (keyName, False, otherPressed)
 
-    -- Trigger Control releasing because when you press
-    -- `CapsLockKey` or `EnterKey` with combo (see below)
-    -- it triggers Control pressing.
-    --
-    -- If it’s a release the key must exist in the "Map.Map".
-    | maybe (error [qms| The key {keyName} unexpectedly does not exist in
-                         the Map of pressed additional controls! |]) fst
-    $ Map.lookup keyName
-    $ state ^. State.comboState' . State.additonalControlsState' -> do
+    -- On release of an additional control
+    Just (keyName', withCombos, _) | not isPressed && keyName == keyName' ->
 
+      if withCombos
+
+      -- Trigger Control release because when you press "Keys.CapsLockKey" or
+      -- "Keys.EnterKey" (or any other additional control) with combo
+      -- (see below) it triggers Control press.
+      then do
+        let
+          Just controlKeyName = resolveAdditionalControl keyName
+          Just controlKeyCode = getDefaultKeyCodeByName controlKeyName
+
+        noise' [ [qms| {keyName} released after pressed with combos,
+                       it means it was interpreted as {controlKeyName} |]
+               , [qms| Triggering releasing of {controlKeyName}
+                       (X key code: {controlKeyCode})... |]
+               ]
+
+        releaseKey controlKeyCode
+
+        pure
+          $ state
+          & State.comboState' . State.additonalControlState' .~ Nothing
+
+      -- Just triggering default aliased key code to "Keys.CapsLockKey" or
+      -- "Keys.EnterKey" (or any other additional modifier).
+      --
+      -- On release, when there were no combos.
+      else
+        let
+          removeFromState =
+            State.comboState' . State.additonalControlState' .~ Nothing
+        in
+        if
+
+        | keyName `Set.member` additionalLeftControls -> do
+            triggerPressRelease keyName keyCode
+            let reset' = execStateT (runExceptT resetAll)
+
+            state
+              & removeFromState
+              & case keyName of
+                     Keys.CapsLockKey
+                       | O.resetByEscapeOnCapsLock opts -> reset'
+                     Keys.EscapeKey
+                       | O.escapeIsAdditionalControl opts &&
+                         O.resetByRealEscape opts -> reset'
+                     _ -> pure
+
+        | keyName `Set.member` additionalRightControls ->
+            removeFromState state <$ triggerPressRelease keyName keyCode
+
+        | otherwise -> error [qms| {keyName} is unexpectedly not one of the
+                                             additional controls! |]
+
+    -- Two additional controls pressed at the same time
+    -- (either both lefts or both rights,
+    -- e.g. "Keys.Escape" + "Keys.CapsLockKey").
+    -- Interpreting secondary (which pressed later in time) additional control
+    -- as associated regular key as a combo. For instance if you press
+    -- "Keys.EscapeKey" and then "Keys.CapsLockKey" then "Keys.ControlLeftKey" +
+    -- "Keys.EscapeKey" will be triggered.
+    Just (keyName', withCombos, _) | keyName /= keyName' -> do
       let
-        controlKeyName
-          | keyName `Set.member` additionalLeftControls =
-              Keys.ControlLeftKey
-          | keyName `Set.member` additionalRightControls =
-              Keys.ControlRightKey
-          | otherwise =
-              error [qms| {keyName} is unexpectedly not one of the
-                                    additional controls! |]
-
+        Just controlKeyName = resolveAdditionalControl keyName'
         Just controlKeyCode = getDefaultKeyCodeByName controlKeyName
 
-      noise' [ [qms| {keyName} released after pressed with combos,
-                     it means it was interpreted as {controlKeyName} |]
-             , [qms| Triggering releasing of {controlKeyName}
-                     (X key code: {controlKeyCode})... |]
-             ]
+      noise' $
+        [ [qms| A secondary additional control key {keyName} was
+                {isPressed ? "pressed" $ "released"} whilst first
+                additonal control {keyName'} (as {controlKeyName})
+                is held, interpreting it as an associated normal key
+                {maybeAsKeyStr keyName} pressed as a combo with
+                first additional control... |]
+        ] <> if withCombos
+                then mempty
+                else [ [qms| First additonal control {keyName'} is not yet
+                             marked as pressed with combos, triggering
+                             {controlKeyName} (X key code: {controlKeyCode})
+                             press event first and then
+                             {maybeAsKeyStr keyName}... |]
+                     ]
 
-      releaseKey controlKeyCode
+      unless withCombos $
+        pressKey controlKeyCode -- Press Control before current key
+
+      smartlyTriggerCurrentKey
 
       pure
         $ state
-        & State.comboState' . State.additonalControlsState' %~
-            Map.delete keyName
+        & State.comboState' . State.additonalControlState' %~
+            (_Just . _2 .~ True)
 
-    -- Just triggering default aliased key code to `CapsLockKey` or `EnterKey`
-    -- (or any other additional modifier).
-    --
-    -- On release, when there were no combos.
-    | otherwise ->
+    -- In case secondary additional control was held and triggered as a regular
+    -- key combo with first additional control and then first additional control
+    -- was released before secondary one.
+    -- This is a release of secondary additional control interpreted as a
+    -- regular key.
+    Nothing | not isPressed -> do
+      noise [qms| Secondary additional control key {maybeAsName keyName} was
+                  released after first additional control released. |]
+      state <$ smartlyTriggerCurrentKey
 
-      let
-        removeFromState =
-          State.comboState' . State.additonalControlsState' %~
-            Map.delete keyName
-      in
-      if
-
-      | keyName `Set.member` additionalLeftControls -> do
-          triggerPressRelease keyName keyCode
-          let reset' = execStateT (runExceptT resetAll)
-
-          state
-            & removeFromState
-            & case keyName of
-                   Keys.CapsLockKey
-                     | O.resetByEscapeOnCapsLock opts -> reset'
-                   Keys.EscapeKey
-                     | O.escapeIsAdditionalControl opts &&
-                       O.resetByRealEscape opts -> reset'
-                   _ -> pure
-
-      | keyName `Set.member` additionalRightControls ->
-          removeFromState state <$ triggerPressRelease keyName keyCode
-
-      | otherwise -> error [qms| {keyName} is unexpectedly not one of the
-                                           additional controls! |]
+    x -> error [qms| Unexpected case after {isPressed ? "press" $ "release"} of
+                     {keyName}, additonal control state: {x} |]
 
   -- When either `CapsLockKey` or `EnterKey` pressed with combo.
   -- They couldn't be pressed both, it handled above.
   | onWithAdditionalControlKey ->
 
     let
-      (additionalControlKey : _) =
-        Map.keys $ state ^. State.comboState' . State.additonalControlsState'
-
-      Just (withCombos, pressedBefore) =
-        Map.lookup additionalControlKey $
-          state ^. State.comboState' . State.additonalControlsState'
+      Just (additionalControlKey, withCombos, pressedBefore) =
+        state ^. State.comboState' . State.additonalControlState'
     in
     if
 
@@ -1211,10 +1249,10 @@ handleKeyEvent ctVars opts keyMap =
     | not isPressed && (keyName `Set.member` pressedBefore) ->
 
       let
-        newState =
-          state & State.comboState' . State.additonalControlsState' %~
-              Map.update (Just . (_2 %~ Set.delete keyName))
-                         additionalControlKey
+        newState
+          = state
+          & State.comboState' . State.additonalControlState' %~
+              (_Just . _3 %~ Set.delete keyName)
       in
         newState <$ smartlyTriggerCurrentKey
 
@@ -1226,17 +1264,8 @@ handleKeyEvent ctVars opts keyMap =
     | otherwise -> do
 
       let
-        controlKeyName
-          | additionalControlKey `Set.member` additionalLeftControls =
-              Keys.ControlLeftKey
-          | additionalControlKey `Set.member` additionalRightControls =
-              Keys.ControlRightKey
-          | otherwise =
-              error [qms| {keyName} is unexpectedly not one of the
-                                    additional controls! |]
-
+        Just controlKeyName = resolveAdditionalControl additionalControlKey
         Just controlKeyCode = getDefaultKeyCodeByName controlKeyName
-
 
       noise [qms| {additionalControlKey} pressed with combo,
                   triggering {controlKeyName}
@@ -1247,8 +1276,8 @@ handleKeyEvent ctVars opts keyMap =
 
       pure
         $ state
-        & State.comboState' . State.additonalControlsState' %~
-            Map.update (Just . (_1 .~ True)) additionalControlKey
+        & State.comboState' . State.additonalControlState' %~
+            (_Just . _2 .~ True)
 
   -- When Caps Lock remapped as Escape key.
   -- Resetting stuff (if it's enabled)
@@ -1585,6 +1614,21 @@ handleKeyEvent ctVars opts keyMap =
 
     & ((Keys.ergoEnterKey :)
         `applyIf` (O.ergonomicMode opts == O.ErgonomicMode))
+
+  bothTwoRealControls :: Set KeyName
+  bothTwoRealControls = Set.fromList [Keys.ControlLeftKey, Keys.ControlRightKey]
+
+  bothTwoRealAlts :: Set KeyName
+  bothTwoRealAlts = Set.fromList [Keys.AltLeftKey, Keys.AltRightKey]
+
+  bothTwoRealSupers :: Set KeyName
+  bothTwoRealSupers = Set.fromList [Keys.SuperLeftKey, Keys.SuperRightKey]
+
+  resolveAdditionalControl :: KeyName -> Maybe KeyName
+  resolveAdditionalControl keyName
+    | keyName `Set.member` additionalLeftControls  = Just Keys.ControlLeftKey
+    | keyName `Set.member` additionalRightControls = Just Keys.ControlRightKey
+    | otherwise                                    = Nothing
 
   -- | A helper for logging (to also show remapped key).
   maybeAsKeyStr :: KeyName -> String
