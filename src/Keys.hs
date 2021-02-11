@@ -409,6 +409,7 @@ alternativeModeRemaps ergoMode = (,)
   , (XKey,            Left AlternativeModeLevelDown)
   , (CKey,            Left AlternativeModeLevelUp)
 
+  , (VKey,            Right LessKey)
   , (BKey,            Right CapsLockKey)
   ]
 
