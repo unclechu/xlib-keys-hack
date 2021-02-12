@@ -33,16 +33,18 @@ import Bindings.Xkb (xkbSetGroup)
 import State (type CrossThreadVars, keysActionsChan)
 import qualified State
 import Keys (KeyName (CapsLockKey))
+import Options (type Options, defaultKeyboardLayout)
 
 
 processKeysActions
   :: CrossThreadVars
+  -> Options
   -> (Proxy 'CapsLockKey, KeyCode)
   -- ^ "KeyCode" of real Caps Lock key (it must be not remapped!)
   -> Display
   -> IO ()
 
-processKeysActions ctVars (Proxy, capsLockKeyCode) dpy = forever $ do
+processKeysActions ctVars opts (Proxy, capsLockKeyCode) dpy = forever $ do
 
   (action :: ActionType KeyAction) <- readChan $ keysActionsChan ctVars
 
@@ -51,10 +53,11 @@ processKeysActions ctVars (Proxy, capsLockKeyCode) dpy = forever $ do
     KeyCodeRelease keyCode -> release keyCode
 
     ResetKeyboardLayout ->
-      xkbSetGroup dpy 0 >>= (`unless` dieWith "xkbSetGroup error")
+      xkbSetGroup dpy (fromIntegral $ defaultKeyboardLayout opts) >>=
+        (`unless` dieWith "xkbSetGroup error")
 
     TurnCapsLock x ->
-      State.capsLockLed .> (== x) <$> getLeds dpy >>= (`unless` toggleCapsLock)
+      getLeds dpy >>= State.capsLockLed .> (== x) .> (`unless` toggleCapsLock)
 
   where f :: (KeyAction -> IO ()) -> ActionType KeyAction -> IO ()
         f m (Actions.Single a) = m a

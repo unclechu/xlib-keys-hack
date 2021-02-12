@@ -47,7 +47,7 @@ import "X11" Graphics.X11.Xlib.Types (type Display)
 import           Utils.Sugar ((?), (|?|), (.>), unnoticed)
 import           Bindings.XTest (fakeKeyCodeEvent)
 import           Bindings.MoreXlib (getLeds)
-import           Options (type Options)
+import           Options (type Options, defaultKeyboardLayout)
 import qualified Actions
 import           State (type State, type CrossThreadVars)
 import qualified State
@@ -341,8 +341,10 @@ turnAlternativeMode noise' notify' state newModeState = go where
 
 
 
-handleResetKbdLayout :: CrossThreadVars -> Noiser -> State -> IO State
-handleResetKbdLayout ctVars noise' state = go where
+handleResetKbdLayout
+  :: Options -> CrossThreadVars -> Noiser -> State -> IO State
+
+handleResetKbdLayout opts ctVars noise' state = go where
   go = runExceptT go' `execStateT` state
 
   go' = do
@@ -350,7 +352,7 @@ handleResetKbdLayout ctVars noise' state = go where
     unless hasDelayed $ throwE ()
 
     -- Skip if it's already done
-    when (State.kbdLayout state == 0) $ do
+    when (State.kbdLayout state == defaultKeyboardLayout opts) $ do
       liftIO $ noise' $ pure
         [qns| Delayed reset keyboard layout to default after all other keys
               release was skipped because it's already done now |]
@@ -372,11 +374,11 @@ handleResetKbdLayout ctVars noise' state = go where
   hasDelayed         = state ^. mcLens :: Bool
   everyKeyIsReleased = Set.null $ State.pressedKeys state :: Bool
 
-resetKbdLayout :: CrossThreadVars -> Noiser -> State -> IO State
-resetKbdLayout ctVars noise' state = runExceptT go `execStateT` state where
+resetKbdLayout :: Options -> CrossThreadVars -> Noiser -> State -> IO State
+resetKbdLayout opts ctVars noise' state = runExceptT go `execStateT` state where
   go = do
     -- Skip if it's already done
-    when (State.kbdLayout state == 0) $ do
+    when (State.kbdLayout state == defaultKeyboardLayout opts) $ do
       liftIO $ noise' $ pure
         [qns| Skipping attempt to reset keyboard layout to default
               because it's already done |]
@@ -409,7 +411,7 @@ resetAll
   :: (St.MonadState State m, MonadIO m)
   => Options -> CrossThreadVars -> Noiser -> Notifier -> m ()
 
-resetAll _ ctVars noise' notify' = go where
+resetAll opts ctVars noise' notify' = go where
   go = do
     liftIO $ noise' ["Resetting keyboard layout..."]
     St.get >>= liftIO . _resetKbdLayout >>= St.put
@@ -420,7 +422,7 @@ resetAll _ ctVars noise' notify' = go where
     liftIO $ noise' ["Resetting Alternative mode..."]
     St.get >>= liftIO . turnAlternativeModeOff >>= St.put
 
-  _resetKbdLayout = Process.CrossThread.resetKbdLayout ctVars noise'
+  _resetKbdLayout = Process.CrossThread.resetKbdLayout opts ctVars noise'
   turnCapsLockModeOff = flip (turnCapsLockMode ctVars noise') False
   turnAlternativeModeOff = flip (turnAlternativeMode noise' notify') Nothing
 

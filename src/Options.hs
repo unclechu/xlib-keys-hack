@@ -71,6 +71,7 @@ data Options
    , resetByRealEscape            :: Bool
    , resetByEscapeOnCapsLock      :: Bool
    , resetByWindowFocusEvent      :: Bool
+   , defaultKeyboardLayout        :: Word8
 
    , debouncerTiming              :: Maybe POSIXTime
 
@@ -124,6 +125,7 @@ instance Default Options where
     , resetByRealEscape            = False
     , resetByEscapeOnCapsLock      = True
     , resetByWindowFocusEvent      = True
+    , defaultKeyboardLayout        = 1
 
     , debouncerTiming              = Nothing
 
@@ -415,6 +417,19 @@ options =
               executable in your 'PATH' environment variable!
             Default is: {resetByWindowFocusEvent def ? "On" $ "Off"}
             |]
+
+  , let validate x
+          | x < 1 = error "Default keyboard layout must be greater than zero"
+          | otherwise = x
+
+        setter = set defaultKeyboardLayout'
+
+     in GetOpt.Option  [ ]  ["default-keyboard-layout"]
+          (GetOpt.ReqArg (read .> validate .> pred .> setter) "NUMBER")
+          [qms| Kayboard layout number (starting with 1) to reset keyboard
+                layout to when pressing Escape or doing whatever action that
+                resets stuff (keyboard layout, alternative mode, etc.)
+                |]
 
   , let defaultValue = 0.03 :: POSIXTime
         convertFn x = fromRational $ toRational (read x :: Word8) / 1000

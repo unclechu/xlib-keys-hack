@@ -271,7 +271,8 @@ main = flip evalStateT ([] :: ThreadsState) $ do
             Actions.overthrow ctVars
 
   runThread "keys actions handler" $
-            processKeysActions ctVars capsLockKeyDef dpyForKeysActionsHanlder
+            processKeysActions ctVars opts capsLockKeyDef
+                               dpyForKeysActionsHanlder
 
   runThread "keyboard state handler" $
             processKeyboardState ctVars opts dpyForKeyboardStateHandler

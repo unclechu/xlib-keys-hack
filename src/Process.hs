@@ -124,7 +124,8 @@ initReset opts ipcHandle capsLockKeyDef dpy = do
 
         initialResetKbdLayout :: Display -> IO ()
         initialResetKbdLayout _dpy =
-          xkbSetGroup _dpy 0 >>= flip unless (dieWith "xkbSetGroup error")
+          xkbSetGroup _dpy (fromIntegral $ O.defaultKeyboardLayout opts) >>=
+            flip unless (dieWith "xkbSetGroup error")
 
 
 data IsEOFException = IsEOFException deriving (Show, Typeable)

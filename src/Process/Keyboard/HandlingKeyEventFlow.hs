@@ -1367,7 +1367,7 @@ handleKeyEvent ctVars opts keyMap =
     CrossThread.handleAlternativeModeChange noise' notify'
 
   handleResetKbdLayout :: State -> IO State
-  handleResetKbdLayout = CrossThread.handleResetKbdLayout ctVars noise'
+  handleResetKbdLayout = CrossThread.handleResetKbdLayout opts ctVars noise'
 
   resetAll :: ExceptT () (StateT State IO) ()
   resetAll = CrossThread.resetAll opts ctVars noise' notify'
