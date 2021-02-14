@@ -201,6 +201,7 @@ handleKeyEvent ctVars opts keyMap =
       onWithAdditionalControlKey =
         O.additionalControls opts &&
         any (`Set.member` pressed) additionalControls &&
+        isJust (state ^. State.comboState' . State.additonalControlState') &&
         not (
           any (`Set.member` pressed) enters &&
           all (`Set.notMember` pressed) nonEntersAdditionalControls &&
