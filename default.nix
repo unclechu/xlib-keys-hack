@@ -5,39 +5,25 @@ let sources = import nix/sources.nix; in
     let k = "data-maybe-preserve"; in
     pkgs.haskellPackages.callCabal2nix k sources.${k} {}
 
-, src ? ./. # A directory
-, packageName ? "xlib-keys-hack"
+, src ? (import nix/clean-src.nix { inherit pkgs; }) ./. # A directory
 , justStaticExecutable ? true
 }:
 let
+  name = "xlib-keys-hack";
+  pkg = haskellPackages.callCabal2nix name src {};
+
   haskellPackages = pkgs.haskellPackages.extend (self: super: {
     inherit data-maybe-preserve;
-    ${packageName} = xlib-keys-hack;
+    ${name} = pkg;
   });
-
-  cleanSrcDir = dir:
-    let
-      noCabalStuffFilter = fileName: fileType: ! (
-        fileType == "directory" &&
-        ! isNull (builtins.match "^dist(-newstyle)?$" (baseNameOf fileName))
-      );
-    in
-      pkgs.lib.cleanSourceWith {
-        name   = "${packageName}-clean-source";
-        filter = noCabalStuffFilter;
-        src    = pkgs.lib.cleanSource dir;
-      };
 
   justStaticExecutableFn =
     if justStaticExecutable
     then pkgs.haskell.lib.justStaticExecutables
     else x: x;
-
-  cleanSrc = cleanSrcDir src;
-  xlib-keys-hack = haskellPackages.callCabal2nix packageName cleanSrc {};
 in
-justStaticExecutableFn xlib-keys-hack // {
-  inherit src cleanSrc data-maybe-preserve;
+justStaticExecutableFn pkg // {
+  inherit src data-maybe-preserve;
   inherit haskellPackages;
-  haskellPackage = xlib-keys-hack;
+  haskellPackage = pkg;
 }

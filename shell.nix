@@ -4,29 +4,28 @@ args@
 { pkgs ? import sources.nixpkgs {}
 , data-maybe-preserve ? null
 , src ? null
-, packageName ? null
 , justStaticExecutable ? false
 
 # Local arguments
 , utils ? import sources.nix-utils { inherit pkgs; }
 , withCabal ? false
 , withStack ? false
-, withPackageRepl ? false # Adds ‘xlib-keys-hack’ library modules into GHCi REPL
+, withPackageRepl ? false # Adds package library modules into GHCi REPL
 , withHoogle ? true
 , buildExecutable ? true
 }:
 let
-  forwardedNames = [ "pkgs" "data-maybe-preserve" "src" "packageName" ];
+  forwardedNames = [ "pkgs" "data-maybe-preserve" "src" ];
   filterForwarded = pkgs.lib.filterAttrs (n: v: builtins.elem n forwardedNames);
   forwardedArgs = { inherit justStaticExecutable; } // filterForwarded args;
-  xlib-keys-hack = import ./. forwardedArgs;
-  hp = xlib-keys-hack.haskellPackages;
-  name = xlib-keys-hack.haskellPackage.pname;
+  pkg = import ./. forwardedArgs;
+  hp = pkg.haskellPackages;
+  name = pkg.haskellPackage.pname;
 
   inherit (utils) wrapExecutable;
-  pkgReplGhc = hp.ghcWithPackages (p: [p.xlib-keys-hack]);
+  pkgReplGhc = hp.ghcWithPackages (p: [p.${name}]);
 
-  # Produces ‘xlib-keys-hack-ghc’ and ‘xlib-keys-hack-ghci’ files.
+  # Produces ‘PACKAGE-NAME-ghc’ and ‘PACKAGE-NAME-ghci’ files.
   # ‘shellFor’ overrides ‘ghc’ and ‘ghci’ executables.
   pkgRepl =
     let
