@@ -29,10 +29,10 @@
         "homepage": null,
         "owner": "unclechu",
         "repo": "nix-utils",
-        "rev": "9d5fabedd99843b86d2bdee40f6b0447fabb20cb",
-        "sha256": "0ry8fg94fz9gljcy0m4yi331wzy2zrh80414dfp4xhbzdiyjwa37",
+        "rev": "83388ae4f14f192b205ecf1e70315eee94c17ca6",
+        "sha256": "0b4hmkjcfdgyhqdbfk7j8f80bn733grd7g1bjxacpj0axmlh42yz",
         "type": "tarball",
-        "url": "https://github.com/unclechu/nix-utils/archive/9d5fabedd99843b86d2bdee40f6b0447fabb20cb.tar.gz",
+        "url": "https://github.com/unclechu/nix-utils/archive/83388ae4f14f192b205ecf1e70315eee94c17ca6.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "nixpkgs": {

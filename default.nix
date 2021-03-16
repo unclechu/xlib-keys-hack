@@ -1,29 +1,34 @@
 let sources = import nix/sources.nix; in
-{ pkgs ? import sources.nixpkgs {}
+# This module is supposed to be called with ‘nixpkgs.callPackage’
+{ callPackage
+, haskellPackages
+, haskell
 
-, data-maybe-preserve ?
+# Overridable dependencies
+, __data-maybe-preserve ?
     let k = "data-maybe-preserve"; in
-    pkgs.haskellPackages.callCabal2nix k sources.${k} {}
+    haskellPackages.callCabal2nix k sources.${k} {}
 
-, src ? (import nix/clean-src.nix { inherit pkgs; }) ./. # A directory
+# Build options
+, __src ? (callPackage nix/clean-src.nix {}) ./. # A directory
 , justStaticExecutable ? true
 }:
 let
   name = "xlib-keys-hack";
-  pkg = haskellPackages.callCabal2nix name src {};
+  pkg = extendedHaskellPackages.callCabal2nix name __src {};
 
-  haskellPackages = pkgs.haskellPackages.extend (self: super: {
-    inherit data-maybe-preserve;
+  extendedHaskellPackages = haskellPackages.extend (self: super: {
+    data-maybe-preserve = __data-maybe-preserve;
     ${name} = pkg;
   });
 
   justStaticExecutableFn =
     if justStaticExecutable
-    then pkgs.haskell.lib.justStaticExecutables
+    then haskell.lib.justStaticExecutables
     else x: x;
 in
 justStaticExecutableFn pkg // {
-  inherit src data-maybe-preserve;
-  inherit haskellPackages;
+  data-maybe-preserve = __data-maybe-preserve;
+  haskellPackages = extendedHaskellPackages;
   haskellPackage = pkg;
 }
