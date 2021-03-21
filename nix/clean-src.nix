@@ -1,3 +1,7 @@
+# Author: Viacheslav Lotsmanov
+# License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
+
+# This module is supposed to be called with ‘nixpkgs.callPackage’
 { lib, nix-gitignore }:
 let
   withoutDeadWeight = fileName: fileType: ! (
