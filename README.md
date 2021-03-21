@@ -220,6 +220,10 @@ Usage: xlib-keys-hack [OPTION...] DEVICES-FD-PATHS...
       --no-additional-controls                            Disable additional controls behavior for Caps Lock and Enter keys
                                                           (could be comfortable for playing some video games)
                                                           Default is: On
+      --escape-is-additional-control                      Make Escape work as additional control
+                                                          (I have Plank EZ layout which has Escape mapped on the key where Caps Lock usually is, with this option I can use it as additional control)
+                                                          This option makes no sense with --no-additional-controls option.
+                                                          Default is: Off
       --shift-numeric-keys                                Shift numeric keys in numbers row one key righter, and move 'minus' key to the left side at '1' key position.
                                                           Could be more consistent for 10-fingers typing.
                                                           Default is: Off
@@ -293,6 +297,7 @@ Usage: xlib-keys-hack [OPTION...] DEVICES-FD-PATHS...
       --disable-reset-by-window-focus-event               Disable resetting Caps Lock mode, Alternative mode and keyboard layout by switching between windows.
                                                           WARNING! If you don't disable this feature you should ensure that you have directory that contains 'xlib-keys-hack-watch-for-window-focus-events' executable in your 'PATH' environment variable!
                                                           Default is: On
+      --default-keyboard-layout=NUMBER                    Kayboard layout number (starting with 1) to reset keyboard layout to when pressing Escape or doing whatever action that resets stuff (keyboard layout, alternative mode, etc.)
       --software-debouncer[=MILLISECONDS]                 Enable software debouncer feature.
                                                           Debouncing is usually done on hardware or firmware level of a keyboard but timing could be not configurable. Some keyboards may have issues with doubling or just shrapnelling some keys (triggering a key pressing more than once per one physical press) especially after long use time. By using this feature you could use your keyboard longer, give it a second life.
                                                           How this feature works: when you press/release a key only first event is handled and then it waits for specified or default timing ignoring any other events of that key in that gap and only after that it handles next state of that key.
