@@ -25,7 +25,7 @@ _P.S. It's just one of possible ways to configure this tool,
 it's neither limited to this nor urge you to remap your keyboard so radical,
 see detailed [usage info](#--help) for all possible options._
 
-![Keyboard scheme](./docs/scheme/ergonomic-mode-and-shifted-hjkl-render.png)
+![Keyboard scheme](docs/scheme/ergonomic-mode-and-shifted-hjkl-render.png)
 
 **WARNING!** Work in progress, not released yet, look at
 [tasks board](https://github.com/unclechu/xlib-keys-hack/projects/1?fullscreen=true).
@@ -96,14 +96,14 @@ out of date and may not represent the latest state of my NixOS config. Look at
 
 ### Nix
 
-``` bash
+``` sh
 nix-shell --run 'xlib-keys-hack --help'
 ```
 
 ### Other GNU/Linux distro
 
-``` bash
-$ make --always-make
+``` sh
+make --always-make
 ```
 
 Application binaries supposed to be installed by `stack` to `$HOME/.local/bin`
@@ -116,8 +116,8 @@ directory, make sure you have this directory in your `$PATH` environment variabl
 
    You could easily do it for all input devices by this command:
 
-   ``` bash
-   $ sudo setfacl -m "u:$(whoami):r" /dev/input/by-id/*
+   ``` sh
+   sudo setfacl -m "u:$(whoami):r" /dev/input/by-id/*
    ```
 
    Keep in mind that after reboot or physically replug of your keyboard
@@ -140,14 +140,14 @@ directory, make sure you have this directory in your `$PATH` environment variabl
 
    You could get all names of your `xinput` devices by this command:
 
-   ``` bash
-   $ xinput list
+   ``` sh
+   xinput list
    ```
 
    Keyboard name in our example case is `2.4G Receiver`, let's check it:
 
-   ``` bash
-   $ xinput list | grep -F '2.4G Receiver'
+   ``` sh
+   xinput list | grep -F '2.4G Receiver'
    ```
 
    Will get us (if we really have this device):
@@ -174,24 +174,24 @@ directory, make sure you have this directory in your `$PATH` environment variabl
 
 3. Now you could start this utility daemon:
 
-   ``` bash
-   $ xlib-keys-hack -v \
-        /dev/input/by-id/usb-1d57_2.4G_Receiver-event-kbd \
-        /dev/input/by-id/usb-1d57_2.4G_Receiver-event-if02 \
-        --disable-xinput-device-name='2.4G Receiver'
+   ``` sh
+   xlib-keys-hack -v \
+     /dev/input/by-id/usb-1d57_2.4G_Receiver-event-kbd \
+     /dev/input/by-id/usb-1d57_2.4G_Receiver-event-if02 \
+     --disable-xinput-device-name='2.4G Receiver'
    ```
 
    You could use more than one keyboard, here is an example:
 
-   ``` bash
-   $ xlib-keys-hack -v \
-        /dev/input/by-id/usb-1d57_2.4G_Receiver-event-kbd \
-        /dev/input/by-id/usb-1d57_2.4G_Receiver-event-if02 \
-        --disable-xinput-device-name='2.4G Receiver' \
-        /dev/input/by-id/usb-04b4_6018-event-kbd \
-        /dev/input/by-id/usb-04b4_6018-if01-event-mouse \
-        /dev/input/by-id/usb-04b4_6018-if01-mouse \
-        --disable-xinput-device-name='HID 04b4:6018'
+   ``` sh
+   xlib-keys-hack -v \
+     /dev/input/by-id/usb-1d57_2.4G_Receiver-event-kbd \
+     /dev/input/by-id/usb-1d57_2.4G_Receiver-event-if02 \
+     --disable-xinput-device-name='2.4G Receiver' \
+     /dev/input/by-id/usb-04b4_6018-event-kbd \
+     /dev/input/by-id/usb-04b4_6018-if01-event-mouse \
+     /dev/input/by-id/usb-04b4_6018-if01-mouse \
+     --disable-xinput-device-name='HID 04b4:6018'
    ```
 
    P.S. `-v` provides verbose debug information to stdout,
@@ -357,9 +357,9 @@ Usage: xlib-keys-hack [OPTION...] DEVICES-FD-PATHS...
 
 ### Generating coverage report
 
-``` bash
-$ stack clean
-$ stack test --ghc-options=-fhpc --coverage
+``` sh
+stack clean
+stack test --ghc-options=-fhpc --coverage
 ```
 
 ## Author
@@ -368,4 +368,4 @@ $ stack test --ghc-options=-fhpc --coverage
 
 ## License
 
-[GNU/GPLv3](./LICENSE)
+[GNU/GPLv3](LICENSE)
