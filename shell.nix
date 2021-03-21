@@ -16,6 +16,7 @@ args@
 
 # Local options
 , withCabal ? false
+, withHpack ? false
 , withStack ? false
 , withPackageRepl ? false # Adds package library modules into GHCi REPL
 , withHoogle ? true
@@ -44,6 +45,10 @@ let
       (exe "ghci")
       (exe "ghc")
     ];
+
+  hpack = pkgs.haskell.lib.justStaticExecutables hp.hpack;
+  cabal = pkgs.haskell.lib.justStaticExecutables hp.cabal-install;
+  stack = pkgs.haskell.lib.justStaticExecutables hp.stack;
 in
 hp.shellFor {
   packages = p: [
@@ -53,8 +58,9 @@ hp.shellFor {
   inherit withHoogle;
 
   buildInputs =
-    (if withCabal then [ hp.cabal-install ] else []) ++
-    (if withStack then [ hp.stack ] else []) ++
+    (if withCabal then [ cabal ] else []) ++
+    (if withHpack then [ hpack ] else []) ++
+    (if withStack then [ stack ] else []) ++
     (if buildExecutable then [ hp.${name} ] else []) ++
     (if withPackageRepl then pkgRepl else []);
 }
