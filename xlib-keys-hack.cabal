@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: ae27bba07d65d013e334896254e7c79b0d85c54648d4466144a5d5de1cf0c3e5
+-- hash: 8715ab11221e694151581ae334d5d0d0874cb13489819d77782eb3e5de16cf1a
 
 name:                xlib-keys-hack
 version:             0.2.0
@@ -15,7 +15,7 @@ license:             GPL-3
 license-file:        LICENSE
 author:              Viacheslav Lotsmanov
 maintainer:          Viacheslav Lotsmanov <lotsmanov89@gmail.com>
-copyright:           Copyright © 2016–2021 Viacheslav Lotsmanov
+copyright:           Copyright © 2016–2022 Viacheslav Lotsmanov
 category:            System, Desktop Environment
 build-type:          Simple
 
