@@ -1,13 +1,13 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.2.
+-- This file has been generated from package.yaml by hpack version 0.34.7.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 505c0104c03d22a0d1efa17c5f5c7b8f82bad69121fb4adac696919e67241b8a
+-- hash: ae27bba07d65d013e334896254e7c79b0d85c54648d4466144a5d5de1cf0c3e5
 
 name:                xlib-keys-hack
-version:             0.1.0
+version:             0.2.0
 synopsis:            Some my own hacks for advanced keyboard
 homepage:            https://github.com/unclechu/xlib-keys-hack#readme
 bug-reports:         https://github.com/unclechu/xlib-keys-hack/issues
@@ -30,7 +30,15 @@ library
   ghc-options: -Wall -O2
   extra-libraries:
       Xtst
-  default-extensions: ExplicitNamespaces PackageImports TypeOperators BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
+  default-extensions:
+      ExplicitNamespaces
+      PackageImports
+      TypeOperators
+      BangPatterns
+      ViewPatterns
+      QuasiQuotes
+      LambdaCase
+      MultiWayIf
   exposed-modules:
       Actions
       Actions.Types
@@ -85,7 +93,15 @@ library
 executable xlib-keys-hack
   default-language: Haskell2010
   ghc-options: -Wall -O2 -threaded
-  default-extensions: ExplicitNamespaces PackageImports TypeOperators BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
+  default-extensions:
+      ExplicitNamespaces
+      PackageImports
+      TypeOperators
+      BangPatterns
+      ViewPatterns
+      QuasiQuotes
+      LambdaCase
+      MultiWayIf
   hs-source-dirs:
       app/XlibKeysHack
   main-is: Main.hs
@@ -121,7 +137,15 @@ executable xlib-keys-hack
 executable xlib-keys-hack-watch-for-window-focus-events
   default-language: Haskell2010
   ghc-options: -Wall -O2 -threaded
-  default-extensions: ExplicitNamespaces PackageImports TypeOperators BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
+  default-extensions:
+      ExplicitNamespaces
+      PackageImports
+      TypeOperators
+      BangPatterns
+      ViewPatterns
+      QuasiQuotes
+      LambdaCase
+      MultiWayIf
   hs-source-dirs:
       app/WindowFocusWatcher
   main-is: Main.hs
@@ -156,7 +180,15 @@ test-suite xlib-keys-hack-utils-test
   type: exitcode-stdio-1.0
   default-language: Haskell2010
   ghc-options: -Wall -O2
-  default-extensions: ExplicitNamespaces PackageImports TypeOperators BangPatterns ViewPatterns QuasiQuotes LambdaCase MultiWayIf
+  default-extensions:
+      ExplicitNamespaces
+      PackageImports
+      TypeOperators
+      BangPatterns
+      ViewPatterns
+      QuasiQuotes
+      LambdaCase
+      MultiWayIf
   hs-source-dirs:
       test
   main-is: UtilsSpec.hs

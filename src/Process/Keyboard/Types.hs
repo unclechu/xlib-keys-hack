@@ -28,9 +28,9 @@ toOrderedKey = OrderedKey
 
 
 -- | Parsed key event obtained from raw keyboard device file descriptor.
-data HandledKey
-   = HandledKey
-   ! OrderedKey
-   ! KeyName
-   ! KeyCode
-   ! Bool -- ^ Indicates whether a key is pressed or released
+data HandledKey =
+  HandledKey
+    !OrderedKey
+    !KeyName
+    !KeyCode
+    !Bool -- ← Indicates whether a key is pressed or released
