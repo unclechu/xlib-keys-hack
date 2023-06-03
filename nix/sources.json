@@ -17,22 +17,22 @@
         "homepage": null,
         "owner": "unclechu",
         "repo": "nix-utils",
-        "rev": "83388ae4f14f192b205ecf1e70315eee94c17ca6",
-        "sha256": "0b4hmkjcfdgyhqdbfk7j8f80bn733grd7g1bjxacpj0axmlh42yz",
+        "rev": "6fbb12ea371ee6610bf240778fca9c68a68c19d8",
+        "sha256": "11ihrs3s9ar3ww9wr9rbx8py4grkhfyvx27gabf1ifwx1ch2ng0r",
         "type": "tarball",
-        "url": "https://github.com/unclechu/nix-utils/archive/83388ae4f14f192b205ecf1e70315eee94c17ca6.tar.gz",
+        "url": "https://github.com/unclechu/nix-utils/archive/6fbb12ea371ee6610bf240778fca9c68a68c19d8.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "nixpkgs": {
-        "branch": "release-22.05",
+        "branch": "release-23.05",
         "description": "Nix Packages collection",
         "homepage": "",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "3642b3cdf5b4bbf7b6fbbc6aedf1cef44cf9a894",
-        "sha256": "12miq7f73xkdpqbq1nh1xcbxchpzznj5inyxjb6nra0dpl9bw0ww",
+        "rev": "4eaa9e3eb36386de0c6a268ba5da72cafc959619",
+        "sha256": "1g8v5nwagf1x168lkrpadlvgkn247z6kmdv3rbq5ias2xsv9qam7",
         "type": "tarball",
-        "url": "https://github.com/NixOS/nixpkgs/archive/3642b3cdf5b4bbf7b6fbbc6aedf1cef44cf9a894.tar.gz",
+        "url": "https://github.com/NixOS/nixpkgs/archive/4eaa9e3eb36386de0c6a268ba5da72cafc959619.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     }
 }
