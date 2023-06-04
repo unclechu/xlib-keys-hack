@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.7.
+-- This file has been generated from package.yaml by hpack version 0.35.2.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 8715ab11221e694151581ae334d5d0d0874cb13489819d77782eb3e5de16cf1a
+-- hash: 324e734f04bc0fe7d00dc5cb3a25a9e217cb956ec221a7aaa36849294d5d3ace
 
 name:                xlib-keys-hack
 version:             0.2.0
