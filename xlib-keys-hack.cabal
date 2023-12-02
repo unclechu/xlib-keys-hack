@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.35.2.
+-- This file has been generated from package.yaml by hpack version 0.36.0.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 324e734f04bc0fe7d00dc5cb3a25a9e217cb956ec221a7aaa36849294d5d3ace
+-- hash: f39ea77eed8695313c6f2bc38b00964d59ef97b3cc38d3a50b023eb71ba13036
 
 name:                xlib-keys-hack
 version:             0.2.0
@@ -87,7 +87,6 @@ library
     , text
     , time
     , transformers
-    , type-operators
     , unix
 
 executable xlib-keys-hack
@@ -128,7 +127,6 @@ executable xlib-keys-hack
     , text
     , time
     , transformers
-    , type-operators
     , unix
     , xlib-keys-hack
   other-modules:
@@ -170,7 +168,6 @@ executable xlib-keys-hack-watch-for-window-focus-events
     , text
     , time
     , transformers
-    , type-operators
     , unix
     , xlib-keys-hack
   other-modules:
@@ -218,6 +215,5 @@ test-suite xlib-keys-hack-utils-test
     , text
     , time
     , transformers
-    , type-operators
     , unix
     , xlib-keys-hack

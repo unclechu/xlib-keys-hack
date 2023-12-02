@@ -18,7 +18,6 @@ import "time" Data.Time.Clock.POSIX (type POSIXTime, getPOSIXTime)
 import "qm-interpolated-string" Text.InterpolatedString.QM (qm, qms, qns)
 import "safe" Safe (succSafe, predSafe)
 
-import "type-operators" Control.Type.Operator (type ($))
 import "base" Control.Applicative ((<|>))
 import "base" Control.Concurrent (forkIO)
 import "base" Control.Concurrent.MVar (modifyMVar_)
@@ -42,7 +41,7 @@ import "X11" Graphics.X11.Types (type KeyCode)
 
 -- local imports
 
-import           Utils.Sugar ( (&), (<&>), (?), (|?|)
+import           Utils.Sugar ( (&), (<&>), (?), (|?|), type ($)
                              , applyIf, unnoticed, liftAT2
                              )
 

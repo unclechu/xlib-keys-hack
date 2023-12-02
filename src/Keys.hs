@@ -49,7 +49,6 @@ import "base" Control.Monad (join)
 import "extra" Control.Monad.Extra (whenM)
 import "mtl" Control.Monad.Except (type MonadError (throwError))
 import "deepseq" Control.DeepSeq (type NFData)
-import "type-operators" Control.Type.Operator (type ($))
 import "lens" Control.Lens ( type Lens', type Field1, type Field2
                            , (&~), (.=), (%~)
                            , view, use, set, _1, _2, _3
@@ -60,7 +59,7 @@ import "X11" Graphics.X11.Types (type KeyCode)
 
 -- local imports
 
-import Utils.Sugar ((.>), (<$.), (&), (<&>), (?), applyIf, liftAT2)
+import Utils.Sugar ((.>), (<$.), (&), (<&>), (?), type ($), applyIf, liftAT2)
 import Utils.Lens (makeApoClassy)
 import qualified Options as O
 import Types (type AlternativeModeLevel (..))

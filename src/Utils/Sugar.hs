@@ -1,9 +1,12 @@
 -- Author: Viacheslav Lotsmanov
 -- License: GPLv3 https://raw.githubusercontent.com/unclechu/xlib-keys-hack/master/LICENSE
 
+{-# LANGUAGE ExplicitNamespaces #-}
+
 module Utils.Sugar
   ( (&), (<&>), (.&>), (<$.), (.>)
   , (?), (|?|) -- condition helpers
+  , type ($)
   , module Data.Maybe.Preserve
   , applyIf, applyUnless
   , unnoticed, apart
@@ -84,6 +87,11 @@ infixl 2 |?|
 (?) c x y = if c then x else y
 {-# INLINE (?) #-}
 infixl 1 ?
+
+
+-- | Type-level version of ($) operator
+type f $ a = f a
+infixr 2 $
 
 
 applyIf :: (a -> a) -> Bool -> a -> a

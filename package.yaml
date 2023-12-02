@@ -39,7 +39,6 @@ dependencies:
   - text
   - time
   - transformers
-  - type-operators
   - unix
   - X11
 

@@ -16,7 +16,6 @@ import "containers" Data.Set (type Set)
 import qualified "containers" Data.Set as Set
 import "time" Data.Time.Clock.POSIX (POSIXTime, getPOSIXTime)
 
-import "type-operators" Control.Type.Operator (type ($))
 import "base" Control.Monad (when)
 import "base" Control.Concurrent (threadDelay)
 import qualified "stm" Control.Monad.STM as STM
@@ -25,7 +24,7 @@ import qualified "stm" Control.Concurrent.STM.TChan as STM
 
 -- local imports
 
-import           Utils.Sugar ((?), (<&>), (<$.), (.>), preserve')
+import           Utils.Sugar ((?), (<&>), (<$.), (.>), type ($), preserve')
 import           Options (Options)
 import qualified Options as O
 import           Process.Keyboard.Types (OrderedKey, HandledKey (HandledKey))
