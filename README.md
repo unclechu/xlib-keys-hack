@@ -96,14 +96,23 @@ out of date and may not represent the latest state of my NixOS config. Look at
 
 ### Nix
 
+Build and run with Cabal in a nix-shell:
+
 ``` sh
-nix-shell --run 'xlib-keys-hack --help'
+nix-shell --run 'cabal run xlib-keys-hack -- --help'
+```
+
+Build and run with Nix:
+
+``` sh
+nix-build && result/bin/xlib-keys-hack --help
 ```
 
 ### Other GNU/Linux distro
 
 ``` sh
-make --always-make
+stack build --install-ghc --ghc-options=-fllvm -j'$(shell nproc --all)'
+stack install
 ```
 
 Application binaries supposed to be installed by `stack` to `$HOME/.local/bin`

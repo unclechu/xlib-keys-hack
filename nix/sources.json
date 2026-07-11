@@ -11,18 +11,6 @@
         "url": "https://github.com/unclechu/haskell-data-maybe-preserve/archive/705e3e4e85661c6c3c34f43a408b111433abb27e.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
-    "nix-utils": {
-        "branch": "master",
-        "description": "My own Nix utils",
-        "homepage": null,
-        "owner": "unclechu",
-        "repo": "nix-utils",
-        "rev": "6fbb12ea371ee6610bf240778fca9c68a68c19d8",
-        "sha256": "11ihrs3s9ar3ww9wr9rbx8py4grkhfyvx27gabf1ifwx1ch2ng0r",
-        "type": "tarball",
-        "url": "https://github.com/unclechu/nix-utils/archive/6fbb12ea371ee6610bf240778fca9c68a68c19d8.tar.gz",
-        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
-    },
     "nixpkgs": {
         "branch": "nixos-26.05",
         "description": "Nix Packages collection",

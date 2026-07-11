@@ -1,14 +1,20 @@
+# Cabal and Stack build artifacts
 build
 dist
-result
-
+dist-newstyle
 cabal.sandbox.config
 .cabal-sandbox
 .stack-work
 
+# Nix build artifacts
+result*
+
+# GHC build artifacts
 .hpc
 *.tix
 
+# Vim tags
 tags
 
-.lvimrc
+# Direnv configuration file
+.envrc

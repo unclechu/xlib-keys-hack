@@ -1,0 +1,6 @@
+# Example configuration for direnv
+watch_file xlib-keys-hack.cabal
+watch_file package.yaml
+watch_file default.nix
+watch_file nix/*
+use nix
